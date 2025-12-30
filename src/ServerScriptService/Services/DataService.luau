@@ -204,6 +204,7 @@ function DataService:Get(player: Player, key: string): any
 		return nil
 	end
 
+	if key == nil then return profile.Data end
 	return profile.Data[key]
 end
 
