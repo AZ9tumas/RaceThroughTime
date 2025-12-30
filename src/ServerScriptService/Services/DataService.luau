@@ -143,6 +143,15 @@ local function OnPlayerAdded(player: Player)
 		-- Initialize leaderstats after data is ready
 		InitializeLeaderstats(player, profile.Data.Currencies)
 
+		-- Add save logging for debugging
+		profile.OnSave:Connect(function()
+			Log(player, "Data Saving...")
+		end)
+
+		profile.OnAfterSave:Connect(function(lastSavedData)
+			Log(player, "Data Saved Successfully")
+		end)
+
 		-- Resolve data ready promise
 		if DataReadyPromises[player] and DataReadyPromises[player].resolve then
 			DataReadyPromises[player].resolve()
@@ -168,6 +177,7 @@ end
 local function OnPlayerRemoving(player: Player)
 	local profile = PlayerProfiles[player]
 	if profile then
+		Log(player, "Ending Session and Saving Data...")
 		profile:EndSession()
 	end
 
