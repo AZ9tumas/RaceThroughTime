@@ -5,9 +5,10 @@
 ]]
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Knit = require(game.ReplicatedStorage.Packages.Knit)
-local Promise = require(game.ReplicatedStorage.Packages.Promise)
+local Knit = require(ReplicatedStorage.Packages.Knit)
+local Promise = require(ReplicatedStorage.Packages.Promise)
 local ProfileStore = require(script.Parent.Parent.Modules.ProfileStore)
 
 -- Data Template

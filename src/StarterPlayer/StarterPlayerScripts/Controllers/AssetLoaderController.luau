@@ -19,7 +19,15 @@ local IsLoadingComplete = false
 local TotalAssets = 0
 local LoadedAssets = 0
 
--- Collect all critical assets for preloading
+--[[
+	Collects all critical game assets for preloading.
+	Critical assets include:
+	- Worlds: All visual elements (parts, decals, textures, meshes) from the Worlds folder
+	- Stars: All visual elements from the Stars folder
+	- UI: All images from PlayerGui and StarterGui
+	- Assets: All visual and audio elements from ReplicatedStorage/Assets folder
+	Returns an array of Instances to pass to ContentProvider:PreloadAsync
+]]
 local function CollectCriticalAssets(): { Instance }
 	local assets = {}
 
@@ -43,8 +51,8 @@ local function CollectCriticalAssets(): { Instance }
 		end
 	end
 
-	-- Collect UI elements
-	local playerGui = Knit.Player:WaitForChild("PlayerGui", 5)
+	-- Collect UI elements from PlayerGui (may not exist immediately)
+	local playerGui = Knit.Player:FindFirstChild("PlayerGui")
 	if playerGui then
 		for _, gui in playerGui:GetDescendants() do
 			if gui:IsA("ImageLabel") or gui:IsA("ImageButton") then
@@ -90,10 +98,18 @@ local function PreloadAssets()
 	LoadedAssets = 0
 	LoadingProgress = 0
 
-	-- Use ContentProvider:PreloadAsync with callback for progress
-	ContentProvider:PreloadAsync(assets, function(assetId, assetFetchStatus)
+	-- Use ContentProvider:PreloadAsync with callback for progress tracking
+	-- Callback receives (contentId: string, assetFetchStatus: Enum.AssetFetchStatus)
+	ContentProvider:PreloadAsync(assets, function(contentId, assetFetchStatus)
+		-- Track progress regardless of fetch status (success or failure)
+		-- This ensures the progress bar reflects overall completion
 		LoadedAssets = LoadedAssets + 1
 		LoadingProgress = LoadedAssets / TotalAssets
+
+		-- Log failures for debugging purposes
+		if assetFetchStatus ~= Enum.AssetFetchStatus.Success then
+			warn(string.format("[AssetLoader]: Failed to load asset %s - Status: %s", tostring(contentId), tostring(assetFetchStatus)))
+		end
 	end)
 
 	LoadingProgress = 1
