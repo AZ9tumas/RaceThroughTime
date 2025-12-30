@@ -61,6 +61,43 @@ local function Log(player: Player, message: string)
 	print(string.format("[DataService | %s]: %s", player.Name, message))
 end
 
+-- Initialize leaderstats for a player
+local function InitializeLeaderstats(player: Player, currencies: { Cash: number, Gems: number })
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+	leaderstats.Parent = player
+
+	local cashValue = Instance.new("IntValue")
+	cashValue.Name = "Cash"
+	cashValue.Value = currencies.Cash
+	cashValue.Parent = leaderstats
+
+	local gemsValue = Instance.new("IntValue")
+	gemsValue.Name = "Gems"
+	gemsValue.Value = currencies.Gems
+	gemsValue.Parent = leaderstats
+
+	Log(player, "Leaderstats Initialized")
+end
+
+-- Sync currency values to leaderstats (if they exist)
+local function SyncLeaderstats(player: Player, currencies: { Cash: number, Gems: number })
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if not leaderstats then
+		return -- Leaderstats not yet created or player disconnected
+	end
+
+	local cashValue = leaderstats:FindFirstChild("Cash")
+	if cashValue then
+		cashValue.Value = currencies.Cash
+	end
+
+	local gemsValue = leaderstats:FindFirstChild("Gems")
+	if gemsValue then
+		gemsValue.Value = currencies.Gems
+	end
+end
+
 -- Check if both data and client are ready, then resolve session
 local function TryResolveSession(player: Player)
 	local profile = PlayerProfiles[player]
@@ -102,6 +139,9 @@ local function OnPlayerAdded(player: Player)
 		PlayerProfiles[player] = profile
 
 		Log(player, "Data Loaded")
+
+		-- Initialize leaderstats after data is ready
+		InitializeLeaderstats(player, profile.Data.Currencies)
 
 		-- Resolve data ready promise
 		if DataReadyPromises[player] and DataReadyPromises[player].resolve then
@@ -168,6 +208,11 @@ function DataService:Update(player: Player, key: string, callback: (any) -> any)
 	local currentValue = profile.Data[key]
 	local newValue = callback(currentValue)
 	profile.Data[key] = newValue
+
+	-- Sync leaderstats if Currencies were updated
+	if key == "Currencies" then
+		SyncLeaderstats(player, newValue)
+	end
 end
 
 -- Returns a promise that resolves when the player's profile is loaded
