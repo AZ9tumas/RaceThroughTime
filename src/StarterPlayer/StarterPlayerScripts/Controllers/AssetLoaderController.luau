@@ -136,9 +136,9 @@ function AssetLoaderController:KnitStart()
 	task.spawn(function()
 		PreloadAssets()
 
-		-- Signal the server that we're ready
-		local DataService = Knit.GetService("DataService")
-		DataService:SignalReady()
+		-- Notify LoadingScreenController that assets are ready
+		local LoadingScreenController = Knit.GetController("LoadingScreenController")
+		LoadingScreenController:SetAssetsReady()
 	end)
 end
 

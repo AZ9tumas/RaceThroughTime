@@ -44,7 +44,9 @@ local Template = {
 
 local DataService = Knit.CreateService({
 	Name = "DataService",
-	Client = {},
+	Client = {
+		DataReady = Knit.CreateSignal(), -- Signal to notify client when data is loaded
+	},
 })
 
 -- Private state
@@ -158,6 +160,9 @@ local function OnPlayerAdded(player: Player)
 			DataReadyPromises[player].resolve = nil
 		end
 
+		-- Fire DataReady signal to client
+		DataService.Client.DataReady:Fire(player)
+
 		-- Check if session is ready to initialize
 		TryResolveSession(player)
 
@@ -265,6 +270,9 @@ end
 
 -- Knit lifecycle
 function DataService:KnitInit()
+	-- Disable character auto-loading - player won't spawn until explicitly loaded
+	Players.CharacterAutoLoads = false
+
 	-- Set up player connections
 	Players.PlayerAdded:Connect(OnPlayerAdded)
 	Players.PlayerRemoving:Connect(OnPlayerRemoving)
@@ -272,6 +280,14 @@ function DataService:KnitInit()
 	-- Handle players who joined before the service started
 	for _, player in Players:GetPlayers() do
 		task.spawn(OnPlayerAdded, player)
+	end
+end
+
+-- Load a player's character (call after session is ready)
+function DataService:LoadCharacter(player: Player)
+	if player and player:IsDescendantOf(Players) then
+		player:LoadCharacter()
+		Log(player, "Character Loaded")
 	end
 end
 
