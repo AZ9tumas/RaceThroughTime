@@ -128,7 +128,7 @@ end
 
 -- Knit lifecycle
 function AssetLoaderController:KnitInit()
-	-- Nothing to initialize
+	
 end
 
 function AssetLoaderController:KnitStart()

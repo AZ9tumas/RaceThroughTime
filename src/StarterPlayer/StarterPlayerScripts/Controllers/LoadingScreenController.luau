@@ -58,8 +58,6 @@ local function FadeIn(frame)
 	})
 	tween:Play()
 	tween.Completed:Wait()
-
-	print("[LoadingScreenController]: Loading screen faded in")
 end
 
 -- Fade out the loading screen
@@ -74,13 +72,11 @@ local function FadeOut(frame)
 	tween.Completed:Wait()
 
 	frame.Visible = false
-	print("[LoadingScreenController]: Loading screen faded out")
 end
 
 -- Check if loading is complete and fade out if so
 local function TryCompleteLoading()
 	if IsDataReady and IsAssetsReady then
-		print("[LoadingScreenController]: All loading complete, fading out")
 		FadeOut(LoadingFrame)
 
 		-- Request character spawn from server
@@ -92,14 +88,12 @@ end
 -- Mark data as ready
 function LoadingScreenController:SetDataReady()
 	IsDataReady = true
-	print("[LoadingScreenController]: Server data ready")
 	TryCompleteLoading()
 end
 
 -- Mark assets as ready
 function LoadingScreenController:SetAssetsReady()
 	IsAssetsReady = true
-	print("[LoadingScreenController]: Client assets ready")
 	TryCompleteLoading()
 end
 

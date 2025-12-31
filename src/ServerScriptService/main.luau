@@ -19,9 +19,6 @@ local function Main()
 		DataService:OnSessionReady(player):andThen(function()
 			print(string.format("[Main]: Player %s session fully initialized", player.Name))
 
-			-- Load the player's character now that everything is ready
-			DataService:LoadCharacter(player)
-
 			-- Additional game initialization for this player can go here
 			-- Example: Initialize player's game state, start tutorials, etc.
 		end):catch(function(err)

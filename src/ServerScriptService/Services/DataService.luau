@@ -270,8 +270,6 @@ end
 
 -- Knit lifecycle
 function DataService:KnitInit()
-	-- Disable character auto-loading - player won't spawn until explicitly loaded
-	Players.CharacterAutoLoads = false
 
 	-- Set up player connections
 	Players.PlayerAdded:Connect(OnPlayerAdded)
@@ -280,14 +278,6 @@ function DataService:KnitInit()
 	-- Handle players who joined before the service started
 	for _, player in Players:GetPlayers() do
 		task.spawn(OnPlayerAdded, player)
-	end
-end
-
--- Load a player's character (call after session is ready)
-function DataService:LoadCharacter(player: Player)
-	if player and player:IsDescendantOf(Players) then
-		player:LoadCharacter()
-		Log(player, "Character Loaded")
 	end
 end
 
