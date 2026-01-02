@@ -21,6 +21,7 @@ local Template = {
 		TotalDistance = 0,
 		Points = 0,
 		Rebirths = 0,
+		Fuel = 100, -- Starting fuel for players
 	},
 	Progression = {
 		CurrentWorld = "Stone Age",

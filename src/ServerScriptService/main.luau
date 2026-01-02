@@ -13,11 +13,16 @@ local function Main()
 	print("[Main]: Game loop starting...")
 
 	local DataService = Knit.GetService("DataService")
+	local StarService = Knit.GetService("StarService")
 
 	-- Set up session ready handler for each player
 	local function OnPlayerSessionReady(player: Player)
 		DataService:OnSessionReady(player):andThen(function()
 			print(string.format("[Main]: Player %s session fully initialized", player.Name))
+
+			-- Generate and spawn stars for this player
+			StarService:GenerateStarInformation(player)
+			StarService:SpawnStarsForPlayer(player)
 
 			-- Additional game initialization for this player can go here
 			-- Example: Initialize player's game state, start tutorials, etc.
