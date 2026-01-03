@@ -77,11 +77,11 @@ function handler.UpdateFuelUI(amount: number)
 end
 
 function handler.UpdateCashUI(amount: number)
-    cashDisplay.Text = truncateNumber(amount)
+    cashDisplay.Text = "💵 " .. truncateNumber(amount)
 end
 
 function handler.UpdateGemsUI(amount: number)
-    GemsDisplay.Text = truncateNumber(amount)
+    GemsDisplay.Text = "💎 " .. truncateNumber(amount)
 end
 
 handler._connections["RenderStepped"] = game:GetService("RunService").RenderStepped:Connect(function()
