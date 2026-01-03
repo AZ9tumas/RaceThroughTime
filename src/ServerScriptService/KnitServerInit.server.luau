@@ -16,7 +16,6 @@ Knit.AddServices(ServerScriptService.Services)
 
 -- Start Knit
 Knit.Start():andThen(function()
-	print("[Knit]: Server started successfully")
 	main()
 end):catch(function(err)
 	warn("[Knit]: Server failed to start -", err)

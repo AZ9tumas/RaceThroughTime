@@ -21,6 +21,7 @@ local Template = {
 		TotalDistance = 0,
 		Points = 0,
 		Rebirths = 0,
+		Fuel = 100, -- Starting fuel for players
 	},
 	Progression = {
 		CurrentWorld = "Stone Age",
@@ -60,44 +61,53 @@ local GameProfileStore = ProfileStore.New("RaceThroughTime_v1", Template)
 
 -- Helper function for logging
 local function Log(player: Player, message: string)
-	print(string.format("[DataService | %s]: %s", player.Name, message))
+	--print(string.format("[DataService | %s]: %s", player.Name, message))
 end
 
 -- Initialize leaderstats for a player
-local function InitializeLeaderstats(player: Player, currencies: { Cash: number, Gems: number })
+local function InitializeLeaderstats(player: Player, playerData: typeof(Template))
 	local leaderstats = Instance.new("Folder")
 	leaderstats.Name = "leaderstats"
 	leaderstats.Parent = player
 
 	local cashValue = Instance.new("IntValue")
 	cashValue.Name = "Cash"
-	cashValue.Value = currencies.Cash
+	cashValue.Value = playerData.Currencies.Cash
 	cashValue.Parent = leaderstats
 
 	local gemsValue = Instance.new("IntValue")
 	gemsValue.Name = "Gems"
-	gemsValue.Value = currencies.Gems
+	gemsValue.Value = playerData.Currencies.Gems
 	gemsValue.Parent = leaderstats
 
-	Log(player, "Leaderstats Initialized")
+	local statsFolder = Instance.new("Folder", player)
+	statsFolder.Name = "Stats"
+
+	local fuelValue: NumberValue = Instance.new("NumberValue", statsFolder)
+	fuelValue.Name = "Fuel"
+	fuelValue.Value = playerData.Stats.Fuel
 end
 
 -- Sync currency values to leaderstats (if they exist)
-local function SyncLeaderstats(player: Player, currencies: { Cash: number, Gems: number })
+local function SyncLeaderstats(player: Player, playerData: typeof(Template))
 	local leaderstats = player:FindFirstChild("leaderstats")
 	if not leaderstats then
-		return -- Leaderstats not yet created or player disconnected
+		return
 	end
 
 	local cashValue = leaderstats:FindFirstChild("Cash")
 	if cashValue then
-		cashValue.Value = currencies.Cash
+		cashValue.Value = playerData.Currencies.Cash
 	end
 
 	local gemsValue = leaderstats:FindFirstChild("Gems")
 	if gemsValue then
-		gemsValue.Value = currencies.Gems
+		gemsValue.Value = playerData.Currencies.Gems
 	end
+
+	local statsFolder = player:FindFirstChild("Stats")
+	local fuelVal : NumberValue = statsFolder and statsFolder:FindFirstChild("Fuel")
+	if fuelVal then fuelVal.Value = playerData.Stats.Fuel end
 end
 
 -- Check if both data and client are ready, then resolve session
@@ -107,7 +117,7 @@ local function TryResolveSession(player: Player)
 	local sessionPromise = SessionReadyPromises[player]
 
 	if profile and clientReady and sessionPromise and sessionPromise.resolve then
-		Log(player, "Session Initialized")
+		print(player, "Session Initialized")
 		sessionPromise.resolve()
 		sessionPromise.resolve = nil -- Prevent double resolution
 	end
@@ -115,19 +125,23 @@ end
 
 -- Initialize player data when they join
 local function OnPlayerAdded(player: Player)
-	-- Create data ready promise
-	local dataResolve
-	local dataPromise = Promise.new(function(resolve)
-		dataResolve = resolve
-	end)
-	DataReadyPromises[player] = { resolve = dataResolve, promise = dataPromise }
+	-- Get or create data ready promise
+	if not DataReadyPromises[player] then
+		local dataResolve
+		local dataPromise = Promise.new(function(resolve)
+			dataResolve = resolve
+		end)
+		DataReadyPromises[player] = { resolve = dataResolve, promise = dataPromise }
+	end
 
-	-- Create session ready promise
-	local sessionResolve
-	local sessionPromise = Promise.new(function(resolve)
-		sessionResolve = resolve
-	end)
-	SessionReadyPromises[player] = { resolve = sessionResolve, promise = sessionPromise }
+	-- Get or create session ready promise
+	if not SessionReadyPromises[player] then
+		local sessionResolve
+		local sessionPromise = Promise.new(function(resolve)
+			sessionResolve = resolve
+		end)
+		SessionReadyPromises[player] = { resolve = sessionResolve, promise = sessionPromise }
+	end
 
 	-- Initialize client status as not ready
 	ClientStatus[player] = false
@@ -140,10 +154,10 @@ local function OnPlayerAdded(player: Player)
 		profile:Reconcile()
 		PlayerProfiles[player] = profile
 
-		Log(player, "Data Loaded")
+		print(player, "Data Loaded")
 
 		-- Initialize leaderstats after data is ready
-		InitializeLeaderstats(player, profile.Data.Currencies)
+		InitializeLeaderstats(player, profile.Data)
 
 		-- Add save logging for debugging
 		profile.OnSave:Connect(function()
@@ -196,7 +210,7 @@ end
 function DataService.Client:SignalReady(player: Player)
 	if ClientStatus[player] == false then
 		ClientStatus[player] = true
-		Log(player, "Client Assets Ready")
+		print(player, "Client Assets Ready")
 		TryResolveSession(player)
 	end
 end
@@ -225,42 +239,41 @@ function DataService:Update(player: Player, key: string, callback: (any) -> any)
 	local newValue = callback(currentValue)
 	profile.Data[key] = newValue
 
-	-- Sync leaderstats if Currencies were updated
-	if key == "Currencies" then
-		SyncLeaderstats(player, newValue)
-	end
+	SyncLeaderstats(player, profile.Data)
 end
 
 -- Returns a promise that resolves when the player's profile is loaded
 function DataService:OnDataReady(player: Player)
 	local entry = DataReadyPromises[player]
-	if entry then
-		return entry.promise
+	if not entry then
+		if not player:IsDescendantOf(Players) then
+			return Promise.reject("Player not found or has left")
+		end
+
+		local resolve
+		local promise = Promise.new(function(r) resolve = r end)
+		entry = { resolve = resolve, promise = promise }
+		DataReadyPromises[player] = entry
 	end
 
-	-- If player already has a profile, resolve immediately
-	if PlayerProfiles[player] then
-		return Promise.resolve()
-	end
-
-	-- No entry found, player may have left
-	return Promise.reject("Player not found or has left")
+	return entry.promise
 end
 
 -- Returns a "Gatekeeper" promise that resolves when data is ready AND client has signaled ready
 function DataService:OnSessionReady(player: Player)
 	local entry = SessionReadyPromises[player]
-	if entry then
-		return entry.promise
+	if not entry then
+		if not player:IsDescendantOf(Players) then
+			return Promise.reject("Player not found or has left")
+		end
+
+		local resolve
+		local promise = Promise.new(function(r) resolve = r end)
+		entry = { resolve = resolve, promise = promise }
+		SessionReadyPromises[player] = entry
 	end
 
-	-- If both conditions are already met, resolve immediately
-	if PlayerProfiles[player] and ClientStatus[player] then
-		return Promise.resolve()
-	end
-
-	-- No entry found, player may have left
-	return Promise.reject("Player not found or has left")
+	return entry.promise
 end
 
 -- Get the player's profile (for advanced use cases)
