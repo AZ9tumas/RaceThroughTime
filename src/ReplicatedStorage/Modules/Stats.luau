@@ -7,6 +7,12 @@ local Stats = {}
 
 Stats.MaxBaseFuel = 1500
 
+-- Returns the maximum fuel value with multipliers applied
+-- Currently returns base value * 1, can be extended for upgrades/boosts
+function Stats.FuelMultiplier(): number
+	return Stats.MaxBaseFuel * 1
+end
+
 -- Star Tiers and their spawn probabilities (must sum to 1.0)
 -- Yellow (Common): Most frequent, low fuel bonus
 -- Blue (Uncommon): Moderate spawn rate, medium fuel bonus
