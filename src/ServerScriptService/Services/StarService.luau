@@ -12,6 +12,9 @@ local HttpService = game:GetService("HttpService")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 
+-- base parts for reference
+local SpawnLocation: SpawnLocation = workspace:FindFirstChild("RTT_Map_Final"):FindFirstChild("SpawnLocation")
+
 local StarService = Knit.CreateService({
 	Name = "StarService",
 	Client = {
@@ -102,14 +105,16 @@ end
 function StarService:GenerateStarInformation(player: Player)
 	local userId = player.UserId
 	local character = player.Character
-	local spawnCenter = Vector3.new(0, 5, 0) -- Default spawn center
+	local spawnCenter = SpawnLocation.Position -- Default spawn center
 
 	if character then
 		local rootPart = character:FindFirstChild("HumanoidRootPart")
 		if rootPart then
-			spawnCenter = rootPart.Position
+			--spawnCenter = rootPart.Position
 		end
 	end
+
+	print("Here, start service")
 
 	local starInfoList = {}
 	local existingPositions = {}
@@ -159,7 +164,8 @@ function StarService:SpawnStarsForPlayer(player: Player)
 end
 
 -- Find star info by ID in player's tracker
-local function FindStarById(userId: number, starId: string): ({ Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number }?, number?)
+local function FindStarById(userId: number, starId: string):
+	({ Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number }?, number?)
 	local starInfoList = UniversalTracker[userId]
 	if not starInfoList then
 		return nil, nil

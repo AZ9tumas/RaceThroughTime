@@ -61,7 +61,7 @@ local GameProfileStore = ProfileStore.New("RaceThroughTime_v1", Template)
 
 -- Helper function for logging
 local function Log(player: Player, message: string)
-	print(string.format("[DataService | %s]: %s", player.Name, message))
+	--print(string.format("[DataService | %s]: %s", player.Name, message))
 end
 
 -- Initialize leaderstats for a player
@@ -108,7 +108,7 @@ local function TryResolveSession(player: Player)
 	local sessionPromise = SessionReadyPromises[player]
 
 	if profile and clientReady and sessionPromise and sessionPromise.resolve then
-		Log(player, "Session Initialized")
+		print(player, "Session Initialized")
 		sessionPromise.resolve()
 		sessionPromise.resolve = nil -- Prevent double resolution
 	end
@@ -116,19 +116,23 @@ end
 
 -- Initialize player data when they join
 local function OnPlayerAdded(player: Player)
-	-- Create data ready promise
-	local dataResolve
-	local dataPromise = Promise.new(function(resolve)
-		dataResolve = resolve
-	end)
-	DataReadyPromises[player] = { resolve = dataResolve, promise = dataPromise }
+	-- Get or create data ready promise
+	if not DataReadyPromises[player] then
+		local dataResolve
+		local dataPromise = Promise.new(function(resolve)
+			dataResolve = resolve
+		end)
+		DataReadyPromises[player] = { resolve = dataResolve, promise = dataPromise }
+	end
 
-	-- Create session ready promise
-	local sessionResolve
-	local sessionPromise = Promise.new(function(resolve)
-		sessionResolve = resolve
-	end)
-	SessionReadyPromises[player] = { resolve = sessionResolve, promise = sessionPromise }
+	-- Get or create session ready promise
+	if not SessionReadyPromises[player] then
+		local sessionResolve
+		local sessionPromise = Promise.new(function(resolve)
+			sessionResolve = resolve
+		end)
+		SessionReadyPromises[player] = { resolve = sessionResolve, promise = sessionPromise }
+	end
 
 	-- Initialize client status as not ready
 	ClientStatus[player] = false
@@ -141,7 +145,7 @@ local function OnPlayerAdded(player: Player)
 		profile:Reconcile()
 		PlayerProfiles[player] = profile
 
-		Log(player, "Data Loaded")
+		print(player, "Data Loaded")
 
 		-- Initialize leaderstats after data is ready
 		InitializeLeaderstats(player, profile.Data.Currencies)
@@ -197,7 +201,7 @@ end
 function DataService.Client:SignalReady(player: Player)
 	if ClientStatus[player] == false then
 		ClientStatus[player] = true
-		Log(player, "Client Assets Ready")
+		print(player, "Client Assets Ready")
 		TryResolveSession(player)
 	end
 end
@@ -235,33 +239,35 @@ end
 -- Returns a promise that resolves when the player's profile is loaded
 function DataService:OnDataReady(player: Player)
 	local entry = DataReadyPromises[player]
-	if entry then
-		return entry.promise
+	if not entry then
+		if not player:IsDescendantOf(Players) then
+			return Promise.reject("Player not found or has left")
+		end
+
+		local resolve
+		local promise = Promise.new(function(r) resolve = r end)
+		entry = { resolve = resolve, promise = promise }
+		DataReadyPromises[player] = entry
 	end
 
-	-- If player already has a profile, resolve immediately
-	if PlayerProfiles[player] then
-		return Promise.resolve()
-	end
-
-	-- No entry found, player may have left
-	return Promise.reject("Player not found or has left")
+	return entry.promise
 end
 
 -- Returns a "Gatekeeper" promise that resolves when data is ready AND client has signaled ready
 function DataService:OnSessionReady(player: Player)
 	local entry = SessionReadyPromises[player]
-	if entry then
-		return entry.promise
+	if not entry then
+		if not player:IsDescendantOf(Players) then
+			return Promise.reject("Player not found or has left")
+		end
+
+		local resolve
+		local promise = Promise.new(function(r) resolve = r end)
+		entry = { resolve = resolve, promise = promise }
+		SessionReadyPromises[player] = entry
 	end
 
-	-- If both conditions are already met, resolve immediately
-	if PlayerProfiles[player] and ClientStatus[player] then
-		return Promise.resolve()
-	end
-
-	-- No entry found, player may have left
-	return Promise.reject("Player not found or has left")
+	return entry.promise
 end
 
 -- Get the player's profile (for advanced use cases)

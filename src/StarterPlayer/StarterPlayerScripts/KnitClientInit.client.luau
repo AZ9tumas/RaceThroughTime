@@ -11,8 +11,6 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 Knit.AddControllers(script.Parent.Controllers)
 
 -- Start Knit
-Knit.Start():andThen(function()
-	print("[Knit]: Client started successfully")
-end):catch(function(err)
+Knit.Start():catch(function(err)
 	warn("[Knit]: Client failed to start -", err)
 end)

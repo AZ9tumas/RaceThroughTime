@@ -5,7 +5,7 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 -- Wait for Knit to be started before accessing controllers
 Knit.OnStart():andThen(function()
 	local assetLoader = Knit.GetController("AssetLoaderController")
-	print("[Test]: AssetLoader ready, loading status:", assetLoader:GetLoadingStatus())
+	print("client is ready")
 end):catch(function(err)
 	warn("[Test]: Failed to get AssetLoaderController -", err)
 end)

@@ -28,9 +28,9 @@ Stats.StarFuelValues = {
 -- Star spawn configuration
 Stats.StarConfig = {
 	SpawnCount = 10,                  -- Number of stars to spawn per player
-	SpawnRadius = 100,                -- Radius around player spawn point for star placement
-	MinDistanceBetweenStars = 15,     -- Minimum distance between spawned stars
-	CollectionRadius = 5,             -- Distance within which a star can be collected
+	SpawnRadius = 140,                -- Radius around player spawn point for star placement
+	MinDistanceBetweenStars = 15, 	  -- Minimum distance between spawned stars
+	CollectionRadius = 10,             -- Distance within which a star can be collected
 }
 
 return Stats
