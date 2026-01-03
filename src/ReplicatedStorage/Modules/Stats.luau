@@ -5,6 +5,8 @@
 
 local Stats = {}
 
+Stats.MaxBaseFuel = 1500
+
 -- Star Tiers and their spawn probabilities (must sum to 1.0)
 -- Yellow (Common): Most frequent, low fuel bonus
 -- Blue (Uncommon): Moderate spawn rate, medium fuel bonus

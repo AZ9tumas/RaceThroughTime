@@ -29,7 +29,7 @@ local StarsFolder = nil
 
 -- Helper function for logging
 local function Log(message: string)
-	print(string.format("[StarService]: %s", message))
+	--print(string.format("[StarService]: %s", message))
 end
 
 -- Initialize the Stars folder in Workspace
@@ -212,7 +212,10 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 	-- Star collection verified - add fuel to player
 	local DataService = Knit.GetService("DataService")
 	DataService:Update(player, "Stats", function(stats)
-		stats.Fuel = (stats.Fuel or 0) + starInfo.FuelValue
+		local finalVal = starInfo.FuelValue + stats.Fuel
+		local maxFuel = Stats.MaxBaseFuel
+		finalVal = math.min(finalVal, maxFuel)
+		stats.Fuel = finalVal
 		return stats
 	end)
 

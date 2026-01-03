@@ -65,40 +65,49 @@ local function Log(player: Player, message: string)
 end
 
 -- Initialize leaderstats for a player
-local function InitializeLeaderstats(player: Player, currencies: { Cash: number, Gems: number })
+local function InitializeLeaderstats(player: Player, playerData: typeof(Template))
 	local leaderstats = Instance.new("Folder")
 	leaderstats.Name = "leaderstats"
 	leaderstats.Parent = player
 
 	local cashValue = Instance.new("IntValue")
 	cashValue.Name = "Cash"
-	cashValue.Value = currencies.Cash
+	cashValue.Value = playerData.Currencies.Cash
 	cashValue.Parent = leaderstats
 
 	local gemsValue = Instance.new("IntValue")
 	gemsValue.Name = "Gems"
-	gemsValue.Value = currencies.Gems
+	gemsValue.Value = playerData.Currencies.Gems
 	gemsValue.Parent = leaderstats
 
-	Log(player, "Leaderstats Initialized")
+	local statsFolder = Instance.new("Folder", player)
+	statsFolder.Name = "Stats"
+
+	local fuelValue: NumberValue = Instance.new("NumberValue", statsFolder)
+	fuelValue.Name = "Fuel"
+	fuelValue.Value = playerData.Stats.Fuel
 end
 
 -- Sync currency values to leaderstats (if they exist)
-local function SyncLeaderstats(player: Player, currencies: { Cash: number, Gems: number })
+local function SyncLeaderstats(player: Player, playerData: typeof(Template))
 	local leaderstats = player:FindFirstChild("leaderstats")
 	if not leaderstats then
-		return -- Leaderstats not yet created or player disconnected
+		return
 	end
 
 	local cashValue = leaderstats:FindFirstChild("Cash")
 	if cashValue then
-		cashValue.Value = currencies.Cash
+		cashValue.Value = playerData.Currencies.Cash
 	end
 
 	local gemsValue = leaderstats:FindFirstChild("Gems")
 	if gemsValue then
-		gemsValue.Value = currencies.Gems
+		gemsValue.Value = playerData.Currencies.Gems
 	end
+
+	local statsFolder = player:FindFirstChild("Stats")
+	local fuelVal : NumberValue = statsFolder and statsFolder:FindFirstChild("Fuel")
+	if fuelVal then fuelVal.Value = playerData.Stats.Fuel end
 end
 
 -- Check if both data and client are ready, then resolve session
@@ -148,7 +157,7 @@ local function OnPlayerAdded(player: Player)
 		print(player, "Data Loaded")
 
 		-- Initialize leaderstats after data is ready
-		InitializeLeaderstats(player, profile.Data.Currencies)
+		InitializeLeaderstats(player, profile.Data)
 
 		-- Add save logging for debugging
 		profile.OnSave:Connect(function()
@@ -230,10 +239,7 @@ function DataService:Update(player: Player, key: string, callback: (any) -> any)
 	local newValue = callback(currentValue)
 	profile.Data[key] = newValue
 
-	-- Sync leaderstats if Currencies were updated
-	if key == "Currencies" then
-		SyncLeaderstats(player, newValue)
-	end
+	SyncLeaderstats(player, profile.Data)
 end
 
 -- Returns a promise that resolves when the player's profile is loaded

@@ -20,7 +20,7 @@ local PlayerStarsFolder = nil
 
 -- Helper function for logging
 local function Log(message: string)
-	print(string.format("[StarController]: %s", message))
+	--print(string.format("[StarController]: %s", message))
 end
 
 -- Get or create the Stars folder in Workspace
@@ -126,11 +126,7 @@ local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: st
 				local StarService = Knit.GetService("StarService")
 				local success = StarService:CollectStar(starInfo.ID)
 
-				if success then
-					Log(string.format("Collected %s", starInfo.StarName))
-				else
-					debounce = false
-				end
+				if not success then debounce = false end
 			end
 		end)
 	end
