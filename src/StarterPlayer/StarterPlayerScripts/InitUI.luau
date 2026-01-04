@@ -96,9 +96,9 @@ handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function
     local success, gateName, totalDistance = TrackService:RequestTrackStart()
     
     if success then
-        print(string.format("[InitUI]: Track start successful at %s, distance: %.2f", gateName, totalDistance))
+        print("[InitUI]: Track start successful")
     else
-        print(string.format("[InitUI]: Track start failed - %s", gateName or "Unknown error"))
+        warn(success)
     end
 end)
 
