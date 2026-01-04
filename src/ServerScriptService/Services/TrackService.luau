@@ -81,10 +81,10 @@ local function CalculateTotalDistance(player: Player): number
 	local fuel = playerData.Fuel or 0
 	local speed = Stats.CalculateSpeedFromFuel(fuel, "Main")
 	
-	-- Distance is proportional to fuel consumed at calculated speed
-	-- Using a base multiplier for track distance
-	local distanceMultiplier = 10
-	local totalDistance = fuel * distanceMultiplier
+	-- Distance is calculated using speed and fuel
+	-- Higher speed means more distance covered per fuel unit
+	local distanceMultiplier = Stats.TrackConfig.DistanceMultiplier
+	local totalDistance = (speed / Stats.BaseSpeed) * fuel * distanceMultiplier
 	
 	return totalDistance
 end

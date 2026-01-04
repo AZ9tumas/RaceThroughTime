@@ -43,16 +43,27 @@ local function DisablePlayerControls()
 		humanoid.JumpPower = 0
 	end
 	
+	-- Unbind existing action first to prevent conflicts
+	pcall(function()
+		ContextActionService:UnbindAction("TrackController_DisableMovement")
+	end)
+	
 	-- Sink all movement inputs
-	ContextActionService:BindAction("TrackController_DisableMovement", function()
-		return Enum.ContextActionResult.Sink
-	end, false, 
-		Enum.PlayerActions.CharacterForward,
-		Enum.PlayerActions.CharacterBackward,
-		Enum.PlayerActions.CharacterLeft,
-		Enum.PlayerActions.CharacterRight,
-		Enum.PlayerActions.CharacterJump
-	)
+	local success, err = pcall(function()
+		ContextActionService:BindAction("TrackController_DisableMovement", function()
+			return Enum.ContextActionResult.Sink
+		end, false, 
+			Enum.PlayerActions.CharacterForward,
+			Enum.PlayerActions.CharacterBackward,
+			Enum.PlayerActions.CharacterLeft,
+			Enum.PlayerActions.CharacterRight,
+			Enum.PlayerActions.CharacterJump
+		)
+	end)
+	
+	if not success then
+		warn(string.format("[TrackController]: Failed to bind movement disable action - %s", tostring(err)))
+	end
 	
 	Log("Player controls disabled")
 end

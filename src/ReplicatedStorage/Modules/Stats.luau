@@ -47,6 +47,11 @@ Stats.StarConfig = {
 	CollectionRadius = 10,             -- Distance within which a star can be collected
 }
 
+-- Track configuration
+Stats.TrackConfig = {
+	DistanceMultiplier = 10,          -- Multiplier for converting fuel to track distance
+}
+
 -- Calculate multipliers from pets, rebirths, and boosts
 -- Formula: Σ(M_pets + M_rebirth + M_boosts)
 -- Returns 1 for now, can be extended for actual multiplier calculations
