@@ -21,6 +21,7 @@ local NotificationTemplate = nil
 local NotificationContainer = nil
 local ActiveNotifications = {} -- Array of active notification frames with cleanup data
 local NotificationQueue = {} -- Queue for notifications waiting to be displayed
+local QueueHead = 1 -- Index of the next item to dequeue
 local MaxVisibleNotifications = 3 -- Maximum number of notifications shown at once
 
 -- Configuration
@@ -104,19 +105,17 @@ local function GetNotificationContainer()
 end
 
 -- Remove a notification from the display
-local function RemoveNotification(notificationFrame: Frame, cleanupThread: thread?)
+local function RemoveNotification(notificationFrame: Frame)
 	if not notificationFrame or not notificationFrame.Parent then
 		return
 	end
 	
-	-- Cancel the auto-removal thread if it exists
-	if cleanupThread and coroutine.status(cleanupThread) == "suspended" then
-		task.cancel(cleanupThread)
-	end
-	
-	-- Find and remove from active notifications
+	-- Find and remove from active notifications, cancel cleanup thread
 	for i, data in ipairs(ActiveNotifications) do
 		if data.frame == notificationFrame then
+			if data.cleanupThread then
+				task.cancel(data.cleanupThread)
+			end
 			table.remove(ActiveNotifications, i)
 			break
 		end
@@ -143,8 +142,21 @@ local function RemoveNotification(notificationFrame: Frame, cleanupThread: threa
 		notificationFrame:Destroy()
 		
 		-- Process queue if there are waiting notifications
-		if #NotificationQueue > 0 then
-			local nextNotification = table.remove(NotificationQueue, 1)
+		if QueueHead <= #NotificationQueue then
+			local nextNotification = NotificationQueue[QueueHead]
+			QueueHead = QueueHead + 1
+			
+			-- Clean up the queue if it gets too large
+			if QueueHead > 10 then
+				for i = QueueHead, #NotificationQueue do
+					NotificationQueue[i - QueueHead + 1] = NotificationQueue[i]
+				end
+				for i = #NotificationQueue - QueueHead + 2, #NotificationQueue do
+					NotificationQueue[i] = nil
+				end
+				QueueHead = 1
+			end
+			
 			DisplayNotification(
 				nextNotification.Title,
 				nextNotification.Message,
@@ -224,14 +236,16 @@ local function DisplayNotification(title: string, message: string, duration: num
 	tween:Play()
 	
 	-- Add to active notifications with cleanup tracking
-	local cleanupThread = task.delay(duration, function()
-		RemoveNotification(notificationFrame, cleanupThread)
-	end)
-	
-	table.insert(ActiveNotifications, {
+	local notificationData = {
 		frame = notificationFrame,
-		cleanupThread = cleanupThread,
-	})
+		cleanupThread = nil,
+	}
+	table.insert(ActiveNotifications, notificationData)
+	
+	-- Auto-remove after duration
+	notificationData.cleanupThread = task.delay(duration, function()
+		RemoveNotification(notificationFrame)
+	end)
 	
 	Log(string.format("Displayed notification: %s", title))
 end
@@ -306,12 +320,13 @@ function NotificationController:ClearAll()
 		if data.frame and data.frame.Parent then
 			data.frame:Destroy()
 		end
-		if data.cleanupThread and coroutine.status(data.cleanupThread) == "suspended" then
+		if data.cleanupThread then
 			task.cancel(data.cleanupThread)
 		end
 	end
 	ActiveNotifications = {}
 	NotificationQueue = {}
+	QueueHead = 1
 	Log("Cleared all notifications")
 end
 
