@@ -94,6 +94,12 @@ local function OnTrackStarted(trackData: { gateName: string, totalDistance: numb
 	
 	Log(string.format("Track started at %s, total distance: %.2f", trackData.gateName, trackData.totalDistance))
 	
+	-- Fade out the loading screen now that server has acknowledged the request
+	local LoadingScreenController = Knit.GetController("LoadingScreenController")
+	if LoadingScreenController then
+		LoadingScreenController:HideLoadingScreen()
+	end
+	
 	-- Disable player controls
 	DisablePlayerControls()
 	

@@ -93,12 +93,22 @@ handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function
     -- Get the TrackService and send request to start running on track
     local TrackService = Knit.GetService("TrackService")
     
+    -- Fade in the loading screen before making the request
+    local LoadingScreenController = Knit.GetController("LoadingScreenController")
+    if LoadingScreenController then
+        LoadingScreenController:ShowLoadingScreen()
+    end
+    
     local success, gateName, totalDistance = TrackService:RequestTrackStart()
     
     if success then
         print("[InitUI]: Track start successful")
     else
-        warn(success)
+        print(string.format("[InitUI]: Track start failed - %s", gateName or "Unknown error"))
+        -- Fade out loading screen on failure
+        if LoadingScreenController then
+            LoadingScreenController:HideLoadingScreen()
+        end
     end
 end)
 
