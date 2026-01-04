@@ -88,7 +88,7 @@ local function CalculateInitialAngle(position: Vector3, center: Vector3): number
 end
 
 -- Calculate the total distance to travel based on player's current fuel
-local function CalculateTotalDistance(player: Player): number
+local function CalculateTotalDistance(player: Player, speed: number): number
 	local DataService = Knit.GetService("DataService")
 	local playerData = DataService:Get(player, "Stats")
 	
@@ -99,7 +99,7 @@ local function CalculateTotalDistance(player: Player): number
 	local fuel = playerData.Fuel or 0
 	
 	-- Total distance is based on fuel - more fuel = more distance on the track
-	local distanceMultiplier = 10 -- Each fuel unit contributes to distance
+	local distanceMultiplier = 0.5 -- Each fuel unit contributes to distance
 	local totalDistance = fuel * distanceMultiplier
 	
 	return totalDistance
@@ -277,6 +277,8 @@ local function OnHeartbeat(dt: number)
 			TrackService:EndTrackRun(player)
 			continue
 		end
+
+		print(trackData.distanceTraveled / trackData.totalDistance * 100, "% complete")
 		
 		-- Calculate new position and orientation
 		local targetCFrame, targetPosition = UpdateCircularPosition(center, radius, trackData.currentAngle, center.Y + 5)
@@ -345,7 +347,7 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	
 	-- Calculate speed and total distance
 	local speed = CalculatePlayerSpeed(player)
-	local totalDistance = CalculateTotalDistance(player)
+	local totalDistance = CalculateTotalDistance(player, speed)
 	
 	-- Track the player as running on the track (store player reference for efficient heartbeat loop)
 	PlayersOnTrack[userId] = {

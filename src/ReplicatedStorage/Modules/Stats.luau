@@ -15,7 +15,7 @@ Stats.WorldEfficiency = {
 
 -- World radius values for track movement (distance from center)
 Stats.WorldRadius = {
-	Main = 160,
+	Main = 175,
 }
 
 -- Returns the maximum fuel value with multipliers applied

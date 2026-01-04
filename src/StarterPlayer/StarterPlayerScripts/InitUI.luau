@@ -105,6 +105,8 @@ handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function
         print("[InitUI]: Already on track, ignoring click")
         return
     end
+
+    runButton.Visible = false
     
     -- Set debounce flag
     isRequestingTrack = true

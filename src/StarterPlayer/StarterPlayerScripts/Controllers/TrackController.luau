@@ -9,6 +9,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
 
+-- ui
+local player = Players.LocalPlayer
+local PlayerGui = player:WaitForChild("PlayerGui")
+local mainUi: ScreenGui = PlayerGui:WaitForChild("RaceThroughTime_UI")
+local centerHUD: Frame = mainUi:WaitForChild("CenterHUD")
+local runButton: TextButton = centerHUD:WaitForChild("RunButton")
+
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
 -- Reference to InitUI module for debounce reset
@@ -109,7 +116,7 @@ local function OnTrackStarted(trackData: { gateName: string, totalDistance: numb
 	-- Show notification
 	local NotificationController = Knit.GetController("NotificationController")
 	if NotificationController then
-		NotificationController:ShowNotification("🏁 Track Run Started!", 3, nil, {
+		NotificationController:ShowNotification("🏁 Track Run Started! Distance: " .. trackData.totalDistance, 3, nil, {
 			icon = "🏁"
 		})
 	end
@@ -139,6 +146,8 @@ local function OnTrackEnded(trackData: { distanceTraveled: number })
 			icon = "✅"
 		})
 	end
+
+	runButton.Visible = true
 end
 
 -- Check if player is currently on track
