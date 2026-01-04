@@ -166,15 +166,6 @@ local function PlaySound(soundName: string?, soundProperties: {}?)
 	end
 end
 
--- Update notification stack positions (for smooth animations)
-local function UpdateNotificationPositions()
-	local container = GetNotificationContainer()
-	if not container then return end
-	
-	-- UIListLayout handles positioning automatically
-	-- This function is kept for potential future custom animations
-end
-
 -- Remove oldest notifications if we exceed max visible
 local function TrimNotifications()
 	while #ActiveNotifications > MAX_VISIBLE_NOTIFICATIONS do
@@ -248,9 +239,8 @@ function NotificationController:ShowNotification(
 	table.insert(ActiveNotifications, notification)
 	TrimNotifications()
 	
-	-- Play sound
-	local soundName = sound or (options and options.soundProperties and "NotificationSound") or nil
-	PlaySound(soundName, options and options.soundProperties)
+	-- Play sound (always plays default sound unless explicitly suppressed)
+	PlaySound(sound, options and options.soundProperties)
 	
 	-- Spawn animation (scale up and fade in)
 	task.spawn(function()
