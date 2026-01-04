@@ -29,6 +29,8 @@ local Config = {
 	NotificationSpacing = 10, -- Vertical spacing between notifications
 	AnimationDuration = 0.3, -- Duration of slide-in/out animations
 	DefaultDuration = 3, -- Default notification display time
+	SlideOffset = 20, -- Horizontal offset for slide animation
+	QueueCleanupThreshold = 10, -- Clean up queue when head index exceeds this
 	TypeColors = {
 		Info = Color3.fromRGB(52, 152, 219), -- Blue
 		Success = Color3.fromRGB(46, 204, 113), -- Green
@@ -124,7 +126,7 @@ local function RemoveNotification(notificationFrame: Frame)
 	-- Animate out
 	local tweenInfo = TweenInfo.new(Config.AnimationDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	local tween = TweenService:Create(notificationFrame, tweenInfo, {
-		Position = UDim2.new(1, 20, notificationFrame.Position.Y.Scale, notificationFrame.Position.Y.Offset),
+		Position = UDim2.new(1, Config.SlideOffset, notificationFrame.Position.Y.Scale, notificationFrame.Position.Y.Offset),
 		BackgroundTransparency = 1,
 	})
 	
@@ -146,11 +148,9 @@ local function RemoveNotification(notificationFrame: Frame)
 			local nextNotification = NotificationQueue[QueueHead]
 			QueueHead = QueueHead + 1
 			
-			-- Clean up the queue if it gets too large
-			if QueueHead > 10 then
-				for i = QueueHead, #NotificationQueue do
-					NotificationQueue[i - QueueHead + 1] = NotificationQueue[i]
-				end
+			-- Clean up the queue periodically to prevent memory growth
+			if QueueHead > Config.QueueCleanupThreshold then
+				table.move(NotificationQueue, QueueHead, #NotificationQueue, 1)
 				for i = #NotificationQueue - QueueHead + 2, #NotificationQueue do
 					NotificationQueue[i] = nil
 				end
@@ -225,7 +225,7 @@ local function DisplayNotification(title: string, message: string, duration: num
 	
 	-- Store original position for animation
 	local originalPosition = notificationFrame.Position
-	notificationFrame.Position = UDim2.new(1, 20, originalPosition.Y.Scale, originalPosition.Y.Offset)
+	notificationFrame.Position = UDim2.new(1, Config.SlideOffset, originalPosition.Y.Scale, originalPosition.Y.Offset)
 	notificationFrame.Parent = listFrame
 	
 	-- Animate in
