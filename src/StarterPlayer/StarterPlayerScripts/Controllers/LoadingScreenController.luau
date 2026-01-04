@@ -108,6 +108,24 @@ function LoadingScreenController:IsLoadingComplete(): boolean
 	return IsDataReady and IsAssetsReady
 end
 
+-- Public method to show loading screen (fade in)
+function LoadingScreenController:ShowLoadingScreen()
+	if LoadingFrame then
+		task.spawn(function()
+			FadeIn(LoadingFrame)
+		end)
+	end
+end
+
+-- Public method to hide loading screen (fade out)
+function LoadingScreenController:HideLoadingScreen()
+	if LoadingFrame then
+		task.spawn(function()
+			FadeOut(LoadingFrame)
+		end)
+	end
+end
+
 -- Knit lifecycle
 function LoadingScreenController:KnitInit()
 	-- Get loading frame reference
