@@ -13,6 +13,9 @@ local PlayerGui = player:WaitForChild("PlayerGui")
 local modules = ReplicatedStorage:WaitForChild("Modules")
 local statsM = require(modules:WaitForChild("Stats"))
 
+-- Knit for service communication
+local Knit = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Knit"))
+
 -- ui
 local mainUi: ScreenGui = PlayerGui:WaitForChild("RaceThroughTime_UI")
 local leftPanel: Frame = mainUi:WaitForChild("LeftPanel")
@@ -87,7 +90,16 @@ function handler.UpdateGemsUI(amount: number)
 end
 
 handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function()
+    -- Get the TrackService and send request to start running on track
+    local TrackService = Knit.GetService("TrackService")
     
+    local success, gateName, totalDistance = TrackService:RequestTrackStart()
+    
+    if success then
+        print(string.format("[InitUI]: Track start successful at %s, distance: %.2f", gateName, totalDistance))
+    else
+        print(string.format("[InitUI]: Track start failed - %s", gateName or "Unknown error"))
+    end
 end)
 
 handler._connections["RenderStepped"] = game:GetService("RunService").RenderStepped:Connect(function()

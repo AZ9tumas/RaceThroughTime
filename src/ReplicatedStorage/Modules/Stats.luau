@@ -6,6 +6,12 @@
 local Stats = {}
 
 Stats.MaxBaseFuel = 1500
+Stats.BaseSpeed = 50
+
+-- World efficiency values for speed calculation
+Stats.WorldEfficiency = {
+	Main = 1,
+}
 
 -- Returns the maximum fuel value with multipliers applied
 -- Currently returns base value * 1, can be extended for upgrades/boosts
@@ -40,5 +46,28 @@ Stats.StarConfig = {
 	MinDistanceBetweenStars = 15, 	  -- Minimum distance between spawned stars
 	CollectionRadius = 10,             -- Distance within which a star can be collected
 }
+
+-- Calculate multipliers from pets, rebirths, and boosts
+-- Formula: Σ(M_pets + M_rebirth + M_boosts)
+-- Returns 1 for now, can be extended for actual multiplier calculations
+function Stats.CalculateMultipliers(): number
+	return 1
+end
+
+-- Calculate speed from fuel using the formula:
+-- V_total = (V_base + F^0.7 * E_world) * Σ(M_pets + M_rebirth + M_boosts)
+-- @param fuel number - The current fuel amount
+-- @param worldName string? - The world name to get efficiency for (default: "Main")
+-- @return number - The calculated total speed
+function Stats.CalculateSpeedFromFuel(fuel: number, worldName: string?): number
+	local baseSpeed = Stats.BaseSpeed
+	local worldEfficiency = Stats.WorldEfficiency[worldName or "Main"] or 1
+	local multipliers = Stats.CalculateMultipliers()
+	
+	local fuelComponent = math.pow(fuel, 0.7) * worldEfficiency
+	local totalSpeed = (baseSpeed + fuelComponent) * multipliers
+	
+	return totalSpeed
+end
 
 return Stats

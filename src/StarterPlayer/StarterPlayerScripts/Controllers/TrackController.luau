@@ -1,0 +1,137 @@
+--[[
+	TrackController
+	Handles track running on the client side.
+	Receives acknowledgment from server and disables player controls while on track.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
+
+local Knit = require(ReplicatedStorage.Packages.Knit)
+
+local TrackController = Knit.CreateController({
+	Name = "TrackController",
+})
+
+-- Private state
+local IsOnTrack = false
+local TrackData = nil
+local OriginalWalkSpeed = 16
+local OriginalJumpPower = 50
+
+-- Helper function for logging
+local function Log(message: string)
+	print(string.format("[TrackController]: %s", message))
+end
+
+-- Disable player movement controls
+local function DisablePlayerControls()
+	local player = Players.LocalPlayer
+	local character = player.Character
+	if not character then return end
+	
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		-- Store original values
+		OriginalWalkSpeed = humanoid.WalkSpeed
+		OriginalJumpPower = humanoid.JumpPower
+		
+		-- Disable movement
+		humanoid.WalkSpeed = 0
+		humanoid.JumpPower = 0
+	end
+	
+	-- Sink all movement inputs
+	ContextActionService:BindAction("TrackController_DisableMovement", function()
+		return Enum.ContextActionResult.Sink
+	end, false, 
+		Enum.PlayerActions.CharacterForward,
+		Enum.PlayerActions.CharacterBackward,
+		Enum.PlayerActions.CharacterLeft,
+		Enum.PlayerActions.CharacterRight,
+		Enum.PlayerActions.CharacterJump
+	)
+	
+	Log("Player controls disabled")
+end
+
+-- Enable player movement controls
+local function EnablePlayerControls()
+	local player = Players.LocalPlayer
+	local character = player.Character
+	if not character then return end
+	
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		-- Restore original values
+		humanoid.WalkSpeed = OriginalWalkSpeed
+		humanoid.JumpPower = OriginalJumpPower
+	end
+	
+	-- Unbind movement sink
+	ContextActionService:UnbindAction("TrackController_DisableMovement")
+	
+	Log("Player controls enabled")
+end
+
+-- Handle track started signal from server
+local function OnTrackStarted(trackData: { gateName: string, totalDistance: number })
+	IsOnTrack = true
+	TrackData = trackData
+	
+	Log(string.format("Track started at %s, total distance: %.2f", trackData.gateName, trackData.totalDistance))
+	
+	-- Disable player controls
+	DisablePlayerControls()
+	
+	-- Show notification
+	local NotificationController = Knit.GetController("NotificationController")
+	if NotificationController then
+		NotificationController:ShowNotification("🏁 Track Run Started!", 3, nil, {
+			icon = "🏁"
+		})
+	end
+	
+	-- Additional track running logic will be implemented later
+end
+
+-- Check if player is currently on track
+function TrackController:IsOnTrack(): boolean
+	return IsOnTrack
+end
+
+-- Get current track data
+function TrackController:GetTrackData()
+	return TrackData
+end
+
+-- Stop track running (for future use)
+function TrackController:StopTrack()
+	if not IsOnTrack then return end
+	
+	IsOnTrack = false
+	TrackData = nil
+	
+	-- Re-enable player controls
+	EnablePlayerControls()
+	
+	Log("Track stopped")
+end
+
+-- Knit lifecycle
+function TrackController:KnitInit()
+	-- Controller initialization
+end
+
+function TrackController:KnitStart()
+	-- Listen for server signals
+	local TrackService = Knit.GetService("TrackService")
+	
+	TrackService.TrackStarted:Connect(OnTrackStarted)
+	
+	Log("TrackController started")
+end
+
+return TrackController
