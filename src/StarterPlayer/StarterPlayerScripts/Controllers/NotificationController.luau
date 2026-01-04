@@ -103,12 +103,6 @@ local function GetNotificationContainer()
 	return NotificationContainer
 end
 
--- Update positions of all active notifications
-local function UpdateNotificationPositions()
-	-- Positions are automatically handled by UIListLayout
-	-- No custom logic needed
-end
-
 -- Remove a notification from the display
 local function RemoveNotification(notificationFrame: Frame, cleanupThread: thread?)
 	if not notificationFrame or not notificationFrame.Parent then
@@ -151,14 +145,12 @@ local function RemoveNotification(notificationFrame: Frame, cleanupThread: threa
 		-- Process queue if there are waiting notifications
 		if #NotificationQueue > 0 then
 			local nextNotification = table.remove(NotificationQueue, 1)
-			task.spawn(function()
-				DisplayNotification(
-					nextNotification.Title,
-					nextNotification.Message,
-					nextNotification.Duration,
-					nextNotification.Type
-				)
-			end)
+			DisplayNotification(
+				nextNotification.Title,
+				nextNotification.Message,
+				nextNotification.Duration,
+				nextNotification.Type
+			)
 		end
 	end)
 	
@@ -233,7 +225,7 @@ local function DisplayNotification(title: string, message: string, duration: num
 	
 	-- Add to active notifications with cleanup tracking
 	local cleanupThread = task.delay(duration, function()
-		RemoveNotification(notificationFrame, nil)
+		RemoveNotification(notificationFrame, cleanupThread)
 	end)
 	
 	table.insert(ActiveNotifications, {
