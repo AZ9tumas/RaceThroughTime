@@ -18,7 +18,9 @@ local mainUi: ScreenGui = PlayerGui:WaitForChild("RaceThroughTime_UI")
 local leftPanel: Frame = mainUi:WaitForChild("LeftPanel")
 local cashDisplay: TextLabel = leftPanel:WaitForChild("CashDisplay")
 local GemsDisplay: TextLabel = leftPanel:WaitForChild("GemsDisplay")
-local fuelBar = mainUi:WaitForChild("CenterHUD"):WaitForChild("FuelBar")
+local centerHUD: Frame = mainUi:WaitForChild("CenterHUD")
+local runButton: TextButton = centerHUD:WaitForChild("RunButton")
+local fuelBar = centerHUD:WaitForChild("FuelBar")
 local fuelText: TextLabel = fuelBar:WaitForChild("FuelText")
 local fuelBarFill = fuelBar:WaitForChild("Fill")
 
@@ -83,6 +85,10 @@ end
 function handler.UpdateGemsUI(amount: number)
     GemsDisplay.Text = "💎 " .. truncateNumber(amount)
 end
+
+handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function()
+    
+end)
 
 handler._connections["RenderStepped"] = game:GetService("RunService").RenderStepped:Connect(function()
     handler.UpdateFuelUI(fuelVal.Value)
