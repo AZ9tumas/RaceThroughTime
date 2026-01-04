@@ -27,7 +27,9 @@ local TrackService = Knit.CreateService({
 
 -- Private state
 local PlayersOnTrack = {} -- [Player.UserId] = { player, startTime, gateIndex, totalDistance, currentAngle, speed, distanceTraveled }
+local PlayerRequestDebounce = {} -- [Player.UserId] = lastRequestTime (for rate limiting)
 local HeartbeatConnection = nil -- Note: Connection persists for service lifetime, no cleanup needed
+local DEBOUNCE_COOLDOWN = 1 -- Minimum seconds between requests
 
 -- Helper function for logging
 local function Log(message: string)
@@ -288,6 +290,17 @@ end
 -- Client request to start running on the track
 function TrackService.Client:RequestTrackStart(player: Player): (boolean, string?, number?)
 	local userId = player.UserId
+	local currentTime = tick()
+	
+	-- Check rate limiting debounce
+	local lastRequestTime = PlayerRequestDebounce[userId]
+	if lastRequestTime and (currentTime - lastRequestTime) < DEBOUNCE_COOLDOWN then
+		local remainingTime = DEBOUNCE_COOLDOWN - (currentTime - lastRequestTime)
+		return false, string.format("Request too fast, wait %.1f seconds", remainingTime), nil
+	end
+	
+	-- Update last request time
+	PlayerRequestDebounce[userId] = currentTime
 	
 	-- Check if player is already on the track
 	if PlayersOnTrack[userId] then
@@ -364,6 +377,7 @@ local function OnPlayerRemoving(player: Player)
 		CleanupBodyMovers(character)
 	end
 	PlayersOnTrack[player.UserId] = nil
+	PlayerRequestDebounce[player.UserId] = nil
 	Log(string.format("Cleared track data for player %s", player.Name))
 end
 

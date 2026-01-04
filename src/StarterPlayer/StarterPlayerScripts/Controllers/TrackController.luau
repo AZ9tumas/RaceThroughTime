@@ -11,6 +11,9 @@ local ContextActionService = game:GetService("ContextActionService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
+-- Reference to InitUI module for debounce reset
+local InitUI = nil
+
 local TrackController = Knit.CreateController({
 	Name = "TrackController",
 })
@@ -124,6 +127,11 @@ local function OnTrackEnded(trackData: { distanceTraveled: number })
 	-- Re-enable player controls
 	EnablePlayerControls()
 	
+	-- Reset InitUI debounce so player can request a new run
+	if InitUI and InitUI.ResetTrackDebounce then
+		InitUI.ResetTrackDebounce()
+	end
+	
 	-- Show notification
 	local NotificationController = Knit.GetController("NotificationController")
 	if NotificationController then
@@ -162,6 +170,13 @@ function TrackController:KnitInit()
 end
 
 function TrackController:KnitStart()
+	-- Get InitUI reference for debounce reset
+	local StarterPlayerScripts = Knit.Player:WaitForChild("PlayerScripts")
+	local initUIModule = StarterPlayerScripts:FindFirstChild("InitUI")
+	if initUIModule then
+		InitUI = require(initUIModule)
+	end
+	
 	-- Listen for server signals
 	local TrackService = Knit.GetService("TrackService")
 	

@@ -16,6 +16,9 @@ local statsM = require(modules:WaitForChild("Stats"))
 -- Knit for service communication
 local Knit = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Knit"))
 
+-- Debounce state for track requests
+local isRequestingTrack = false
+
 -- ui
 local mainUi: ScreenGui = PlayerGui:WaitForChild("RaceThroughTime_UI")
 local leftPanel: Frame = mainUi:WaitForChild("LeftPanel")
@@ -90,6 +93,22 @@ function handler.UpdateGemsUI(amount: number)
 end
 
 handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function()
+    -- Debounce: prevent spam requests while one is already in progress
+    if isRequestingTrack then
+        print("[InitUI]: Track request already in progress, ignoring click")
+        return
+    end
+    
+    -- Check if player is already on track (via TrackController)
+    local TrackController = Knit.GetController("TrackController")
+    if TrackController and TrackController:IsOnTrack() then
+        print("[InitUI]: Already on track, ignoring click")
+        return
+    end
+    
+    -- Set debounce flag
+    isRequestingTrack = true
+    
     -- Get the TrackService and send request to start running on track
     local TrackService = Knit.GetService("TrackService")
     
@@ -103,14 +122,22 @@ handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function
     
     if success then
         print("[InitUI]: Track start successful")
+        -- Keep debounce on until track ends (handled by TrackController)
     else
         print(string.format("[InitUI]: Track start failed - %s", gateName or "Unknown error"))
         -- Fade out loading screen on failure
         if LoadingScreenController then
             LoadingScreenController:HideLoadingScreen()
         end
+        -- Reset debounce on failure so player can try again
+        isRequestingTrack = false
     end
 end)
+
+-- Function to reset debounce when track ends (called externally)
+function handler.ResetTrackDebounce()
+    isRequestingTrack = false
+end
 
 handler._connections["RenderStepped"] = game:GetService("RunService").RenderStepped:Connect(function()
     handler.UpdateFuelUI(fuelVal.Value)
