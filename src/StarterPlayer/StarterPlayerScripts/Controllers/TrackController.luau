@@ -88,11 +88,11 @@ local function EnablePlayerControls()
 end
 
 -- Handle track started signal from server
-local function OnTrackStarted(trackData: { gateName: string, totalDistance: number })
+local function OnTrackStarted(trackData: { gateName: string, totalDistance: number, speed: number })
 	IsOnTrack = true
 	TrackData = trackData
 	
-	Log(string.format("Track started at %s, total distance: %.2f", trackData.gateName, trackData.totalDistance))
+	Log(string.format("Track started at %s, total distance: %.2f, speed: %.2f", trackData.gateName, trackData.totalDistance, trackData.speed or 0))
 	
 	-- Fade out the loading screen now that server has acknowledged the request
 	local LoadingScreenController = Knit.GetController("LoadingScreenController")
@@ -110,8 +110,27 @@ local function OnTrackStarted(trackData: { gateName: string, totalDistance: numb
 			icon = "🏁"
 		})
 	end
+end
+
+-- Handle track ended signal from server
+local function OnTrackEnded(trackData: { distanceTraveled: number })
+	if not IsOnTrack then return end
 	
-	-- Additional track running logic will be implemented later
+	Log(string.format("Track ended, distance traveled: %.2f", trackData.distanceTraveled or 0))
+	
+	IsOnTrack = false
+	TrackData = nil
+	
+	-- Re-enable player controls
+	EnablePlayerControls()
+	
+	-- Show notification
+	local NotificationController = Knit.GetController("NotificationController")
+	if NotificationController then
+		NotificationController:ShowNotification("🏁 Track Run Complete!", 3, nil, {
+			icon = "✅"
+		})
+	end
 end
 
 -- Check if player is currently on track
@@ -147,6 +166,7 @@ function TrackController:KnitStart()
 	local TrackService = Knit.GetService("TrackService")
 	
 	TrackService.TrackStarted:Connect(OnTrackStarted)
+	TrackService.TrackEnded:Connect(OnTrackEnded)
 	
 	Log("TrackController started")
 end

@@ -2,32 +2,41 @@
 	TrackService
 	Handles track teleportation and player tracking for the racing system.
 	Players request to start running on a track, get teleported to the closest gate,
-	and are tracked while running.
+	and are tracked while running. Uses circular movement with body movers.
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 
 -- Track gate references
 local TrackGates = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("Track_System"):WaitForChild("Track_Gates")
+local SpawnLocation = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("SpawnLocation")
 
 local TrackService = Knit.CreateService({
 	Name = "TrackService",
 	Client = {
 		TrackStarted = Knit.CreateSignal(), -- Signal to notify client when track run starts
+		TrackEnded = Knit.CreateSignal(), -- Signal to notify client when track run ends
 	},
 })
 
 -- Private state
-local PlayersOnTrack = {} -- [Player.UserId] = { startTime, gateIndex, totalDistance }
+local PlayersOnTrack = {} -- [Player.UserId] = { player, startTime, gateIndex, totalDistance, currentAngle, speed, distanceTraveled }
+local HeartbeatConnection = nil -- Note: Connection persists for service lifetime, no cleanup needed
 
 -- Helper function for logging
 local function Log(message: string)
 	print(string.format("[TrackService]: %s", message))
+end
+
+-- Get the center position for circular movement (SpawnLocation position)
+local function GetTrackCenter(): Vector3
+	return SpawnLocation.Position
 end
 
 -- Get all track gate positions
@@ -69,6 +78,13 @@ local function FindClosestGate(playerPosition: Vector3): (string?, Vector3?, num
 	return closestGate, closestPosition, closestDistance
 end
 
+-- Calculate the initial angle based on player's position relative to center
+local function CalculateInitialAngle(position: Vector3, center: Vector3): number
+	local dx = position.X - center.X
+	local dz = position.Z - center.Z
+	return math.atan2(dz, dx)
+end
+
 -- Calculate the total distance to travel based on player's current fuel
 local function CalculateTotalDistance(player: Player): number
 	local DataService = Knit.GetService("DataService")
@@ -79,11 +95,102 @@ local function CalculateTotalDistance(player: Player): number
 	end
 	
 	local fuel = playerData.Fuel or 0
-	local speed = Stats.CalculateSpeedFromFuel(fuel, "Main")
 	
-	local totalDistance = (2 * math.pi * 160) / speed
-	totalDistance *= 15
+	-- Total distance is based on fuel - more fuel = more distance on the track
+	local distanceMultiplier = 10 -- Each fuel unit contributes to distance
+	local totalDistance = fuel * distanceMultiplier
+	
 	return totalDistance
+end
+
+-- Calculate the player's speed based on their fuel
+local function CalculatePlayerSpeed(player: Player): number
+	local DataService = Knit.GetService("DataService")
+	local playerData = DataService:Get(player, "Stats")
+	
+	if not playerData then
+		return Stats.BaseSpeed
+	end
+	
+	local fuel = playerData.Fuel or 0
+	return Stats.CalculateSpeedFromFuel(fuel, "Main")
+end
+
+-- Update circular position using polar to cartesian conversion
+local function UpdateCircularPosition(center: Vector3, radius: number, angle: number, y: number): (CFrame, Vector3)
+	-- Polar to Cartesian conversion
+	local x = center.X + radius * math.cos(angle)
+	local z = center.Z + radius * math.sin(angle)
+	
+	local targetPosition = Vector3.new(x, y, z)
+	
+	-- Calculate orientation (tangential direction - looking forward along the path)
+	local lookAtPos = targetPosition + Vector3.new(
+		-math.sin(angle), -- Derivative of cos
+		0,
+		math.cos(angle)   -- Derivative of sin
+	)
+	
+	local finalCFrame = CFrame.lookAt(targetPosition, lookAtPos)
+	
+	return finalCFrame, targetPosition
+end
+
+-- Setup body movers for smooth movement
+local function SetupBodyMovers(character: Model): (AlignPosition?, AlignOrientation?)
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return nil, nil end
+	
+	-- Create or get attachment for body movers
+	local attachment = rootPart:FindFirstChild("TrackAttachment")
+	if not attachment then
+		attachment = Instance.new("Attachment")
+		attachment.Name = "TrackAttachment"
+		attachment.Parent = rootPart
+	end
+	
+	-- Create AlignPosition for smooth position movement
+	local alignPosition = rootPart:FindFirstChild("TrackAlignPosition")
+	if not alignPosition then
+		alignPosition = Instance.new("AlignPosition")
+		alignPosition.Name = "TrackAlignPosition"
+		alignPosition.Mode = Enum.PositionAlignmentMode.OneAttachment
+		alignPosition.Attachment0 = attachment
+		alignPosition.MaxForce = 100000
+		alignPosition.MaxVelocity = 500
+		alignPosition.Responsiveness = 50
+		alignPosition.Parent = rootPart
+	end
+	
+	-- Create AlignOrientation for smooth rotation
+	local alignOrientation = rootPart:FindFirstChild("TrackAlignOrientation")
+	if not alignOrientation then
+		alignOrientation = Instance.new("AlignOrientation")
+		alignOrientation.Name = "TrackAlignOrientation"
+		alignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
+		alignOrientation.Attachment0 = attachment
+		alignOrientation.MaxTorque = 100000
+		alignOrientation.MaxAngularVelocity = 50
+		alignOrientation.Responsiveness = 50
+		alignOrientation.Parent = rootPart
+	end
+	
+	return alignPosition, alignOrientation
+end
+
+-- Clean up body movers when track ends
+local function CleanupBodyMovers(character: Model)
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+	
+	local alignPosition = rootPart:FindFirstChild("TrackAlignPosition")
+	if alignPosition then alignPosition:Destroy() end
+	
+	local alignOrientation = rootPart:FindFirstChild("TrackAlignOrientation")
+	if alignOrientation then alignOrientation:Destroy() end
+	
+	local attachment = rootPart:FindFirstChild("TrackAttachment")
+	if attachment then attachment:Destroy() end
 end
 
 -- Check if a player is currently on the track
@@ -96,11 +203,85 @@ function TrackService:GetPlayerTrackData(player: Player)
 	return PlayersOnTrack[player.UserId]
 end
 
--- Remove player from track
+-- End track run for a player
+function TrackService:EndTrackRun(player: Player)
+	local userId = player.UserId
+	local trackData = PlayersOnTrack[userId]
+	
+	if not trackData then return end
+	
+	-- Clean up body movers
+	local character = player.Character
+	if character then
+		CleanupBodyMovers(character)
+	end
+	
+	-- Calculate rewards based on distance traveled
+	local distanceTraveled = trackData.distanceTraveled or 0
+	
+	Log(string.format("Player %s ended track run, distance traveled: %.2f", player.Name, distanceTraveled))
+	
+	-- Clear player from track
+	PlayersOnTrack[userId] = nil
+	
+	-- Fire signal to client that track has ended
+	TrackService.Client.TrackEnded:Fire(player, {
+		distanceTraveled = distanceTraveled,
+	})
+end
+
+-- Remove player from track (alias for EndTrackRun)
 function TrackService:RemovePlayerFromTrack(player: Player)
-	if PlayersOnTrack[player.UserId] then
-		Log(string.format("Player %s removed from track", player.Name))
-		PlayersOnTrack[player.UserId] = nil
+	self:EndTrackRun(player)
+end
+
+-- Main heartbeat update for all players on track
+local function OnHeartbeat(dt: number)
+	local center = GetTrackCenter()
+	local radius = Stats.WorldRadius.Main
+	
+	for userId, trackData in pairs(PlayersOnTrack) do
+		local player = trackData.player
+		if not player or not player:IsDescendantOf(Players) then
+			PlayersOnTrack[userId] = nil
+			continue
+		end
+		
+		local character = player.Character
+		if not character then continue end
+		
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+		if not rootPart then continue end
+		
+		-- Get body movers
+		local alignPosition = rootPart:FindFirstChild("TrackAlignPosition")
+		local alignOrientation = rootPart:FindFirstChild("TrackAlignOrientation")
+		
+		if not alignPosition or not alignOrientation then continue end
+		
+		-- Calculate angular velocity (w = v / r)
+		local speed = trackData.speed
+		local angularVelocity = speed / radius
+		
+		-- Update angle based on time delta
+		trackData.currentAngle = trackData.currentAngle + (angularVelocity * dt)
+		
+		-- Calculate distance traveled this frame
+		local distanceThisFrame = speed * dt
+		trackData.distanceTraveled = trackData.distanceTraveled + distanceThisFrame
+		
+		-- Check if player has completed their run
+		if trackData.distanceTraveled >= trackData.totalDistance then
+			TrackService:EndTrackRun(player)
+			continue
+		end
+		
+		-- Calculate new position and orientation
+		local targetCFrame, targetPosition = UpdateCircularPosition(center, radius, trackData.currentAngle, center.Y + 5)
+		
+		-- Update body mover targets
+		alignPosition.Position = targetPosition
+		alignOrientation.CFrame = targetCFrame
 	end
 end
 
@@ -132,26 +313,45 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		return false, "No gates found", nil
 	end
 	
-	-- Teleport player to the closest gate
-	local teleportPosition = gatePosition + Vector3.new(0, 3, 0) -- Slightly above the gate
-	rootPart.CFrame = CFrame.new(teleportPosition)
+	-- Get track center and radius
+	local center = GetTrackCenter()
+	local radius = Stats.WorldRadius.Main
 	
-	-- Calculate total distance to travel
+	-- Calculate initial angle based on gate position
+	local initialAngle = CalculateInitialAngle(gatePosition, center)
+	
+	-- Teleport player to the gate position on the track
+	local teleportCFrame, _ = UpdateCircularPosition(center, radius, initialAngle, center.Y + 5)
+	rootPart.CFrame = teleportCFrame
+	
+	-- Setup body movers for smooth movement
+	local alignPosition, alignOrientation = SetupBodyMovers(character)
+	if not alignPosition or not alignOrientation then
+		return false, "Failed to setup body movers", nil
+	end
+	
+	-- Calculate speed and total distance
+	local speed = CalculatePlayerSpeed(player)
 	local totalDistance = CalculateTotalDistance(player)
 	
-	-- Track the player as running on the track
+	-- Track the player as running on the track (store player reference for efficient heartbeat loop)
 	PlayersOnTrack[userId] = {
+		player = player,
 		startTime = tick(),
 		gateIndex = tonumber(closestGate:match("%d+")),
 		totalDistance = totalDistance,
+		currentAngle = initialAngle,
+		speed = speed,
+		distanceTraveled = 0,
 	}
 	
-	Log(string.format("Player %s started track at %s, distance: %.2f", player.Name, closestGate, totalDistance))
+	Log(string.format("Player %s started track at %s, speed: %.2f, distance: %.2f", player.Name, closestGate, speed, totalDistance))
 	
 	-- Fire signal to client that track has started
 	TrackService.Client.TrackStarted:Fire(player, {
 		gateName = closestGate,
 		totalDistance = totalDistance,
+		speed = speed,
 	})
 	
 	return true, closestGate, totalDistance
@@ -159,6 +359,10 @@ end
 
 -- Clean up when player leaves
 local function OnPlayerRemoving(player: Player)
+	local character = player.Character
+	if character then
+		CleanupBodyMovers(character)
+	end
 	PlayersOnTrack[player.UserId] = nil
 	Log(string.format("Cleared track data for player %s", player.Name))
 end
@@ -170,6 +374,8 @@ function TrackService:KnitInit()
 end
 
 function TrackService:KnitStart()
+	-- Start the heartbeat loop for circular movement
+	HeartbeatConnection = RunService.Heartbeat:Connect(OnHeartbeat)
 	Log("TrackService started")
 end
 
