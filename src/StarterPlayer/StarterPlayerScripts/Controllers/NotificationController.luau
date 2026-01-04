@@ -72,40 +72,10 @@ local function GetNotificationContainer(): Frame?
 	end
 	
 	-- Find or create notification ScreenGui
-	local screenGui = PlayerGui:FindFirstChild("NotificationGui")
-	if not screenGui then
-		screenGui = Instance.new("ScreenGui")
-		screenGui.Name = "NotificationGui"
-		screenGui.ResetOnSpawn = false
-		screenGui.DisplayOrder = 100 -- High display order for visibility
-		screenGui.IgnoreGuiInset = true
-		screenGui.Parent = PlayerGui
-	end
+	local screenGui = PlayerGui:WaitForChild("Essentials")
 	
 	-- Find or create container frame
-	NotificationContainer = screenGui:FindFirstChild("Container")
-	if not NotificationContainer then
-		NotificationContainer = Instance.new("Frame")
-		NotificationContainer.Name = "Container"
-		NotificationContainer.BackgroundTransparency = 1
-		NotificationContainer.Size = UDim2.new(1, 0, 1, 0)
-		NotificationContainer.Position = UDim2.new(0, 0, 0, 0)
-		NotificationContainer.Parent = screenGui
-		
-		-- Add UIListLayout for automatic stacking
-		local layout = Instance.new("UIListLayout")
-		layout.Name = "Layout"
-		layout.SortOrder = Enum.SortOrder.LayoutOrder
-		layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-		layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-		layout.Padding = UDim.new(0, NOTIFICATION_SPACING)
-		layout.Parent = NotificationContainer
-		
-		-- Add padding from bottom
-		local padding = Instance.new("UIPadding")
-		padding.PaddingBottom = UDim.new(0, 50)
-		padding.Parent = NotificationContainer
-	end
+	NotificationContainer = screenGui:WaitForChild("Notifications")
 	
 	return NotificationContainer
 end
