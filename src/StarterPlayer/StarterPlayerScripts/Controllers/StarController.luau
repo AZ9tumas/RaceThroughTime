@@ -150,6 +150,12 @@ local function OnRemoveStar(starId: string)
 		star:Destroy()
 		SpawnedStars[starId] = nil
 		Log(string.format("Removed star %s", starId))
+		
+		-- Show notification for star collection
+		local NotificationController = Knit.GetController("NotificationController")
+		NotificationController:ShowNotification("Star collected! ⭐ +Fuel", 2, nil, {
+			icon = "⭐"
+		})
 	end
 end
 
