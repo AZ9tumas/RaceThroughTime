@@ -31,18 +31,63 @@ The notification system requires a UI template located at:
 ReplicatedStorage.Assets.NotificationTemplate
 ```
 
-The template should be a Frame or similar GuiObject with the following children:
-- **Title** (TextLabel) - Displays the notification title
-- **Message** (TextLabel) - Displays the notification message
-- **TypeIndicator** (Frame, optional) - Colored indicator showing the notification type
+**⚠️ IMPORTANT: UI Template Setup Required**
 
-Example structure:
+The NotificationTemplate must exist in the game file at the location above. If it doesn't exist yet, you need to create it:
+
+#### Creating the NotificationTemplate
+
+1. In Roblox Studio, navigate to ReplicatedStorage
+2. Create a folder named "Assets" if it doesn't exist
+3. Inside Assets, create a Frame named "NotificationTemplate"
+4. Add the following children to the NotificationTemplate Frame:
+
+**Recommended structure:**
 ```
 NotificationTemplate (Frame)
-├── Title (TextLabel)
-├── Message (TextLabel)
-└── TypeIndicator (Frame) [Optional]
+├── UICorner (optional, for rounded corners)
+├── TypeIndicator (Frame) - Colored bar/indicator
+│   └── UICorner (optional)
+├── Title (TextLabel) - Displays notification title
+│   ├── UITextSizeConstraint (optional)
+│   └── UIPadding (optional)
+└── Message (TextLabel) - Displays notification message
+    ├── UITextSizeConstraint (optional)
+    └── UIPadding (optional)
 ```
+
+#### Example Template Properties
+
+**NotificationTemplate (Frame):**
+- Size: `UDim2.new(1, 0, 0, 80)` or `UDim2.new(0, 280, 0, 80)`
+- BackgroundColor3: `Color3.fromRGB(40, 40, 40)` (dark gray)
+- BorderSizePixel: 0
+
+**TypeIndicator (Frame):**
+- Size: `UDim2.new(0, 4, 1, 0)` (vertical bar on left side)
+- Position: `UDim2.new(0, 0, 0, 0)`
+- BackgroundColor3: Will be set automatically based on notification type
+
+**Title (TextLabel):**
+- Size: `UDim2.new(1, -15, 0, 25)`
+- Position: `UDim2.new(0, 15, 0, 10)`
+- TextSize: 18
+- TextColor3: `Color3.fromRGB(255, 255, 255)`
+- Font: Enum.Font.GothamBold
+- TextXAlignment: Enum.TextXAlignment.Left
+- TextYAlignment: Enum.TextYAlignment.Top
+
+**Message (TextLabel):**
+- Size: `UDim2.new(1, -15, 0, 35)`
+- Position: `UDim2.new(0, 15, 0, 40)`
+- TextSize: 14
+- TextColor3: `Color3.fromRGB(200, 200, 200)`
+- Font: Enum.Font.Gotham
+- TextXAlignment: Enum.TextXAlignment.Left
+- TextYAlignment: Enum.TextYAlignment.Top
+- TextWrapped: true
+
+The template should be designed but kept invisible (Visible = false), as the controller will clone and show it when needed.
 
 ## Usage Examples
 
@@ -220,10 +265,23 @@ All notifications feature smooth slide-in and slide-out animations using TweenSe
 
 ## Migration from NotificationClient
 
-The old `NotificationClient` script has been removed. It was a template/example script with incorrect implementation that referenced:
+The old `NotificationClient` script needs to be manually removed from the game file. It was a template/example script with incorrect implementation that referenced:
 - Old "Sample" template name (now "NotificationTemplate")
 - Wrong location (template is now in ReplicatedStorage.Assets)
 - Event/remote-based system (now uses Knit signals)
+
+### Removal Steps
+
+**⚠️ IMPORTANT: Manual removal required**
+
+The `NotificationClient` script exists in StarterPlayer.StarterPlayerScripts in the game file (.rbxl) but is NOT synced to source control. You must manually remove it:
+
+1. Open the game file in Roblox Studio
+2. Navigate to StarterPlayer → StarterPlayerScripts
+3. Find and delete the "NotificationClient" script
+4. Save the game file
+
+The script is not in the src folder, so it won't be automatically removed when syncing from source. It must be manually deleted from the .rbxl file.
 
 **What changed:**
 - ❌ No RemoteEvents or RemoteFunctions

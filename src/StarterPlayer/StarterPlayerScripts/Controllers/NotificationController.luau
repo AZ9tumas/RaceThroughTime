@@ -19,7 +19,7 @@ local NotificationController = Knit.CreateController({
 -- Private state
 local NotificationTemplate = nil
 local NotificationContainer = nil
-local ActiveNotifications = {} -- Array of active notification frames
+local ActiveNotifications = {} -- Array of active notification frames with cleanup data
 local NotificationQueue = {} -- Queue for notifications waiting to be displayed
 local MaxVisibleNotifications = 3 -- Maximum number of notifications shown at once
 
@@ -105,19 +105,24 @@ end
 
 -- Update positions of all active notifications
 local function UpdateNotificationPositions()
-	-- Positions are automatically updated by UIListLayout
-	-- This function is kept for potential future custom positioning logic
+	-- Positions are automatically handled by UIListLayout
+	-- No custom logic needed
 end
 
 -- Remove a notification from the display
-local function RemoveNotification(notificationFrame: Frame)
+local function RemoveNotification(notificationFrame: Frame, cleanupThread: thread?)
 	if not notificationFrame or not notificationFrame.Parent then
 		return
 	end
 	
+	-- Cancel the auto-removal thread if it exists
+	if cleanupThread and coroutine.status(cleanupThread) == "suspended" then
+		task.cancel(cleanupThread)
+	end
+	
 	-- Find and remove from active notifications
-	for i, frame in ipairs(ActiveNotifications) do
-		if frame == notificationFrame then
+	for i, data in ipairs(ActiveNotifications) do
+		if data.frame == notificationFrame then
 			table.remove(ActiveNotifications, i)
 			break
 		end
@@ -142,12 +147,18 @@ local function RemoveNotification(notificationFrame: Frame)
 	
 	tween.Completed:Connect(function()
 		notificationFrame:Destroy()
-		UpdateNotificationPositions()
 		
 		-- Process queue if there are waiting notifications
 		if #NotificationQueue > 0 then
 			local nextNotification = table.remove(NotificationQueue, 1)
-			NotificationController:Show(nextNotification.Title, nextNotification.Message, nextNotification.Duration, nextNotification.Type)
+			task.spawn(function()
+				DisplayNotification(
+					nextNotification.Title,
+					nextNotification.Message,
+					nextNotification.Duration,
+					nextNotification.Type
+				)
+			end)
 		end
 	end)
 	
@@ -220,13 +231,15 @@ local function DisplayNotification(title: string, message: string, duration: num
 	})
 	tween:Play()
 	
-	-- Add to active notifications
-	table.insert(ActiveNotifications, notificationFrame)
-	
-	-- Auto-remove after duration
-	task.delay(duration, function()
-		RemoveNotification(notificationFrame)
+	-- Add to active notifications with cleanup tracking
+	local cleanupThread = task.delay(duration, function()
+		RemoveNotification(notificationFrame, nil)
 	end)
+	
+	table.insert(ActiveNotifications, {
+		frame = notificationFrame,
+		cleanupThread = cleanupThread,
+	})
 	
 	Log(string.format("Displayed notification: %s", title))
 end
@@ -297,9 +310,12 @@ end
 	Clears all active notifications immediately.
 ]=]
 function NotificationController:ClearAll()
-	for _, notificationFrame in ipairs(ActiveNotifications) do
-		if notificationFrame and notificationFrame.Parent then
-			notificationFrame:Destroy()
+	for _, data in ipairs(ActiveNotifications) do
+		if data.frame and data.frame.Parent then
+			data.frame:Destroy()
+		end
+		if data.cleanupThread and coroutine.status(data.cleanupThread) == "suspended" then
+			task.cancel(data.cleanupThread)
 		end
 	end
 	ActiveNotifications = {}

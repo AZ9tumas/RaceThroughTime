@@ -46,7 +46,6 @@ function NotificationService:Notify(player: Player, title: string, message: stri
 		Message = message or "",
 		Duration = duration or 3,
 		Type = notificationType or "Info",
-		Timestamp = os.time(),
 	}
 	
 	self.Client.ShowNotification:Fire(player, notificationData)
@@ -73,7 +72,6 @@ function NotificationService:NotifyAll(title: string, message: string, duration:
 		Message = message or "",
 		Duration = duration or 3,
 		Type = notificationType or "Info",
-		Timestamp = os.time(),
 	}
 	
 	self.Client.ShowNotification:FireAll(notificationData)
@@ -102,7 +100,6 @@ function NotificationService:NotifyMultiple(players: {Player}, title: string, me
 		Message = message or "",
 		Duration = duration or 3,
 		Type = notificationType or "Info",
-		Timestamp = os.time(),
 	}
 	
 	for _, player in ipairs(players) do
