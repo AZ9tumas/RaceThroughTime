@@ -99,8 +99,8 @@ local function CalculateTotalDistance(player: Player, speed: number): number
 	local fuel = playerData.Fuel or 0
 	
 	-- Total distance is based on fuel - more fuel = more distance on the track
-	local distanceMultiplier = 0.5 -- Each fuel unit contributes to distance
-	local totalDistance = fuel * distanceMultiplier
+	local timeLeft = fuel / Stats.FuelConsumptionRate.Main
+	local totalDistance = speed * timeLeft
 	
 	return totalDistance
 end
@@ -348,6 +348,8 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	-- Calculate speed and total distance
 	local speed = CalculatePlayerSpeed(player)
 	local totalDistance = CalculateTotalDistance(player, speed)
+
+	print("TOTAL DISTANCE: ", totalDistance, "TOTAL SPEED: ", speed)
 	
 	-- Track the player as running on the track (store player reference for efficient heartbeat loop)
 	PlayersOnTrack[userId] = {

@@ -18,6 +18,14 @@ Stats.WorldRadius = {
 	Main = 175,
 }
 
+Stats.FuelConsumptionRate = {
+	Main = 25, -- Fuel consumed per second on the Main world
+}
+
+Stats.WorldCashRates = {
+	Main = 150 -- Cash per 1000 distance
+}
+
 -- Returns the maximum fuel value with multipliers applied
 -- Currently returns base value * 1, can be extended for upgrades/boosts
 function Stats.FuelMultiplier(): number

@@ -16,6 +16,9 @@ local mainUi: ScreenGui = PlayerGui:WaitForChild("RaceThroughTime_UI")
 local centerHUD: Frame = mainUi:WaitForChild("CenterHUD")
 local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 
+local liveMainUI: ScreenGui = PlayerGui:WaitForChild("UI_LiveDistance")
+local distanceCounter: TextLabel = liveMainUI:WaitForChild("DistanceCounter")
+
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
 -- Reference to InitUI module for debounce reset
@@ -101,6 +104,7 @@ end
 local function OnTrackStarted(trackData: { gateName: string, totalDistance: number, speed: number })
 	IsOnTrack = true
 	TrackData = trackData
+	distanceCounter.Visible = true
 	
 	Log(string.format("Track started at %s, total distance: %.2f, speed: %.2f", trackData.gateName, trackData.totalDistance, trackData.speed or 0))
 	
@@ -125,6 +129,7 @@ end
 -- Handle track ended signal from server
 local function OnTrackEnded(trackData: { distanceTraveled: number })
 	if not IsOnTrack then return end
+	distanceCounter.Visible = false
 	
 	Log(string.format("Track ended, distance traveled: %.2f", trackData.distanceTraveled or 0))
 	
