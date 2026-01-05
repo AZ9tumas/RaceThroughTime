@@ -26,7 +26,7 @@ local TrackService = Knit.CreateService({
 })
 
 -- Private state
-local PlayersOnTrack = {} -- [Player.UserId] = { player, startTime, gateIndex, totalDistance, currentAngle, speed, distanceTraveled }
+local PlayersOnTrack = {} -- [Player.UserId] = { player, worldName, startTime, gateIndex, totalDistance, currentAngle, speed, distanceTraveled }
 local PlayerRequestDebounce = {} -- [Player.UserId] = lastRequestTime (for rate limiting)
 local HeartbeatConnection = nil -- Note: Connection persists for service lifetime, no cleanup needed
 local DEBOUNCE_COOLDOWN = 1 -- Minimum seconds between requests
@@ -88,7 +88,7 @@ local function CalculateInitialAngle(position: Vector3, center: Vector3): number
 end
 
 -- Calculate the total distance to travel based on player's current fuel
-local function CalculateTotalDistance(player: Player, speed: number): number
+local function CalculateTotalDistance(player: Player, speed: number, worldName: string): number
 	local DataService = Knit.GetService("DataService")
 	local playerData = DataService:Get(player, "Stats")
 	
@@ -99,14 +99,15 @@ local function CalculateTotalDistance(player: Player, speed: number): number
 	local fuel = playerData.Fuel or 0
 	
 	-- Total distance is based on fuel - more fuel = more distance on the track
-	local timeLeft = fuel / Stats.FuelConsumptionRate.Main
+	local fuelConsumptionRate = Stats.FuelConsumptionRate[worldName] or Stats.FuelConsumptionRate.Main
+	local timeLeft = fuel / fuelConsumptionRate
 	local totalDistance = speed * timeLeft
 	
 	return math.floor(totalDistance)
 end
 
 -- Calculate the player's speed based on their fuel
-local function CalculatePlayerSpeed(player: Player): number
+local function CalculatePlayerSpeed(player: Player, worldName: string): number
 	local DataService = Knit.GetService("DataService")
 	local playerData = DataService:Get(player, "Stats")
 	
@@ -115,7 +116,7 @@ local function CalculatePlayerSpeed(player: Player): number
 	end
 	
 	local fuel = playerData.Fuel or 0
-	return Stats.CalculateSpeedFromFuel(fuel, "Main")
+	return Stats.CalculateSpeedFromFuel(fuel, worldName)
 end
 
 -- Update circular position using polar to cartesian conversion
@@ -232,12 +233,13 @@ function TrackService:EndTrackRun(player: Player)
 	
 	-- Calculate rewards based on distance traveled
 	local distanceTraveled = trackData.distanceTraveled or 0
+	local worldName = trackData.worldName or "Main"
 	
 	-- Calculate cash earned based on WorldCashRate (per 1000 distance)
-	local cashRate = Stats.WorldCashRates.Main
+	local cashRate = Stats.WorldCashRates[worldName] or Stats.WorldCashRates.Main
 	local cashEarned = math.floor((distanceTraveled / 1000) * cashRate)
 	
-	Log(string.format("Player %s ended track run, distance traveled: %.2f, cash earned: %d", player.Name, distanceTraveled, cashEarned))
+	Log(string.format("Player %s ended track run in %s, distance traveled: %.2f, cash earned: %d", player.Name, worldName, distanceTraveled, cashEarned))
 	
 	-- Update player data: set fuel to 0 and add cash
 	local DataService = Knit.GetService("DataService")
@@ -274,7 +276,6 @@ end
 -- Main heartbeat update for all players on track
 local function OnHeartbeat(dt: number)
 	local center = GetTrackCenter()
-	local radius = Stats.WorldRadius.Main
 	
 	for userId, trackData in pairs(PlayersOnTrack) do
 		local player = trackData.player
@@ -294,6 +295,10 @@ local function OnHeartbeat(dt: number)
 		local alignOrientation = rootPart:FindFirstChild("TrackAlignOrientation")
 		
 		if not alignPosition or not alignOrientation then continue end
+		
+		-- Get world-specific radius
+		local worldName = trackData.worldName or "Main"
+		local radius = Stats.WorldRadius[worldName] or Stats.WorldRadius.Main
 		
 		-- Calculate angular velocity (w = v / r)
 		local speed = trackData.speed
@@ -358,8 +363,18 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		return false, "No HumanoidRootPart"
 	end
 
-	local fuel = Knit.GetService("DataService"):Get(player, "Stats").Fuel
-	if fuel <= Stats.FuelConsumptionRate.Main then return false, "Not enough fuel, need at least " .. Stats.FuelConsumptionRate.Main end
+	-- Get player's current world and data
+	local DataService = Knit.GetService("DataService")
+	local worldName = DataService:GetPlayerWorld(player)
+	
+	-- Get world-specific stats
+	local fuelConsumptionRate = Stats.FuelConsumptionRate[worldName] or Stats.FuelConsumptionRate.Main
+	local radius = Stats.WorldRadius[worldName] or Stats.WorldRadius.Main
+
+	local fuel = DataService:Get(player, "Stats").Fuel
+	if fuel <= fuelConsumptionRate then 
+		return false, string.format("Not enough fuel, need at least %d fuel/sec", fuelConsumptionRate) 
+	end
 	
 	local playerPosition = rootPart.Position
 	
@@ -369,9 +384,8 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		return false, "No gates found"
 	end
 	
-	-- Get track center and radius
+	-- Get track center
 	local center = GetTrackCenter()
-	local radius = Stats.WorldRadius.Main
 	
 	-- Calculate initial angle based on gate position
 	local initialAngle = CalculateInitialAngle(gatePosition, center)
@@ -386,13 +400,14 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		return false, "Failed to setup body movers"
 	end
 	
-	-- Calculate speed and total distance
-	local speed = CalculatePlayerSpeed(player)
-	local totalDistance = CalculateTotalDistance(player, speed)
+	-- Calculate speed and total distance using player's world
+	local speed = CalculatePlayerSpeed(player, worldName)
+	local totalDistance = CalculateTotalDistance(player, speed, worldName)
 	
-	-- Track the player as running on the track (store player reference for efficient heartbeat loop)
+	-- Track the player as running on the track (store player reference and world for efficient heartbeat loop)
 	PlayersOnTrack[userId] = {
 		player = player,
+		worldName = worldName,
 		startTime = tick(),
 		gateIndex = tonumber(closestGate:match("%d+")),
 		totalDistance = totalDistance,
@@ -401,7 +416,7 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		distanceTraveled = 0,
 	}
 	
-	Log(string.format("Player %s started track at %s, speed: %.2f, distance: %.2f", player.Name, closestGate, speed, totalDistance))
+	Log(string.format("Player %s started track at %s in world %s, speed: %.2f, distance: %.2f", player.Name, closestGate, worldName, speed, totalDistance))
 	
 	-- Fire signal to client that track has started
 	TrackService.Client.TrackStarted:Fire(player, {
