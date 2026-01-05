@@ -177,6 +177,15 @@ local function SetupBodyMovers(character: Model): (AlignPosition?, AlignOrientat
 		alignOrientation.Parent = rootPart
 	end
 	
+	-- Create NumberValue for distance tracking (client reads this for visual feedback)
+	local distanceValue = rootPart:FindFirstChild("TrackDistanceTraveled")
+	if not distanceValue then
+		distanceValue = Instance.new("NumberValue")
+		distanceValue.Name = "TrackDistanceTraveled"
+		distanceValue.Value = 0
+		distanceValue.Parent = rootPart
+	end
+	
 	return alignPosition, alignOrientation
 end
 
@@ -193,6 +202,9 @@ local function CleanupBodyMovers(character: Model)
 	
 	local attachment = rootPart:FindFirstChild("TrackAttachment")
 	if attachment then attachment:Destroy() end
+	
+	local distanceValue = rootPart:FindFirstChild("TrackDistanceTraveled")
+	if distanceValue then distanceValue:Destroy() end
 end
 
 -- Check if a player is currently on the track
@@ -221,7 +233,28 @@ function TrackService:EndTrackRun(player: Player)
 	-- Calculate rewards based on distance traveled
 	local distanceTraveled = trackData.distanceTraveled or 0
 	
-	Log(string.format("Player %s ended track run, distance traveled: %.2f", player.Name, distanceTraveled))
+	-- Calculate cash earned based on WorldCashRate (per 1000 distance)
+	local cashRate = Stats.WorldCashRates.Main
+	local cashEarned = math.floor((distanceTraveled / 1000) * cashRate)
+	
+	Log(string.format("Player %s ended track run, distance traveled: %.2f, cash earned: %d", player.Name, distanceTraveled, cashEarned))
+	
+	-- Update player data: set fuel to 0 and add cash
+	local DataService = Knit.GetService("DataService")
+	
+	-- Set fuel to 0
+	DataService:Update(player, "Stats", function(stats)
+		stats.Fuel = 0
+		return stats
+	end)
+	
+	-- Add cash earned
+	if cashEarned > 0 then
+		DataService:Update(player, "Currencies", function(currencies)
+			currencies.Cash = (currencies.Cash or 0) + cashEarned
+			return currencies
+		end)
+	end
 	
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
@@ -229,6 +262,7 @@ function TrackService:EndTrackRun(player: Player)
 	-- Fire signal to client that track has ended
 	TrackService.Client.TrackEnded:Fire(player, {
 		distanceTraveled = distanceTraveled,
+		cashEarned = cashEarned,
 	})
 end
 
@@ -272,13 +306,17 @@ local function OnHeartbeat(dt: number)
 		local distanceThisFrame = speed * dt
 		trackData.distanceTraveled = trackData.distanceTraveled + distanceThisFrame
 		
+		-- Update distance NumberValue for client feedback
+		local distanceValue = rootPart:FindFirstChild("TrackDistanceTraveled")
+		if distanceValue then
+			distanceValue.Value = trackData.distanceTraveled
+		end
+		
 		-- Check if player has completed their run
 		if trackData.distanceTraveled >= trackData.totalDistance then
 			TrackService:EndTrackRun(player)
 			continue
 		end
-
-		print(trackData.distanceTraveled / trackData.totalDistance * 100, "% complete")
 		
 		-- Calculate new position and orientation
 		local targetCFrame, targetPosition = UpdateCircularPosition(center, radius, trackData.currentAngle, center.Y + 5)
@@ -348,8 +386,6 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	-- Calculate speed and total distance
 	local speed = CalculatePlayerSpeed(player)
 	local totalDistance = CalculateTotalDistance(player, speed)
-
-	print("TOTAL DISTANCE: ", totalDistance, "TOTAL SPEED: ", speed)
 	
 	-- Track the player as running on the track (store player reference for efficient heartbeat loop)
 	PlayersOnTrack[userId] = {
