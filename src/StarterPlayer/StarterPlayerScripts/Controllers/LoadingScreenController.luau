@@ -85,9 +85,7 @@ local function TryCompleteLoading()
 		
 		-- Show welcome notification when session is ready
 		local NotificationController = Knit.GetController("NotificationController")
-		NotificationController:ShowNotification("Welcome! Your session is ready.", 4, nil, {
-			icon = "🎮"
-		})
+		NotificationController:ShowNotification("Welcome! Your session is ready.", NotificationController.Category.Success, 2.5)
 	end
 end
 
