@@ -153,9 +153,9 @@ local function OnRemoveStar(starId: string)
 		
 		-- Show notification for star collection
 		local NotificationController = Knit.GetController("NotificationController")
-		NotificationController:ShowNotification("Star collected! ⭐ +Fuel", 2, nil, {
-			icon = "⭐"
-		})
+		NotificationController:ShowNotification("Star collected! ⭐ +Fuel", {
+			icon = "⭐", sound = "CollectStar", name = "Custom"
+		}, 2)
 	end
 end
 

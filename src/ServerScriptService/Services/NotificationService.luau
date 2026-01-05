@@ -8,23 +8,20 @@
 	-- From another server service:
 	local NotificationService = Knit.GetService("NotificationService")
 	
-	-- Send a simple notification to a player
-	NotificationService:SendNotification(player, "Welcome to the game!")
+	-- Send a notification with a category
+	NotificationService:SendNotification(player, "Welcome to the game!", NotificationService.Category.Success)
 	
-	-- Send a notification with custom duration (in seconds)
-	NotificationService:SendNotification(player, "You earned 100 coins!", 5)
+	-- Send a notification with default category (no sound)
+	NotificationService:SendNotification(player, "Something happened", NotificationService.Category.Default)
 	
-	-- Send a notification with custom sound
-	NotificationService:SendNotification(player, "Achievement Unlocked!", 4, "AchievementSound")
+	-- Send an error notification
+	NotificationService:SendNotification(player, "Connection failed!", NotificationService.Category.Error)
 	
-	-- Send a notification with icon (emoji or text)
-	NotificationService:SendNotification(player, "Level Up!", 4, nil, {
-		icon = "🎉",
-		iconColor = Color3.fromRGB(255, 215, 0)
-	})
+	-- Send a warning notification
+	NotificationService:SendNotification(player, "Low fuel!", NotificationService.Category.Warning)
 	
 	-- Broadcast to all players
-	NotificationService:BroadcastNotification("Server shutting down in 5 minutes!")
+	NotificationService:BroadcastNotification("Server shutting down in 5 minutes!", NotificationService.Category.Alert)
 ]]
 
 local Players = game:GetService("Players")
@@ -39,6 +36,16 @@ local NotificationService = Knit.CreateService({
 	},
 })
 
+-- Notification categories (enum-like) - mirrors client-side categories
+NotificationService.Category = {
+	Default = { name = "Default" },
+	Alert = { name = "Alert" },
+	Warning = { name = "Warning" },
+	Error = { name = "Error" },
+	Success = { name = "Success" },
+	Failure = { name = "Failure" },
+}
+
 -- Default notification settings
 local DEFAULT_DURATION = 4
 
@@ -46,33 +53,27 @@ local DEFAULT_DURATION = 4
 	Send a notification to a specific player.
 	
 	@param player Player - The player to send the notification to
-	@param text string - The notification message text
-	@param duration number? - How long the notification stays visible (default: 4 seconds)
-	@param sound string? - Optional sound name to play
-	@param options table? - Additional options:
-		- icon: string - An icon/emoji to display
-		- iconColor: Color3 - Color for the icon
-		- soundProperties: table - Properties for the sound
+	@param message string - The notification message text
+	@param category table - The notification category (use NotificationService.Category.X)
+	@param duration number? - Optional override for duration (default: 4 seconds)
 ]]
 function NotificationService:SendNotification(
 	player: Player,
-	text: string,
-	duration: number?,
-	sound: string?,
-	options: { icon: string?, iconColor: Color3?, soundProperties: {}? }?
+	message: string,
+	category: { name: string }?,
+	duration: number?
 )
 	if not player or not player:IsDescendantOf(Players) then
 		warn("[NotificationService]: Invalid player provided")
 		return
 	end
 	
+	local effectiveCategory = category or NotificationService.Category.Default
+	
 	local notificationData = {
-		text = text,
+		message = message,
+		category = effectiveCategory.name,
 		duration = duration or DEFAULT_DURATION,
-		sound = sound,
-		icon = options and options.icon,
-		iconColor = options and options.iconColor,
-		soundProperties = options and options.soundProperties,
 	}
 	
 	self.Client.ShowNotification:Fire(player, notificationData)
@@ -81,19 +82,17 @@ end
 --[[
 	Broadcast a notification to all connected players.
 	
-	@param text string - The notification message text
-	@param duration number? - How long the notification stays visible (default: 4 seconds)
-	@param sound string? - Optional sound name to play
-	@param options table? - Additional options (same as SendNotification)
+	@param message string - The notification message text
+	@param category table - The notification category (use NotificationService.Category.X)
+	@param duration number? - Optional override for duration (default: 4 seconds)
 ]]
 function NotificationService:BroadcastNotification(
-	text: string,
-	duration: number?,
-	sound: string?,
-	options: { icon: string?, iconColor: Color3?, soundProperties: {}? }?
+	message: string,
+	category: { name: string }?,
+	duration: number?
 )
 	for _, player in Players:GetPlayers() do
-		self:SendNotification(player, text, duration, sound, options)
+		self:SendNotification(player, message, category, duration)
 	end
 end
 

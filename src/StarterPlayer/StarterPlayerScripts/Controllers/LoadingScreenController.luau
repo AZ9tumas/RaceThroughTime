@@ -85,9 +85,7 @@ local function TryCompleteLoading()
 		
 		-- Show welcome notification when session is ready
 		local NotificationController = Knit.GetController("NotificationController")
-		NotificationController:ShowNotification("Welcome! Your session is ready.", 4, nil, {
-			icon = "🎮"
-		})
+		NotificationController:ShowNotification("Welcome! Your session is ready.", NotificationController.Category.Success, 2.5)
 	end
 end
 
@@ -106,6 +104,24 @@ end
 -- Check if loading is complete
 function LoadingScreenController:IsLoadingComplete(): boolean
 	return IsDataReady and IsAssetsReady
+end
+
+-- Public method to show loading screen (fade in)
+function LoadingScreenController:ShowLoadingScreen()
+	if LoadingFrame then
+		task.spawn(function()
+			FadeIn(LoadingFrame)
+		end)
+	end
+end
+
+-- Public method to hide loading screen (fade out)
+function LoadingScreenController:HideLoadingScreen()
+	if LoadingFrame then
+		task.spawn(function()
+			FadeOut(LoadingFrame)
+		end)
+	end
 end
 
 -- Knit lifecycle
