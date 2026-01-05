@@ -164,7 +164,7 @@ local function EnablePlayerControls()
 end
 
 -- Handle track started signal from server
-local function OnTrackStarted(trackData: { gateName: string, totalDistance: number, speed: number })
+local function OnTrackStarted(trackData: { gateName: string, totalDistance: number, speed: number, startAngle: number })
 	IsOnTrack = true
 	TrackData = trackData
 	distanceCounter.Visible = true
@@ -192,9 +192,11 @@ local function OnTrackStarted(trackData: { gateName: string, totalDistance: numb
 	-- Show notification
 	local NotificationController = Knit.GetController("NotificationController")
 	if NotificationController then
-		NotificationController:ShowNotification("🏁 Track Run Started! Distance: " .. trackData.totalDistance, 3, nil, {
-			icon = "🏁"
-		})
+		NotificationController:ShowNotification(
+			"Track Run Started! Distance: " .. trackData.totalDistance,
+			NotificationController.Category.Alert,
+			3
+		)
 	end
 end
 
@@ -238,14 +240,28 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	local NotificationController = Knit.GetController("NotificationController")
 	if NotificationController then
 		local cashMessage = trackData.cashEarned and trackData.cashEarned > 0 
-			and string.format("🏁 Track Run Complete! +$%.0f", trackData.cashEarned)
-			or "🏁 Track Run Complete!"
-		NotificationController:ShowNotification(cashMessage, 3, nil, {
-			icon = "✅"
-		})
+			and string.format("Track Run Complete! +$%.0f", trackData.cashEarned)
+			or "Track Run Complete!"
+		NotificationController:ShowNotification(cashMessage, NotificationController.Category.Success, 3)
 	end
+	
+	-- Note: Run button visibility is now controlled by InitUI based on gate proximity
+end
 
-	runButton.Visible = true
+-- Handle lap completed signal from server
+local function OnLapCompleted(lapData: { lapNumber: number })
+	if not IsOnTrack then return end
+	
+	Log(string.format("Lap %d completed!", lapData.lapNumber or 1))
+	
+	local NotificationController = Knit.GetController("NotificationController")
+	if NotificationController then
+		NotificationController:ShowNotification(
+			string.format("Lap %d Complete!", lapData.lapNumber or 1),
+			NotificationController.Category.Success,
+			2
+		)
+	end
 end
 
 -- Check if player is currently on track
@@ -295,6 +311,7 @@ function TrackController:KnitStart()
 	
 	TrackService.TrackStarted:Connect(OnTrackStarted)
 	TrackService.TrackEnded:Connect(OnTrackEnded)
+	TrackService.LapCompleted:Connect(OnLapCompleted)
 	
 	Log("TrackController started")
 end

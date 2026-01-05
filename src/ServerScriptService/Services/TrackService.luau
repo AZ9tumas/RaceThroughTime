@@ -22,11 +22,12 @@ local TrackService = Knit.CreateService({
 	Client = {
 		TrackStarted = Knit.CreateSignal(), -- Signal to notify client when track run starts
 		TrackEnded = Knit.CreateSignal(), -- Signal to notify client when track run ends
+		LapCompleted = Knit.CreateSignal(), -- Signal to notify client when a lap is completed
 	},
 })
 
 -- Private state
-local PlayersOnTrack = {} -- [Player.UserId] = { player, worldName, startTime, gateIndex, totalDistance, currentAngle, speed, distanceTraveled }
+local PlayersOnTrack = {} -- [Player.UserId] = { player, worldName, startTime, gateIndex, totalDistance, currentAngle, speed, distanceTraveled, startAngle, lapCount }
 local PlayerRequestDebounce = {} -- [Player.UserId] = lastRequestTime (for rate limiting)
 local HeartbeatConnection = nil -- Note: Connection persists for service lifetime, no cleanup needed
 local DEBOUNCE_COOLDOWN = 1 -- Minimum seconds between requests
@@ -304,12 +305,27 @@ local function OnHeartbeat(dt: number)
 		local speed = trackData.speed
 		local angularVelocity = speed / radius
 		
+		-- Store previous angle for lap detection
+		local previousAngle = trackData.currentAngle
+		
 		-- Update angle based on time delta
 		trackData.currentAngle = trackData.currentAngle + (angularVelocity * dt)
 		
 		-- Calculate distance traveled this frame
 		local distanceThisFrame = speed * dt
 		trackData.distanceTraveled = trackData.distanceTraveled + distanceThisFrame
+		
+		-- Check for lap completion (crossed the starting angle after completing a full circle)
+		-- A lap is complete when the angle has increased by 2*PI from the start
+		local startAngle = trackData.startAngle
+		local lapThreshold = startAngle + (2 * math.pi * (trackData.lapCount + 1))
+		if trackData.currentAngle >= lapThreshold then
+			trackData.lapCount = trackData.lapCount + 1
+			TrackService.Client.LapCompleted:Fire(player, {
+				lapNumber = trackData.lapCount,
+			})
+			Log(string.format("Player %s completed lap %d", player.Name, trackData.lapCount))
+		end
 		
 		-- Update distance NumberValue for client feedback
 		local distanceValue = rootPart:FindFirstChild("TrackDistanceTraveled")
@@ -378,19 +394,25 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	
 	local playerPosition = rootPart.Position
 	
-	-- Find the closest gate
-	local closestGate, gatePosition, _ = FindClosestGate(playerPosition)
+	-- Find the closest gate and check proximity
+	local closestGate, gatePosition, gateDistance = FindClosestGate(playerPosition)
 	if not closestGate or not gatePosition then
 		return false, "No gates found"
+	end
+	
+	-- Verify player is near the gate (no teleporting)
+	local gateProximityDistance = Stats.GateProximityDistance
+	if gateDistance > gateProximityDistance then
+		return false, string.format("Must be within %d studs of a gate (currently %.1f studs away)", gateProximityDistance, gateDistance)
 	end
 	
 	-- Get track center
 	local center = GetTrackCenter()
 	
-	-- Calculate initial angle based on gate position
-	local initialAngle = CalculateInitialAngle(gatePosition, center)
+	-- Calculate initial angle based on player's actual position (not gate position)
+	local initialAngle = CalculateInitialAngle(playerPosition, center)
 	
-	-- Teleport player to the gate position on the track
+	-- Position player on the track at their current angle (no teleporting, just align to track)
 	local teleportCFrame, _ = UpdateCircularPosition(center, radius, initialAngle, center.Y + 5)
 	rootPart.CFrame = teleportCFrame
 	
@@ -412,8 +434,10 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		gateIndex = tonumber(closestGate:match("%d+")),
 		totalDistance = totalDistance,
 		currentAngle = initialAngle,
+		startAngle = initialAngle, -- Store starting angle for lap detection
 		speed = speed,
 		distanceTraveled = 0,
+		lapCount = 0, -- Track number of completed laps
 	}
 	
 	Log(string.format("Player %s started track at %s in world %s, speed: %.2f, distance: %.2f", player.Name, closestGate, worldName, speed, totalDistance))
@@ -423,6 +447,7 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		gateName = closestGate,
 		totalDistance = totalDistance,
 		speed = speed,
+		startAngle = initialAngle,
 	})
 	
 	return true, nil

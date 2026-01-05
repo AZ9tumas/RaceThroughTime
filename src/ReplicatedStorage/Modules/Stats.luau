@@ -60,6 +60,10 @@ Stats.StarConfig = {
 	CollectionRadius = 10,             -- Distance within which a star can be collected
 }
 
+-- Track/Gate configuration
+Stats.GateProximityDistance = 10 -- studs - distance player must be from gate to start track
+Stats.MaxGateIndex = 3 -- Gates are numbered 0 to MaxGateIndex (0, 1, 2, 3)
+
 -- Calculate multipliers from pets, rebirths, and boosts
 -- Formula: Σ(M_pets + M_rebirth + M_boosts)
 -- Returns 1 for now, can be extended for actual multiplier calculations

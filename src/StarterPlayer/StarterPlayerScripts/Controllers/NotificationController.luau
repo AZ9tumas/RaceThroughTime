@@ -8,27 +8,20 @@
 	-- From another client controller:
 	local NotificationController = Knit.GetController("NotificationController")
 	
-	-- Send a simple local notification (client-side only)
-	NotificationController:ShowNotification("You picked up an item!")
+	-- Send a notification with a category
+	NotificationController:ShowNotification("You picked up an item!", NotificationController.Category.Success)
 	
-	-- Send a notification with custom duration
-	NotificationController:ShowNotification("Quest completed!", 5)
+	-- Send a notification with default category (no sound)
+	NotificationController:ShowNotification("Something happened", NotificationController.Category.Default)
 	
-	-- Send a notification with custom sound
-	NotificationController:ShowNotification("New message!", 4, "MessageSound")
+	-- Send an error notification
+	NotificationController:ShowNotification("Connection failed!", NotificationController.Category.Error)
 	
-	-- Send a notification with icon
-	NotificationController:ShowNotification("Health restored!", 3, nil, {
-		icon = "❤️",
-		iconColor = Color3.fromRGB(255, 100, 100)
-	})
+	-- Send a warning notification
+	NotificationController:ShowNotification("Low fuel!", NotificationController.Category.Warning)
 	
-	-- Send a notification with all options
-	NotificationController:ShowNotification("Level Up!", 5, "LevelUpSound", {
-		icon = "⭐",
-		iconColor = Color3.fromRGB(255, 215, 0),
-		soundProperties = { Volume = 0.8, PlaybackSpeed = 1.2 }
-	})
+	-- Send an alert notification
+	NotificationController:ShowNotification("New event available!", NotificationController.Category.Alert)
 ]]
 
 local Players = game:GetService("Players")
@@ -42,6 +35,16 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local NotificationController = Knit.CreateController({
 	Name = "NotificationController",
 })
+
+-- Notification categories (enum-like)
+NotificationController.Category = {
+	Default = { name = "Default", sound = nil, icon = "ℹ️" },
+	Alert = { name = "Alert", sound = "AlertSound", icon = "🔔" },
+	Warning = { name = "Warning", sound = "WarningSound", icon = "⚠️" },
+	Error = { name = "Error", sound = "ErrorSound", icon = "❌" },
+	Success = { name = "Success", sound = "SuccessSound", icon = "✅" },
+	Failure = { name = "Failure", sound = "FailureSound", icon = "❌" },
+}
 
 -- Private state
 local Player = Players.LocalPlayer
@@ -150,19 +153,14 @@ end
 	Show a notification on the client.
 	Can be called directly from other controllers for local notifications.
 	
-	@param text string - The notification message text
-	@param duration number? - How long the notification stays visible (default: 4 seconds)
-	@param sound string? - Optional sound name to play
-	@param options table? - Additional options:
-		- icon: string - An icon/emoji to display
-		- iconColor: Color3 - Color for the icon
-		- soundProperties: table - Properties for the sound
+	@param message string - The notification message text
+	@param category table - The notification category (use NotificationController.Category.X)
+	@param duration number? - Optional override for duration (default: 4 seconds)
 ]]
 function NotificationController:ShowNotification(
-	text: string,
-	duration: number?,
-	sound: string?,
-	options: { icon: string?, iconColor: Color3?, soundProperties: {}? }?
+	message: string,
+	category: { name: string, sound: string?, icon: string? }?,
+	duration: number?
 )
 	local template = GetNotificationTemplate()
 	local container = GetNotificationContainer()
@@ -172,6 +170,8 @@ function NotificationController:ShowNotification(
 		return
 	end
 	
+	-- Default to Default category if not provided
+	local effectiveCategory = category or NotificationController.Category.Default
 	local effectiveDuration = duration or DEFAULT_DURATION
 	
 	-- Clone and setup notification
@@ -180,10 +180,10 @@ function NotificationController:ShowNotification(
 	-- Find TextLabel in notification
 	local textLabel = notification:FindFirstChild("TextLabel")
 	if textLabel and textLabel:IsA("TextLabel") then
-		-- Add icon if provided
-		local displayText = text
-		if options and options.icon then
-			displayText = options.icon .. " " .. text
+		-- Add icon from category
+		local displayText = message
+		if effectiveCategory.icon then
+			displayText = effectiveCategory.icon .. " " .. message
 		end
 		textLabel.Text = displayText
 	end
@@ -209,8 +209,10 @@ function NotificationController:ShowNotification(
 	table.insert(ActiveNotifications, notification)
 	TrimNotifications()
 	
-	-- Play sound (always plays default sound unless explicitly suppressed)
-	PlaySound(sound, options and options.soundProperties)
+	-- Play sound from category (only if category has a sound, Default has no sound)
+	if effectiveCategory.sound then
+		PlaySound(effectiveCategory.sound, nil)
+	end
 	
 	-- Spawn animation (scale up and fade in)
 	task.spawn(function()
@@ -254,24 +256,30 @@ function NotificationController:ShowNotification(
 	end)
 end
 
+-- Map category name string to category enum
+local function GetCategoryByName(categoryName: string?)
+	if not categoryName then return NotificationController.Category.Default end
+	
+	for _, category in pairs(NotificationController.Category) do
+		if category.name == categoryName then
+			return category
+		end
+	end
+	
+	return NotificationController.Category.Default
+end
+
 -- Handle notification from server
 local function OnServerNotification(notificationData: {
-	text: string,
+	message: string,
+	category: string?,
 	duration: number?,
-	sound: string?,
-	icon: string?,
-	iconColor: Color3?,
-	soundProperties: {}?
 })
+	local category = GetCategoryByName(notificationData.category)
 	NotificationController:ShowNotification(
-		notificationData.text,
-		notificationData.duration,
-		notificationData.sound,
-		{
-			icon = notificationData.icon,
-			iconColor = notificationData.iconColor,
-			soundProperties = notificationData.soundProperties,
-		}
+		notificationData.message,
+		category,
+		notificationData.duration
 	)
 end
 
