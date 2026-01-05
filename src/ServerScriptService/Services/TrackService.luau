@@ -102,7 +102,7 @@ local function CalculateTotalDistance(player: Player, speed: number): number
 	local timeLeft = fuel / Stats.FuelConsumptionRate.Main
 	local totalDistance = speed * timeLeft
 	
-	return totalDistance
+	return math.floor(totalDistance)
 end
 
 -- Calculate the player's speed based on their fuel
@@ -336,7 +336,7 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	local lastRequestTime = PlayerRequestDebounce[userId]
 	if lastRequestTime and (currentTime - lastRequestTime) < DEBOUNCE_COOLDOWN then
 		local remainingTime = DEBOUNCE_COOLDOWN - (currentTime - lastRequestTime)
-		return false, string.format("Request too fast, wait %.1f seconds", remainingTime), nil
+		return false, string.format("Request too fast, wait %.1f seconds", remainingTime)
 	end
 	
 	-- Update last request time
@@ -344,26 +344,29 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	
 	-- Check if player is already on the track
 	if PlayersOnTrack[userId] then
-		return false, "Already on track", nil
+		return false, "Already on track"
 	end
 	
 	-- Get player's character and position
 	local character = player.Character
 	if not character then
-		return false, "No character", nil
+		return false, "No character"
 	end
 	
 	local rootPart = character:FindFirstChild("HumanoidRootPart")
 	if not rootPart then
-		return false, "No HumanoidRootPart", nil
+		return false, "No HumanoidRootPart"
 	end
+
+	local fuel = Knit.GetService("DataService"):Get(player, "Stats").Fuel
+	if fuel <= Stats.FuelConsumptionRate.Main then return false, "Not enough fuel, need at least " .. Stats.FuelConsumptionRate.Main end
 	
 	local playerPosition = rootPart.Position
 	
 	-- Find the closest gate
 	local closestGate, gatePosition, _ = FindClosestGate(playerPosition)
 	if not closestGate or not gatePosition then
-		return false, "No gates found", nil
+		return false, "No gates found"
 	end
 	
 	-- Get track center and radius
@@ -380,7 +383,7 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	-- Setup body movers for smooth movement
 	local alignPosition, alignOrientation = SetupBodyMovers(character)
 	if not alignPosition or not alignOrientation then
-		return false, "Failed to setup body movers", nil
+		return false, "Failed to setup body movers"
 	end
 	
 	-- Calculate speed and total distance
@@ -407,7 +410,7 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		speed = speed,
 	})
 	
-	return true, closestGate, totalDistance
+	return true, nil
 end
 
 -- Clean up when player leaves

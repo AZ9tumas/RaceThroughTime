@@ -105,8 +105,6 @@ handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function
         print("[InitUI]: Already on track, ignoring click")
         return
     end
-
-    runButton.Visible = false
     
     -- Set debounce flag
     isRequestingTrack = true
@@ -119,21 +117,34 @@ handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function
     if LoadingScreenController then
         LoadingScreenController:ShowLoadingScreen()
     end
+
+    local NotificationController = Knit.GetController("NotificationController")
+
     
-    local success, gateName, totalDistance = TrackService:RequestTrackStart()
+    TrackService:RequestTrackStart():andThen(function(success: boolean, gateName: string?)
+        print(success, gateName)
     
-    if success then
-        print("[InitUI]: Track start successful")
-        -- Keep debounce on until track ends (handled by TrackController)
-    else
-        print(string.format("[InitUI]: Track start failed - %s", gateName or "Unknown error"))
-        -- Fade out loading screen on failure
-        if LoadingScreenController then
-            LoadingScreenController:HideLoadingScreen()
+        if success then
+            print("[InitUI]: Track start successful")
+            runButton.Visible = false
+        else
+            print(string.format("[InitUI]: Track start failed - %s", gateName or "Unknown error"))
+
+            NotificationController:ShowNotification(
+                "❌ Failed to start track: " .. (gateName or "Unknown error"),
+                5,
+                nil,
+                { icon = "⚠️" }
+            )
+            
+            -- Fade out loading screen on failure
+            if LoadingScreenController then
+                LoadingScreenController:HideLoadingScreen()
+            end
+            -- Reset debounce on failure so player can try again
+            isRequestingTrack = false
         end
-        -- Reset debounce on failure so player can try again
-        isRequestingTrack = false
-    end
+    end)
 end)
 
 -- Function to reset debounce when track ends (called externally)
