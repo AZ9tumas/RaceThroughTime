@@ -125,10 +125,25 @@ local RAYCAST_HEIGHT_OFFSET = 50 -- Start raycast from this height above the fal
 local RAYCAST_DISTANCE = 100 -- Maximum raycast distance downward
 local GROUND_OFFSET = 3 -- Height offset above ground for player placement (approximate hip height)
 
--- Raycast params to ignore characters
+-- Raycast params to ignore characters (cached for performance)
 local RaycastFilterParams = RaycastParams.new()
 RaycastFilterParams.FilterType = Enum.RaycastFilterType.Exclude
 RaycastFilterParams.FilterDescendantsInstances = {}
+
+-- Cache for character exclusion list (updated when players join/leave)
+local CachedCharacterExclusions = {}
+
+-- Update the cached character exclusion list
+local function UpdateCachedCharacterExclusions()
+	local characters = {}
+	for _, player in Players:GetPlayers() do
+		if player.Character then
+			table.insert(characters, player.Character)
+		end
+	end
+	CachedCharacterExclusions = characters
+	RaycastFilterParams.FilterDescendantsInstances = CachedCharacterExclusions
+end
 
 -- Update circular position using polar to cartesian conversion with ground detection
 local function UpdateCircularPosition(center: Vector3, radius: number, angle: number, fallbackY: number): (CFrame, Vector3)
@@ -140,15 +155,7 @@ local function UpdateCircularPosition(center: Vector3, radius: number, angle: nu
 	local rayOrigin = Vector3.new(x, fallbackY + RAYCAST_HEIGHT_OFFSET, z)
 	local rayDirection = Vector3.new(0, -RAYCAST_DISTANCE, 0)
 	
-	-- Update filter to exclude all player characters
-	local charactersToExclude = {}
-	for _, player in Players:GetPlayers() do
-		if player.Character then
-			table.insert(charactersToExclude, player.Character)
-		end
-	end
-	RaycastFilterParams.FilterDescendantsInstances = charactersToExclude
-	
+	-- Use cached filter for raycast (updated when players join/leave)
 	local raycastResult = Workspace:Raycast(rayOrigin, rayDirection, RaycastFilterParams)
 	
 	local groundY = fallbackY -- Default to fallback if raycast fails
@@ -558,6 +565,22 @@ end
 function TrackService:KnitInit()
 	-- Clean up when player leaves
 	Players.PlayerRemoving:Connect(OnPlayerRemoving)
+	
+	-- Update character exclusion cache when players join/leave/respawn
+	Players.PlayerAdded:Connect(function(player)
+		UpdateCachedCharacterExclusions()
+		player.CharacterAdded:Connect(UpdateCachedCharacterExclusions)
+		player.CharacterRemoving:Connect(UpdateCachedCharacterExclusions)
+	end)
+	
+	Players.PlayerRemoving:Connect(UpdateCachedCharacterExclusions)
+	
+	-- Initialize cache with existing players
+	for _, player in Players:GetPlayers() do
+		UpdateCachedCharacterExclusions()
+		player.CharacterAdded:Connect(UpdateCachedCharacterExclusions)
+		player.CharacterRemoving:Connect(UpdateCachedCharacterExclusions)
+	end
 end
 
 function TrackService:KnitStart()

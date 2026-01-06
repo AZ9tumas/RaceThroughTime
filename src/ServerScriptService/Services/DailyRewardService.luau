@@ -15,7 +15,7 @@
 	
 	From client - request to collect reward:
 	  local DailyRewardService = Knit.GetService("DailyRewardService")
-	  local success, message = DailyRewardService:RequestCollectReward():await()
+	  local success, message = DailyRewardService:RequestCollectReward()
 ]]
 
 local Players = game:GetService("Players")
