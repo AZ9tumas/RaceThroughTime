@@ -35,6 +35,7 @@ local Template = {
 	Meta = {
 		DailyStreak = 0,
 		LastClaim = 0,
+		CollectedRewards = {}, -- Tracks which daily reward IDs have been collected
 		UpdateVersion = 0,
 		Settings = {
 			Music = true,
