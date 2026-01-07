@@ -13,9 +13,10 @@ local RunService = game:GetService("RunService")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 
--- Track gate references
+-- Track references
 local TrackGates = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("Track_System"):WaitForChild("Track_Gates")
 local SpawnLocation = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("SpawnLocation")
+local VisualTrack = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("Track_System"):WaitForChild("Visual_Track")
 
 local TrackService = Knit.CreateService({
 	Name = "TrackService",
@@ -125,25 +126,10 @@ local RAYCAST_HEIGHT_OFFSET = 50 -- Start raycast from this height above the fal
 local RAYCAST_DISTANCE = 100 -- Maximum raycast distance downward
 local GROUND_OFFSET = 3 -- Height offset above ground for player placement (approximate hip height)
 
--- Raycast params to ignore characters (cached for performance)
+-- Raycast params to only hit the visual track
 local RaycastFilterParams = RaycastParams.new()
-RaycastFilterParams.FilterType = Enum.RaycastFilterType.Exclude
-RaycastFilterParams.FilterDescendantsInstances = {}
-
--- Cache for character exclusion list (updated when players join/leave)
-local CachedCharacterExclusions = {}
-
--- Update the cached character exclusion list
-local function UpdateCachedCharacterExclusions()
-	local characters = {}
-	for _, player in Players:GetPlayers() do
-		if player.Character then
-			table.insert(characters, player.Character)
-		end
-	end
-	CachedCharacterExclusions = characters
-	RaycastFilterParams.FilterDescendantsInstances = CachedCharacterExclusions
-end
+RaycastFilterParams.FilterType = Enum.RaycastFilterType.Include
+RaycastFilterParams.FilterDescendantsInstances = { VisualTrack }
 
 -- Update circular position using polar to cartesian conversion with ground detection
 local function UpdateCircularPosition(center: Vector3, radius: number, angle: number, fallbackY: number): (CFrame, Vector3)
@@ -151,11 +137,10 @@ local function UpdateCircularPosition(center: Vector3, radius: number, angle: nu
 	local x = center.X + radius * math.cos(angle)
 	local z = center.Z + radius * math.sin(angle)
 	
-	-- Use raycast to find ground Y coordinate
+	-- Raycast only hits Visual_Track part (excludes characters and other objects)
 	local rayOrigin = Vector3.new(x, fallbackY + RAYCAST_HEIGHT_OFFSET, z)
 	local rayDirection = Vector3.new(0, -RAYCAST_DISTANCE, 0)
 	
-	-- Use cached filter for raycast (updated when players join/leave)
 	local raycastResult = Workspace:Raycast(rayOrigin, rayDirection, RaycastFilterParams)
 	
 	local groundY = fallbackY -- Default to fallback if raycast fails
@@ -565,22 +550,6 @@ end
 function TrackService:KnitInit()
 	-- Clean up when player leaves
 	Players.PlayerRemoving:Connect(OnPlayerRemoving)
-	
-	-- Update character exclusion cache when players join/leave/respawn
-	Players.PlayerAdded:Connect(function(player)
-		UpdateCachedCharacterExclusions()
-		player.CharacterAdded:Connect(UpdateCachedCharacterExclusions)
-		player.CharacterRemoving:Connect(UpdateCachedCharacterExclusions)
-	end)
-	
-	Players.PlayerRemoving:Connect(UpdateCachedCharacterExclusions)
-	
-	-- Initialize cache with existing players
-	for _, player in Players:GetPlayers() do
-		UpdateCachedCharacterExclusions()
-		player.CharacterAdded:Connect(UpdateCachedCharacterExclusions)
-		player.CharacterRemoving:Connect(UpdateCachedCharacterExclusions)
-	end
 end
 
 function TrackService:KnitStart()
