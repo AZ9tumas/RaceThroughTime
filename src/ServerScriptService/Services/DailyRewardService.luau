@@ -1,23 +1,3 @@
---[[
-	DailyRewardService
-	Handles daily reward collection and tracking.
-	
-	Developers can configure rewards by modifying the REWARD_DATA table below.
-	Each reward must have:
-	- ID: Unique identifier (must match IDs in ReplicatedStorage.Modules.DailyRewards)
-	- Name: Display name shown to player when collected
-	- items: Table of items to award { ItemType = "Cash" | "Pet" | "Gems" | "Fuel", Quantity = number, PetId = string? }
-	
-	USAGE:
-	From server - collect reward for a player:
-	  local DailyRewardService = Knit.GetService("DailyRewardService")
-	  local success, message = DailyRewardService:CollectReward(player)
-	
-	From client - request to collect reward:
-	  local DailyRewardService = Knit.GetService("DailyRewardService")
-	  local success, message = DailyRewardService:RequestCollectReward()
-]]
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -32,18 +12,6 @@ local DailyRewardService = Knit.CreateService({
 -- Private constants
 local SECONDS_IN_DAY = 86400 -- 24 hours in seconds
 
---[[
-	REWARD DATA CONFIGURATION
-	Developers: Modify this table to set what rewards players receive.
-	
-	Each reward entry:
-	- ID: Must match an ID from ReplicatedStorage.Modules.DailyRewards.RewardIDs
-	- Name: Display name shown when reward is collected
-	- items: Array of items to give
-	  - ItemType: "Cash" | "Gems" | "Fuel" | "Pet"
-	  - Quantity: Amount to give (for Cash/Gems/Fuel)
-	  - PetId: (for Pet type) The pet identifier to give
-]]
 local REWARD_DATA = {
 	DAY_1_STARTER = {
 		ID = "DAY_1_STARTER",
@@ -101,22 +69,18 @@ local REWARD_DATA = {
 	},
 }
 
--- Helper function for logging
 local function Log(message: string)
 	print(string.format("[DailyRewardService]: %s", message))
 end
 
--- Get the current day's reward based on player's streak
 local function GetCurrentDayRewardID(streak: number): string?
 	local totalDays = DailyRewardsConfig.GetTotalDays()
 	if totalDays == 0 then return nil end
 	
-	-- Cycle through rewards (streak wraps around)
 	local dayIndex = ((streak - 1) % totalDays) + 1
 	return DailyRewardsConfig.GetRewardIDForDay(dayIndex)
 end
 
--- Check if a reward can be collected (24 hours since last claim)
 local function CanCollectReward(lastClaim: number): boolean
 	local currentTime = os.time()
 	return (currentTime - lastClaim) >= SECONDS_IN_DAY
@@ -128,7 +92,6 @@ local function ShouldResetStreak(lastClaim: number): boolean
 	return (currentTime - lastClaim) >= (SECONDS_IN_DAY * 2)
 end
 
--- Apply reward items to player
 local function ApplyRewardItems(player: Player, items: { { ItemType: string, Quantity: number?, PetId: string? } })
 	local DataService = Knit.GetService("DataService")
 	
@@ -170,7 +133,6 @@ local function ApplyRewardItems(player: Player, items: { { ItemType: string, Qua
 	end
 end
 
--- Get collected reward IDs for a player
 function DailyRewardService:GetCollectedRewards(player: Player): { [string]: boolean }
 	local DataService = Knit.GetService("DataService")
 	local meta = DataService:Get(player, "Meta")
@@ -180,7 +142,6 @@ function DailyRewardService:GetCollectedRewards(player: Player): { [string]: boo
 	return {}
 end
 
--- Get the player's current streak
 function DailyRewardService:GetStreak(player: Player): number
 	local DataService = Knit.GetService("DataService")
 	local meta = DataService:Get(player, "Meta")
@@ -190,7 +151,6 @@ function DailyRewardService:GetStreak(player: Player): number
 	return 0
 end
 
--- Get the player's last claim time
 function DailyRewardService:GetLastClaimTime(player: Player): number
 	local DataService = Knit.GetService("DataService")
 	local meta = DataService:Get(player, "Meta")
@@ -200,18 +160,15 @@ function DailyRewardService:GetLastClaimTime(player: Player): number
 	return 0
 end
 
--- Check if player can collect a reward
 function DailyRewardService:CanCollect(player: Player): boolean
 	local lastClaim = self:GetLastClaimTime(player)
 	return CanCollectReward(lastClaim)
 end
 
--- Collect the daily reward for a player
 function DailyRewardService:CollectReward(player: Player): (boolean, string?)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
 	
-	-- Check if data is loaded
 	local meta = DataService:Get(player, "Meta")
 	if not meta then
 		return false, "Data not loaded"
@@ -228,16 +185,14 @@ function DailyRewardService:CollectReward(player: Player): (boolean, string?)
 		return false, string.format("Come back in %dh %dm", hoursLeft, minutesLeft)
 	end
 	
-	-- Check if streak should reset
 	if lastClaim > 0 and ShouldResetStreak(lastClaim) then
 		streak = 0
 		Log(string.format("Streak reset for %s (missed more than 48 hours)", player.Name))
 	end
 	
-	-- Increment streak
 	streak = streak + 1
 	
-	-- Get reward for current day
+	-- Get reward
 	local rewardID = GetCurrentDayRewardID(streak)
 	if not rewardID then
 		return false, "No reward configured"
@@ -247,16 +202,13 @@ function DailyRewardService:CollectReward(player: Player): (boolean, string?)
 	if not rewardData then
 		return false, "Reward data not found"
 	end
-	
-	-- Apply reward items
+
 	ApplyRewardItems(player, rewardData.items)
 	
-	-- Update player's meta data
 	DataService:Update(player, "Meta", function(metaData)
 		metaData.DailyStreak = streak
 		metaData.LastClaim = os.time()
 		
-		-- Track collected rewards
 		if not metaData.CollectedRewards then
 			metaData.CollectedRewards = {}
 		end
@@ -265,7 +217,6 @@ function DailyRewardService:CollectReward(player: Player): (boolean, string?)
 		return metaData
 	end)
 	
-	-- Notify player
 	local rewardName = rewardData.Name
 	NotificationService:SendNotification(
 		player,
@@ -278,12 +229,10 @@ function DailyRewardService:CollectReward(player: Player): (boolean, string?)
 	return true, rewardName
 end
 
--- Client request to collect reward
 function DailyRewardService.Client:RequestCollectReward(player: Player): (boolean, string?)
 	return DailyRewardService:CollectReward(player)
 end
 
--- Client request to get current reward status
 function DailyRewardService.Client:GetRewardStatus(player: Player): { canCollect: boolean, streak: number, timeUntilNext: number?, currentRewardID: string? }
 	local lastClaim = DailyRewardService:GetLastClaimTime(player)
 	local streak = DailyRewardService:GetStreak(player)
@@ -293,8 +242,7 @@ function DailyRewardService.Client:GetRewardStatus(player: Player): { canCollect
 	if not canCollect then
 		timeUntilNext = SECONDS_IN_DAY - (os.time() - lastClaim)
 	end
-	
-	-- Check if streak would reset
+
 	local effectiveStreak = streak
 	if lastClaim > 0 and ShouldResetStreak(lastClaim) then
 		effectiveStreak = 0
@@ -311,12 +259,10 @@ function DailyRewardService.Client:GetRewardStatus(player: Player): { canCollect
 	}
 end
 
--- Client request to get collected rewards (IDs only)
 function DailyRewardService.Client:GetCollectedRewards(player: Player): { [string]: boolean }
 	return DailyRewardService:GetCollectedRewards(player)
 end
 
--- Knit lifecycle
 function DailyRewardService:KnitInit()
 	Log("DailyRewardService initialized")
 end

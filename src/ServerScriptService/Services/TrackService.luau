@@ -146,7 +146,7 @@ local function UpdateCircularPosition(center: Vector3, radius: number, angle: nu
 	local groundY = fallbackY -- Default to fallback if raycast fails
 	if raycastResult then
 		-- Place player at ground position plus offset for character height
-		groundY = raycastResult.Position.Y + GROUND_OFFSET
+		groundY = raycastResult.Position.Y-- + GROUND_OFFSET
 	end
 	
 	local targetPosition = Vector3.new(x, groundY, z)

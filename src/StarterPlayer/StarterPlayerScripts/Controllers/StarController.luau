@@ -1,9 +1,3 @@
---[[
-	StarController
-	Handles star spawning and collection on the client side.
-	Listens to server signals and manages star instances.
-]]
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 

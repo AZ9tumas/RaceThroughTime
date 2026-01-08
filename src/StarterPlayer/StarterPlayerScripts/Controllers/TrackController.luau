@@ -1,9 +1,3 @@
---[[
-	TrackController
-	Handles track running on the client side.
-	Receives acknowledgment from server and disables player controls while on track.
-]]
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
