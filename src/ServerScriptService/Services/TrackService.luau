@@ -476,8 +476,8 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	return true, nil
 end
 
--- Client request to cancel current track run and receive partial rewards
-function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, { distanceTraveled: number?, cashEarned: number? }?)
+-- Client request to cancel current track run (no rewards on cancellation)
+function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, { distanceTraveled: number? }?)
 	local userId = player.UserId
 	local trackData = PlayersOnTrack[userId]
 	
@@ -486,15 +486,10 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 		return false, "Not currently on track", nil
 	end
 	
-	-- Calculate partial rewards based on distance traveled so far
 	local distanceTraveled = trackData.distanceTraveled or 0
 	local worldName = trackData.worldName or "Main"
 	
-	-- Calculate cash earned based on WorldCashRate (per 1000 distance)
-	local cashRate = Stats.WorldCashRates[worldName] or Stats.WorldCashRates.Main
-	local cashEarned = math.floor((distanceTraveled / 1000) * cashRate)
-	
-	Log(string.format("Player %s cancelled track run in %s, distance traveled: %.2f, cash earned: %d", player.Name, worldName, distanceTraveled, cashEarned))
+	Log(string.format("Player %s cancelled track run in %s, distance traveled: %.2f (no rewards)", player.Name, worldName, distanceTraveled))
 	
 	-- Clean up body movers
 	local character = player.Character
@@ -502,7 +497,7 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 		CleanupBodyMovers(character)
 	end
 	
-	-- Update player data: set fuel to 0 and add partial cash
+	-- Update player data: set fuel to 0 (no cash reward on cancellation)
 	local DataService = Knit.GetService("DataService")
 	
 	-- Set fuel to 0
@@ -511,27 +506,18 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 		return stats
 	end)
 	
-	-- Add cash earned
-	if cashEarned > 0 then
-		DataService:Update(player, "Currencies", function(currencies)
-			currencies.Cash = (currencies.Cash or 0) + cashEarned
-			return currencies
-		end)
-	end
-	
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
 	
-	-- Fire signal to client that track has ended (cancelled)
+	-- Fire signal to client that track has ended (cancelled, no rewards)
 	TrackService.Client.TrackEnded:Fire(player, {
 		distanceTraveled = distanceTraveled,
-		cashEarned = cashEarned,
+		cashEarned = 0,
 		cancelled = true,
 	})
 	
 	return true, nil, {
 		distanceTraveled = distanceTraveled,
-		cashEarned = cashEarned,
 	}
 end
 
