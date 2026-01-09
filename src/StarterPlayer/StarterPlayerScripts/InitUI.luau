@@ -38,6 +38,13 @@ local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 local fuelBar = centerHUD:WaitForChild("FuelBar")
 local fuelText: TextLabel = fuelBar:WaitForChild("FuelText")
 local fuelBarFill = fuelBar:WaitForChild("Fill")
+local otherFrames: Frame = mainUi:WaitForChild("OtherFrames")
+
+-- sub frames
+local dailyButton: TextButton = leftPanel:WaitForChild("DailyButton")
+local dailyFrame: Frame = otherFrames:WaitForChild("DailyFrame")
+local shopButton: TextButton = leftPanel:WaitForChild("ShopButton")
+local shopFrame: Frame = otherFrames:WaitForChild("StoreFrame")
 
 -- vals
 local leaderstats = player:WaitForChild("leaderstats")
@@ -213,6 +220,55 @@ local function UpdateRunButtonVisibility()
     
     -- Show only if near a gate
     runButton.Visible = IsPlayerNearGate()
+end
+
+-- daily frame
+handler._connections["DailyButton"] = dailyButton.MouseButton1Click:Connect(function()
+    dailyFrame.Visible = not dailyFrame.Visible
+end)
+
+local dailyFrameMain = dailyFrame:WaitForChild("Main")
+local cardHolderFrame = dailyFrameMain:WaitForChild("CardHolder")
+local cardHolders = {
+    DayOne = {
+        Frame = cardHolderFrame:WaitForChild("1"),
+        RedeemButton = cardHolderFrame:WaitForChild("1"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("1"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("1"):WaitForChild("Amount"),
+    },
+    DayTwo = {
+        Frame = cardHolderFrame:WaitForChild("2"),
+        RedeemButton = cardHolderFrame:WaitForChild("2"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("2"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("2"):WaitForChild("Amount"),
+    },
+    DayThree = {
+        Frame = cardHolderFrame:WaitForChild("3"),
+        RedeemButton = cardHolderFrame:WaitForChild("3"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("3"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("3"):WaitForChild("Amount"),
+    },
+    DayFour = {
+        Frame = cardHolderFrame:WaitForChild("4"),
+        RedeemButton = cardHolderFrame:WaitForChild("4"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("4"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("4"):WaitForChild("Amount"),
+    },
+    DayFive = {
+        Frame = cardHolderFrame:WaitForChild("5"),
+        RedeemButton = cardHolderFrame:WaitForChild("5"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("5"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("5"):WaitForChild("Amount"),
+    },
+}
+
+print(cardHolders, "Card Holders")
+
+for _, cardData in pairs(cardHolders) do
+    handler._connections["Day" .. cardData.Frame.Name] = cardData.RedeemButton.MouseButton1Click:Connect(function()
+        print("Redeem button clicked for card:", cardData.Frame.Name)
+        dailyFrame.Visible = false
+    end)
 end
 
 handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(function()
