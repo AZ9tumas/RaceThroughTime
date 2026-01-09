@@ -12,63 +12,6 @@ local DailyRewardService = Knit.CreateService({
 -- Private constants
 local SECONDS_IN_DAY = 86400 -- 24 hours in seconds
 
-local REWARD_DATA = {
-	DAY_1_STARTER = {
-		ID = "DAY_1_STARTER",
-		Name = "Starter Pack",
-		items = {
-			{ ItemType = "Cash", Quantity = 100 },
-		},
-	},
-	DAY_2_BONUS = {
-		ID = "DAY_2_BONUS",
-		Name = "Bonus Cash",
-		items = {
-			{ ItemType = "Cash", Quantity = 250 },
-		},
-	},
-	DAY_3_BOOST = {
-		ID = "DAY_3_BOOST",
-		Name = "Fuel Boost",
-		items = {
-			{ ItemType = "Cash", Quantity = 150 },
-			{ ItemType = "Fuel", Quantity = 50 },
-		},
-	},
-	DAY_4_SPECIAL = {
-		ID = "DAY_4_SPECIAL",
-		Name = "Special Gems",
-		items = {
-			{ ItemType = "Gems", Quantity = 10 },
-		},
-	},
-	DAY_5_RARE = {
-		ID = "DAY_5_RARE",
-		Name = "Rare Bundle",
-		items = {
-			{ ItemType = "Cash", Quantity = 500 },
-			{ ItemType = "Gems", Quantity = 15 },
-		},
-	},
-	DAY_6_EPIC = {
-		ID = "DAY_6_EPIC",
-		Name = "Epic Rewards",
-		items = {
-			{ ItemType = "Cash", Quantity = 750 },
-			{ ItemType = "Fuel", Quantity = 100 },
-		},
-	},
-	DAY_7_LEGENDARY = {
-		ID = "DAY_7_LEGENDARY",
-		Name = "Legendary Treasure",
-		items = {
-			{ ItemType = "Cash", Quantity = 1000 },
-			{ ItemType = "Gems", Quantity = 50 },
-			{ ItemType = "Fuel", Quantity = 200 },
-		},
-	},
-}
-
 local function Log(message: string)
 	print(string.format("[DailyRewardService]: %s", message))
 end
@@ -171,6 +114,11 @@ function DailyRewardService:CollectReward(player: Player): (boolean, string?)
 	
 	local meta = DataService:Get(player, "Meta")
 	if not meta then
+		NotificationService:SendNotification(
+			player,
+			"Data not loaded yet. Please try again.",
+			NotificationService.Category.Error
+		)
 		return false, "Data not loaded"
 	end
 	
@@ -182,6 +130,11 @@ function DailyRewardService:CollectReward(player: Player): (boolean, string?)
 		local timeUntilNext = SECONDS_IN_DAY - (os.time() - lastClaim)
 		local hoursLeft = math.floor(timeUntilNext / 3600)
 		local minutesLeft = math.floor((timeUntilNext % 3600) / 60)
+		NotificationService:SendNotification(
+			player,
+			string.format("Come back in %dh %dm to claim your next reward!", hoursLeft, minutesLeft),
+			NotificationService.Category.Warning
+		)
 		return false, string.format("Come back in %dh %dm", hoursLeft, minutesLeft)
 	end
 	
@@ -192,14 +145,24 @@ function DailyRewardService:CollectReward(player: Player): (boolean, string?)
 	
 	streak = streak + 1
 	
-	-- Get reward
+	-- Get reward from shared config
 	local rewardID = GetCurrentDayRewardID(streak)
 	if not rewardID then
+		NotificationService:SendNotification(
+			player,
+			"No reward configured for this day.",
+			NotificationService.Category.Error
+		)
 		return false, "No reward configured"
 	end
 	
-	local rewardData = REWARD_DATA[rewardID]
+	local rewardData = DailyRewardsConfig.GetRewardByID(rewardID)
 	if not rewardData then
+		NotificationService:SendNotification(
+			player,
+			"Reward data not found.",
+			NotificationService.Category.Error
+		)
 		return false, "Reward data not found"
 	end
 
@@ -229,8 +192,10 @@ function DailyRewardService:CollectReward(player: Player): (boolean, string?)
 	return true, rewardName
 end
 
-function DailyRewardService.Client:RequestCollectReward(player: Player): (boolean, string?)
-	return DailyRewardService:CollectReward(player)
+-- Client request to collect reward (server handles everything including notifications)
+function DailyRewardService.Client:RequestCollectReward(player: Player)
+	DailyRewardService:CollectReward(player)
+	-- No return value - server handles all notifications
 end
 
 function DailyRewardService.Client:GetRewardStatus(player: Player): { canCollect: boolean, streak: number, timeUntilNext: number?, currentRewardID: string? }

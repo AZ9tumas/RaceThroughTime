@@ -264,9 +264,15 @@ local cardHolders = {
 
 print(cardHolders, "Card Holders")
 
+-- Connect all daily reward claim buttons to the server
+-- Client only sends the request - server handles everything including notifications
+local DailyRewardService = Knit.GetService("DailyRewardService")
+
 for _, cardData in pairs(cardHolders) do
     handler._connections["Day" .. cardData.Frame.Name] = cardData.RedeemButton.MouseButton1Click:Connect(function()
-        print("Redeem button clicked for card:", cardData.Frame.Name)
+        -- Send claim request to server - server handles all logic and notifications
+        DailyRewardService:RequestCollectReward()
+        -- Close the daily frame after clicking
         dailyFrame.Visible = false
     end)
 end
