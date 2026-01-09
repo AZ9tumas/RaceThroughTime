@@ -6,7 +6,7 @@
 	Each reward entry:
 	- ID: Unique identifier for the reward
 	- Name: Display name shown to player when collected
-	- Day: The day number (1-7) this reward is for
+	- Day: The day number (1-5) this reward is for
 	- items: Array of items to give
 	  - ItemType: "Cash" | "Gems" | "Fuel" | "Pet"
 	  - Quantity: Amount to give (for Cash/Gems/Fuel)
@@ -15,7 +15,7 @@
 
 local DailyRewards = {}
 
--- Full reward data exposed to client
+-- Full reward data exposed to client (5 days to match UI)
 DailyRewards.Rewards = {
 	{
 		ID = "DAY_1_STARTER",
@@ -51,27 +51,9 @@ DailyRewards.Rewards = {
 		},
 	},
 	{
-		ID = "DAY_5_RARE",
-		Name = "Rare Bundle",
-		Day = 5,
-		items = {
-			{ ItemType = "Cash", Quantity = 500 },
-			{ ItemType = "Gems", Quantity = 15 },
-		},
-	},
-	{
-		ID = "DAY_6_EPIC",
-		Name = "Epic Rewards",
-		Day = 6,
-		items = {
-			{ ItemType = "Cash", Quantity = 750 },
-			{ ItemType = "Fuel", Quantity = 100 },
-		},
-	},
-	{
-		ID = "DAY_7_LEGENDARY",
+		ID = "DAY_5_LEGENDARY",
 		Name = "Legendary Treasure",
-		Day = 7,
+		Day = 5,
 		items = {
 			{ ItemType = "Cash", Quantity = 1000 },
 			{ ItemType = "Gems", Quantity = 50 },
