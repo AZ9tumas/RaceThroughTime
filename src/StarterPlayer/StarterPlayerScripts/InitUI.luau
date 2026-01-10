@@ -1,6 +1,37 @@
 
 local handler = {
     _connections = {},
+    data = {
+        Currencies = {
+            Cash = 0,
+            Gems = 0,
+        },
+        Stats = {
+            TotalDistance = 0,
+            Points = 0,
+            Rebirths = 0,
+            Fuel = 100, -- Starting fuel for players
+        },
+        Progression = {
+            CurrentWorld = "Main",
+            UnlockedWorlds = { "Main" },
+        },
+        Inventory = {
+            PetInventory = {},
+            EquippedPets = {},
+            Potions = {},
+        },
+        Meta = {
+            DailyStreak = 0,
+            LastClaim = 0,
+            CollectedRewards = {}, -- Tracks which daily reward IDs have been collected
+            UpdateVersion = 0,
+            Settings = {
+                Music = true,
+                SFX = true,
+            },
+        },
+    }
 }
 
 local Players = game:GetService("Players")
@@ -38,6 +69,13 @@ local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 local fuelBar = centerHUD:WaitForChild("FuelBar")
 local fuelText: TextLabel = fuelBar:WaitForChild("FuelText")
 local fuelBarFill = fuelBar:WaitForChild("Fill")
+local otherFrames: Frame = mainUi:WaitForChild("OtherFrames")
+
+-- sub frames
+local dailyButton: TextButton = leftPanel:WaitForChild("DailyButton")
+local dailyFrame: Frame = otherFrames:WaitForChild("DailyFrame")
+local shopButton: TextButton = leftPanel:WaitForChild("ShopButton")
+local shopFrame: Frame = otherFrames:WaitForChild("StoreFrame")
 
 -- vals
 local leaderstats = player:WaitForChild("leaderstats")
@@ -138,6 +176,25 @@ function handler.UpdateGemsUI(amount: number)
     GemsDisplay.Text = "💎 " .. truncateNumber(amount)
 end
 
+
+-- Function to update UI with loaded data from server
+-- Called after data has been loaded on the server
+function handler.UpdateDataOnClient(newData)
+    -- Update handler.Data with new data
+    print("Client data update: ", newData)
+    if newData then
+        handler.data = newData
+    end
+
+    -- Initial UI updates from leaderstats (already replicated)
+    handler.UpdateFuelUI(fuelVal.Value)
+    handler.UpdateCashUI(cashVal.Value)
+    handler.UpdateGemsUI(gemsVal.Value)
+    handler.UpdateRewardsStatus()
+    
+    print("[InitUI]: Client data updated")
+end
+
 handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function()
     -- Debounce: prevent spam requests while one is already in progress
     if isRequestingTrack then
@@ -214,6 +271,98 @@ local function UpdateRunButtonVisibility()
     -- Show only if near a gate
     runButton.Visible = IsPlayerNearGate()
 end
+
+-- daily frame
+handler._connections["DailyButton"] = dailyButton.MouseButton1Click:Connect(function()
+    dailyFrame.Visible = not dailyFrame.Visible
+end)
+
+local dailyFrameMain = dailyFrame:WaitForChild("Main")
+local dailyFrameCloseButton = dailyFrame:WaitForChild("Close")
+local cardHolderFrame = dailyFrameMain:WaitForChild("CardHolder")
+local cardHolders = {
+    DayOne = {
+        Day = 1,
+        Frame = cardHolderFrame:WaitForChild("1"),
+        RedeemButton = cardHolderFrame:WaitForChild("1"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("1"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("1"):WaitForChild("Amount"),
+    },
+    DayTwo = {
+        Day = 2,
+        Frame = cardHolderFrame:WaitForChild("2"),
+        RedeemButton = cardHolderFrame:WaitForChild("2"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("2"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("2"):WaitForChild("Amount"),
+    },
+    DayThree = {
+        Day = 3,
+        Frame = cardHolderFrame:WaitForChild("3"),
+        RedeemButton = cardHolderFrame:WaitForChild("3"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("3"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("3"):WaitForChild("Amount"),
+    },
+    DayFour = {
+        Day = 4,
+        Frame = cardHolderFrame:WaitForChild("4"),
+        RedeemButton = cardHolderFrame:WaitForChild("4"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("4"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("4"):WaitForChild("Amount"),
+    },
+    DayFive = {
+        Day = 5,
+        Frame = cardHolderFrame:WaitForChild("5"),
+        RedeemButton = cardHolderFrame:WaitForChild("5"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("5"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("5"):WaitForChild("Amount"),
+    },
+}
+
+print(cardHolders, "Card Holders")
+
+function handler.UpdateRewardsStatus()
+    -- Get DailyRewardService to check collected rewards
+    print("Updating rewards status on client UI")
+    print(handler.data)
+    local collectedRewards = handler.data.Meta.CollectedRewards or {}
+    local DailyRewardsConfig = require(modules:WaitForChild("DailyRewards"))
+    
+    -- Update each card's status based on collected rewards
+    for _, cardData in pairs(cardHolders) do
+        local rewardID = DailyRewardsConfig.GetRewardIDForDay(cardData.Day)
+        print(rewardID, collectedRewards)
+        if rewardID and collectedRewards[rewardID] then
+            cardData.RedeemButton.Parent.PriceLabel.Text = "REDEEMED"
+        end
+    end
+end
+
+-- Connect all daily reward claim buttons to the server
+-- Client only sends the request - server handles everything including notifications
+local DailyRewardService = Knit.GetService("DailyRewardService")
+local DataService = Knit.GetService("DataService")
+
+for _, cardData in pairs(cardHolders) do
+    handler._connections["Day" .. cardData.Frame.Name] = cardData.RedeemButton.MouseButton1Click:Connect(function()
+        -- Send claim request to server with the specific day number
+        local success, _ = DailyRewardService:RequestCollectReward(cardData.Day)
+        
+        handler.UpdateRewardsStatus()
+        
+        -- Close the daily frame after clicking
+        dailyFrame.Visible = false
+    end)
+end
+
+handler._connections["DailyFrameClose"] = dailyFrameCloseButton.MouseButton1Click:Connect(function()
+    dailyFrame.Visible = false
+end)
+
+-- Listen for DataReady signal from server to update UI
+handler._connections["DataReady"] = DataService.DataReady:Connect(function(data)
+    -- Call UpdateDataOnClient when data is ready
+    handler.UpdateDataOnClient(data)
+end)
 
 handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(function()
     handler.UpdateFuelUI(fuelVal.Value)

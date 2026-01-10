@@ -15,7 +15,7 @@ Stats.WorldEfficiency = {
 
 -- World radius values for track movement (distance from center)
 Stats.WorldRadius = {
-	Main = 185,
+	Main = 205,
 }
 
 Stats.FuelConsumptionRate = {

@@ -1,8 +1,3 @@
---[[
-	LoadingScreenController
-	Handles the loading screen UI fade-in/fade-out and coordinates with data loading.
-]]
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 

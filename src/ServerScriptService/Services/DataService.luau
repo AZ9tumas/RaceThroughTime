@@ -35,6 +35,7 @@ local Template = {
 	Meta = {
 		DailyStreak = 0,
 		LastClaim = 0,
+		CollectedRewards = {}, -- Tracks which daily reward IDs have been collected
 		UpdateVersion = 0,
 		Settings = {
 			Music = true,
@@ -116,6 +117,12 @@ local function TryResolveSession(player: Player)
 	local clientReady = ClientStatus[player]
 	local sessionPromise = SessionReadyPromises[player]
 
+	-- immediately send data right away
+	if profile then
+		-- Fire DataReady signal to client
+		DataService.Client.DataReady:Fire(player, profile.Data)
+	end
+
 	if profile and clientReady and sessionPromise and sessionPromise.resolve then
 		print(player, "Session Initialized")
 		sessionPromise.resolve()
@@ -173,9 +180,6 @@ local function OnPlayerAdded(player: Player)
 			DataReadyPromises[player].resolve()
 			DataReadyPromises[player].resolve = nil
 		end
-
-		-- Fire DataReady signal to client
-		DataService.Client.DataReady:Fire(player)
 
 		-- Check if session is ready to initialize
 		TryResolveSession(player)

@@ -13,9 +13,10 @@ local RunService = game:GetService("RunService")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 
--- Track gate references
+-- Track references
 local TrackGates = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("Track_System"):WaitForChild("Track_Gates")
 local SpawnLocation = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("SpawnLocation")
+local VisualTrack = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("Track_System"):WaitForChild("Visual_Track")
 
 local TrackService = Knit.CreateService({
 	Name = "TrackService",
@@ -120,13 +121,35 @@ local function CalculatePlayerSpeed(player: Player, worldName: string): number
 	return Stats.CalculateSpeedFromFuel(fuel, worldName)
 end
 
--- Update circular position using polar to cartesian conversion
-local function UpdateCircularPosition(center: Vector3, radius: number, angle: number, y: number): (CFrame, Vector3)
+-- Raycast parameters for ground detection
+local RAYCAST_HEIGHT_OFFSET = 50 -- Start raycast from this height above the fallback Y
+local RAYCAST_DISTANCE = 100 -- Maximum raycast distance downward
+local GROUND_OFFSET = 3 -- Height offset above ground for player placement (approximate hip height)
+
+-- Raycast params to only hit the visual track
+local RaycastFilterParams = RaycastParams.new()
+RaycastFilterParams.FilterType = Enum.RaycastFilterType.Include
+RaycastFilterParams.FilterDescendantsInstances = { VisualTrack }
+
+-- Update circular position using polar to cartesian conversion with ground detection
+local function UpdateCircularPosition(center: Vector3, radius: number, angle: number, fallbackY: number): (CFrame, Vector3)
 	-- Polar to Cartesian conversion
 	local x = center.X + radius * math.cos(angle)
 	local z = center.Z + radius * math.sin(angle)
 	
-	local targetPosition = Vector3.new(x, y, z)
+	-- Raycast only hits Visual_Track part (excludes characters and other objects)
+	local rayOrigin = Vector3.new(x, fallbackY + RAYCAST_HEIGHT_OFFSET, z)
+	local rayDirection = Vector3.new(0, -RAYCAST_DISTANCE, 0)
+	
+	local raycastResult = Workspace:Raycast(rayOrigin, rayDirection, RaycastFilterParams)
+	
+	local groundY = fallbackY -- Default to fallback if raycast fails
+	if raycastResult then
+		-- Place player at ground position plus offset for character height
+		groundY = raycastResult.Position.Y-- + GROUND_OFFSET
+	end
+	
+	local targetPosition = Vector3.new(x, groundY, z)
 	
 	-- Calculate orientation (tangential direction - looking forward along the path)
 	local lookAtPos = targetPosition + Vector3.new(
@@ -451,6 +474,51 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	})
 	
 	return true, nil
+end
+
+-- Client request to cancel current track run (no rewards on cancellation)
+function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, { distanceTraveled: number? }?)
+	local userId = player.UserId
+	local trackData = PlayersOnTrack[userId]
+	
+	-- Check if player is on the track
+	if not trackData then
+		return false, "Not currently on track", nil
+	end
+	
+	local distanceTraveled = trackData.distanceTraveled or 0
+	local worldName = trackData.worldName or "Main"
+	
+	Log(string.format("Player %s cancelled track run in %s, distance traveled: %.2f (no rewards)", player.Name, worldName, distanceTraveled))
+	
+	-- Clean up body movers
+	local character = player.Character
+	if character then
+		CleanupBodyMovers(character)
+	end
+	
+	-- Update player data: set fuel to 0 (no cash reward on cancellation)
+	local DataService = Knit.GetService("DataService")
+	
+	-- Set fuel to 0
+	DataService:Update(player, "Stats", function(stats)
+		stats.Fuel = 0
+		return stats
+	end)
+	
+	-- Clear player from track
+	PlayersOnTrack[userId] = nil
+	
+	-- Fire signal to client that track has ended (cancelled, no rewards)
+	TrackService.Client.TrackEnded:Fire(player, {
+		distanceTraveled = distanceTraveled,
+		cashEarned = 0,
+		cancelled = true,
+	})
+	
+	return true, nil, {
+		distanceTraveled = distanceTraveled,
+	}
 end
 
 -- Clean up when player leaves
