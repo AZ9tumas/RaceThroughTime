@@ -177,8 +177,20 @@ local data = {
 	},
 }
 
+-- Function to update UI with loaded data from server
+-- Called after data has been loaded on the server
 function handler.UpdateDataOnClient(newData: typeof(data))
-    -- Set handler.Data = newData and update required functions.
+    -- Update handler.Data with new data
+    if newData then
+        data = newData
+    end
+    
+    -- Initial UI updates from leaderstats (already replicated)
+    handler.UpdateFuelUI(fuelVal.Value)
+    handler.UpdateCashUI(cashVal.Value)
+    handler.UpdateGemsUI(gemsVal.Value)
+    
+    print("[InitUI]: Client data updated")
 end
 
 handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function()
@@ -308,37 +320,16 @@ local DataService = Knit.GetService("DataService")
 for _, cardData in pairs(cardHolders) do
     handler._connections["Day" .. cardData.Frame.Name] = cardData.RedeemButton.MouseButton1Click:Connect(function()
         -- Send claim request to server - server handles all logic and notifications
-        DailyRewardService:RequestCollectReward():andThen(function(success, message)
-            print("Success: ", success, "Message: ", message)
-            -- Close the daily frame after clicking
-            dailyFrame.Visible = false
-        end)
+        DailyRewardService:RequestCollectReward()
+        -- Close the daily frame after clicking
+        dailyFrame.Visible = false
     end)
-end
-
--- Function to update UI with loaded data from server
--- Called after data has been loaded on the server
-function handler.UpdateDataOnClient(data)
-    -- Update daily rewards UI if data contains reward status
-    if data and data.rewardStatus then
-        local status = data.rewardStatus
-        -- Could update UI elements here based on streak, canCollect, etc.
-        print("[InitUI]: Daily reward status updated - Streak:", status.streak, "Can Collect:", status.canCollect)
-    end
-    
-    -- Initial UI updates from leaderstats (already replicated)
-    handler.UpdateFuelUI(fuelVal.Value)
-    handler.UpdateCashUI(cashVal.Value)
-    handler.UpdateGemsUI(gemsVal.Value)
-    
-    print("[InitUI]: Client data updated")
 end
 
 -- Listen for DataReady signal from server to update UI
 handler._connections["DataReady"] = DataService.DataReady:Connect(function()
-    -- Get reward status from server to update UI
-    local rewardStatus = DailyRewardService:GetRewardStatus()
-    handler.UpdateDataOnClient({ rewardStatus = rewardStatus })
+    -- Call UpdateDataOnClient when data is ready
+    handler.UpdateDataOnClient(nil)
 end)
 
 handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(function()
