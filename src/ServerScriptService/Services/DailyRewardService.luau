@@ -194,8 +194,7 @@ end
 
 -- Client request to collect reward (server handles everything including notifications)
 function DailyRewardService.Client:RequestCollectReward(player: Player)
-	DailyRewardService:CollectReward(player)
-	-- No return value - server handles all notifications
+	return DailyRewardService:CollectReward(player)
 end
 
 function DailyRewardService.Client:GetRewardStatus(player: Player): { canCollect: boolean, streak: number, timeUntilNext: number?, currentRewardID: string? }

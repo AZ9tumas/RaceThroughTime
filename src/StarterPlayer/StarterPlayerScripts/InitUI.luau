@@ -145,6 +145,42 @@ function handler.UpdateGemsUI(amount: number)
     GemsDisplay.Text = "💎 " .. truncateNumber(amount)
 end
 
+local data = {
+	Currencies = {
+		Cash = 0,
+		Gems = 0,
+	},
+	Stats = {
+		TotalDistance = 0,
+		Points = 0,
+		Rebirths = 0,
+		Fuel = 100, -- Starting fuel for players
+	},
+	Progression = {
+		CurrentWorld = "Main",
+		UnlockedWorlds = { "Main" },
+	},
+	Inventory = {
+		PetInventory = {},
+		EquippedPets = {},
+		Potions = {},
+	},
+	Meta = {
+		DailyStreak = 0,
+		LastClaim = 0,
+		CollectedRewards = {}, -- Tracks which daily reward IDs have been collected
+		UpdateVersion = 0,
+		Settings = {
+			Music = true,
+			SFX = true,
+		},
+	},
+}
+
+function handler.UpdateDataOnClient(newData: typeof(data))
+
+end
+
 handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function()
     -- Debounce: prevent spam requests while one is already in progress
     if isRequestingTrack then
@@ -271,9 +307,11 @@ local DailyRewardService = Knit.GetService("DailyRewardService")
 for _, cardData in pairs(cardHolders) do
     handler._connections["Day" .. cardData.Frame.Name] = cardData.RedeemButton.MouseButton1Click:Connect(function()
         -- Send claim request to server - server handles all logic and notifications
-        DailyRewardService:RequestCollectReward()
-        -- Close the daily frame after clicking
-        dailyFrame.Visible = false
+        DailyRewardService:RequestCollectReward():andThen(function(success, message)
+            print("Success: ", success, "Message: ", message)
+            -- Close the daily frame after clicking
+            dailyFrame.Visible = false
+        end)
     end)
 end
 
