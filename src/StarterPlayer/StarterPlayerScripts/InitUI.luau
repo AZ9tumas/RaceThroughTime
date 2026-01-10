@@ -1,6 +1,37 @@
 
 local handler = {
     _connections = {},
+    data = {
+        Currencies = {
+            Cash = 0,
+            Gems = 0,
+        },
+        Stats = {
+            TotalDistance = 0,
+            Points = 0,
+            Rebirths = 0,
+            Fuel = 100, -- Starting fuel for players
+        },
+        Progression = {
+            CurrentWorld = "Main",
+            UnlockedWorlds = { "Main" },
+        },
+        Inventory = {
+            PetInventory = {},
+            EquippedPets = {},
+            Potions = {},
+        },
+        Meta = {
+            DailyStreak = 0,
+            LastClaim = 0,
+            CollectedRewards = {}, -- Tracks which daily reward IDs have been collected
+            UpdateVersion = 0,
+            Settings = {
+                Music = true,
+                SFX = true,
+            },
+        },
+    }
 }
 
 local Players = game:GetService("Players")
@@ -145,44 +176,12 @@ function handler.UpdateGemsUI(amount: number)
     GemsDisplay.Text = "💎 " .. truncateNumber(amount)
 end
 
-local data = {
-	Currencies = {
-		Cash = 0,
-		Gems = 0,
-	},
-	Stats = {
-		TotalDistance = 0,
-		Points = 0,
-		Rebirths = 0,
-		Fuel = 100, -- Starting fuel for players
-	},
-	Progression = {
-		CurrentWorld = "Main",
-		UnlockedWorlds = { "Main" },
-	},
-	Inventory = {
-		PetInventory = {},
-		EquippedPets = {},
-		Potions = {},
-	},
-	Meta = {
-		DailyStreak = 0,
-		LastClaim = 0,
-		CollectedRewards = {}, -- Tracks which daily reward IDs have been collected
-		UpdateVersion = 0,
-		Settings = {
-			Music = true,
-			SFX = true,
-		},
-	},
-}
-
 -- Function to update UI with loaded data from server
 -- Called after data has been loaded on the server
 function handler.UpdateDataOnClient(newData: typeof(data))
     -- Update handler.Data with new data
     if newData then
-        data = newData
+        handler.data = newData
     end
     
     -- Initial UI updates from leaderstats (already replicated)
