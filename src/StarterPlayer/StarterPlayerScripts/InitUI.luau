@@ -178,7 +178,7 @@ local data = {
 }
 
 function handler.UpdateDataOnClient(newData: typeof(data))
-
+    -- Set handler.Data = newData and update required functions.
 end
 
 handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function()
