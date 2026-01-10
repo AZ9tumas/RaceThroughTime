@@ -192,9 +192,131 @@ function DailyRewardService:CollectReward(player: Player): (boolean, string?)
 	return true, rewardName
 end
 
--- Client request to collect reward (server handles everything including notifications)
-function DailyRewardService.Client:RequestCollectReward(player: Player)
-	return DailyRewardService:CollectReward(player)
+-- Client request to collect reward for a specific day (server handles everything including notifications)
+function DailyRewardService.Client:RequestCollectReward(player: Player, requestedDay: number)
+	return DailyRewardService:CollectRewardForDay(player, requestedDay)
+end
+
+-- Collect reward for a specific day (validates the request)
+function DailyRewardService:CollectRewardForDay(player: Player, requestedDay: number): (boolean, string?)
+	local DataService = Knit.GetService("DataService")
+	local NotificationService = Knit.GetService("NotificationService")
+	
+	-- Validate requestedDay
+	if not requestedDay or type(requestedDay) ~= "number" then
+		NotificationService:SendNotification(
+			player,
+			"Invalid reward request.",
+			NotificationService.Category.Error
+		)
+		return false, "Invalid request"
+	end
+	
+	local totalDays = DailyRewardsConfig.GetTotalDays()
+	if requestedDay < 1 or requestedDay > totalDays then
+		NotificationService:SendNotification(
+			player,
+			string.format("Invalid day. Choose between 1 and %d.", totalDays),
+			NotificationService.Category.Error
+		)
+		return false, "Invalid day"
+	end
+	
+	local meta = DataService:Get(player, "Meta")
+	if not meta then
+		NotificationService:SendNotification(
+			player,
+			"Data not loaded yet. Please try again.",
+			NotificationService.Category.Error
+		)
+		return false, "Data not loaded"
+	end
+	
+	local lastClaim = meta.LastClaim or 0
+	local streak = meta.DailyStreak or 0
+	
+	-- Check if already collected this reward
+	local rewardID = DailyRewardsConfig.GetRewardIDForDay(requestedDay)
+	if meta.CollectedRewards and meta.CollectedRewards[rewardID] then
+		NotificationService:SendNotification(
+			player,
+			string.format("Day %d reward already redeemed!", requestedDay),
+			NotificationService.Category.Warning
+		)
+		return false, "Already redeemed"
+	end
+	
+	-- Check if can collect (24 hours passed)
+	if not CanCollectReward(lastClaim) then
+		local timeUntilNext = SECONDS_IN_DAY - (os.time() - lastClaim)
+		local hoursLeft = math.floor(timeUntilNext / 3600)
+		local minutesLeft = math.floor((timeUntilNext % 3600) / 60)
+		NotificationService:SendNotification(
+			player,
+			string.format("Come back in %dh %dm to claim your next reward!", hoursLeft, minutesLeft),
+			NotificationService.Category.Warning
+		)
+		return false, string.format("Come back in %dh %dm", hoursLeft, minutesLeft)
+	end
+	
+	-- Check if streak should reset
+	if lastClaim > 0 and ShouldResetStreak(lastClaim) then
+		streak = 0
+		Log(string.format("Streak reset for %s (missed more than 48 hours)", player.Name))
+	end
+	
+	-- Calculate expected day (streak + 1)
+	local expectedDay = ((streak) % totalDays) + 1
+	
+	-- Validate that the requested day matches the expected day
+	if requestedDay ~= expectedDay then
+		NotificationService:SendNotification(
+			player,
+			string.format("You can only claim Day %d reward right now.", expectedDay),
+			NotificationService.Category.Warning
+		)
+		return false, string.format("Can only claim Day %d", expectedDay)
+	end
+	
+	-- Get reward data
+	local rewardData = DailyRewardsConfig.GetRewardForDay(requestedDay)
+	if not rewardData then
+		NotificationService:SendNotification(
+			player,
+			"Reward data not found.",
+			NotificationService.Category.Error
+		)
+		return false, "Reward data not found"
+	end
+
+	-- Apply reward items
+	ApplyRewardItems(player, rewardData.items)
+	
+	-- Update streak and claim time
+	streak = streak + 1
+	
+	DataService:Update(player, "Meta", function(metaData)
+		metaData.DailyStreak = streak
+		metaData.LastClaim = os.time()
+		
+		if not metaData.CollectedRewards then
+			metaData.CollectedRewards = {}
+		end
+		metaData.CollectedRewards[rewardID] = true
+		
+		return metaData
+	end)
+	
+	local rewardName = rewardData.Name
+	NotificationService:SendNotification(
+		player,
+		string.format("Collected: %s (Day %d)", rewardName, requestedDay),
+		NotificationService.Category.Success
+	)
+	
+	Log(string.format("%s collected reward '%s' (Day %d)", player.Name, rewardName, requestedDay))
+	
+	return true, rewardName
 end
 
 function DailyRewardService.Client:GetRewardStatus(player: Player): { canCollect: boolean, streak: number, timeUntilNext: number?, currentRewardID: string? }

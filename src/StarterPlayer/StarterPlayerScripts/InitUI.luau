@@ -278,30 +278,35 @@ local dailyFrameMain = dailyFrame:WaitForChild("Main")
 local cardHolderFrame = dailyFrameMain:WaitForChild("CardHolder")
 local cardHolders = {
     DayOne = {
+        Day = 1,
         Frame = cardHolderFrame:WaitForChild("1"),
         RedeemButton = cardHolderFrame:WaitForChild("1"):WaitForChild("Claim"):WaitForChild("Interact"),
         Image = cardHolderFrame:WaitForChild("1"):WaitForChild("ImageLabel"),
         TextLabel = cardHolderFrame:WaitForChild("1"):WaitForChild("Amount"),
     },
     DayTwo = {
+        Day = 2,
         Frame = cardHolderFrame:WaitForChild("2"),
         RedeemButton = cardHolderFrame:WaitForChild("2"):WaitForChild("Claim"):WaitForChild("Interact"),
         Image = cardHolderFrame:WaitForChild("2"):WaitForChild("ImageLabel"),
         TextLabel = cardHolderFrame:WaitForChild("2"):WaitForChild("Amount"),
     },
     DayThree = {
+        Day = 3,
         Frame = cardHolderFrame:WaitForChild("3"),
         RedeemButton = cardHolderFrame:WaitForChild("3"):WaitForChild("Claim"):WaitForChild("Interact"),
         Image = cardHolderFrame:WaitForChild("3"):WaitForChild("ImageLabel"),
         TextLabel = cardHolderFrame:WaitForChild("3"):WaitForChild("Amount"),
     },
     DayFour = {
+        Day = 4,
         Frame = cardHolderFrame:WaitForChild("4"),
         RedeemButton = cardHolderFrame:WaitForChild("4"):WaitForChild("Claim"):WaitForChild("Interact"),
         Image = cardHolderFrame:WaitForChild("4"):WaitForChild("ImageLabel"),
         TextLabel = cardHolderFrame:WaitForChild("4"):WaitForChild("Amount"),
     },
     DayFive = {
+        Day = 5,
         Frame = cardHolderFrame:WaitForChild("5"),
         RedeemButton = cardHolderFrame:WaitForChild("5"):WaitForChild("Claim"):WaitForChild("Interact"),
         Image = cardHolderFrame:WaitForChild("5"):WaitForChild("ImageLabel"),
@@ -318,8 +323,14 @@ local DataService = Knit.GetService("DataService")
 
 for _, cardData in pairs(cardHolders) do
     handler._connections["Day" .. cardData.Frame.Name] = cardData.RedeemButton.MouseButton1Click:Connect(function()
-        -- Send claim request to server - server handles all logic and notifications
-        DailyRewardService:RequestCollectReward()
+        -- Send claim request to server with the specific day number
+        local success, _ = DailyRewardService:RequestCollectReward(cardData.Day)
+        
+        -- If successful, update the TextLabel to "Redeemed"
+        if success then
+            cardData.TextLabel.Text = "Redeemed"
+        end
+        
         -- Close the daily frame after clicking
         dailyFrame.Visible = false
     end)
@@ -329,6 +340,17 @@ end
 handler._connections["DataReady"] = DataService.DataReady:Connect(function()
     -- Call UpdateDataOnClient when data is ready
     handler.UpdateDataOnClient(nil)
+    
+    -- Get collected rewards from server and update card labels
+    local collectedRewards = DailyRewardService:GetCollectedRewards()
+    local DailyRewardsConfig = require(modules:WaitForChild("DailyRewards"))
+    
+    for _, cardData in pairs(cardHolders) do
+        local rewardID = DailyRewardsConfig.GetRewardIDForDay(cardData.Day)
+        if rewardID and collectedRewards[rewardID] then
+            cardData.TextLabel.Text = "Redeemed"
+        end
+    end
 end)
 
 handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(function()
