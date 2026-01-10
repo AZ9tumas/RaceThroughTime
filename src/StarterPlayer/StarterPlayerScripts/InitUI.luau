@@ -176,18 +176,21 @@ function handler.UpdateGemsUI(amount: number)
     GemsDisplay.Text = "💎 " .. truncateNumber(amount)
 end
 
+
 -- Function to update UI with loaded data from server
 -- Called after data has been loaded on the server
-function handler.UpdateDataOnClient(newData: typeof(data))
+function handler.UpdateDataOnClient(newData)
     -- Update handler.Data with new data
+    print("Client data update: ", newData)
     if newData then
         handler.data = newData
     end
-    
+
     -- Initial UI updates from leaderstats (already replicated)
     handler.UpdateFuelUI(fuelVal.Value)
     handler.UpdateCashUI(cashVal.Value)
     handler.UpdateGemsUI(gemsVal.Value)
+    handler.UpdateRewardsStatus()
     
     print("[InitUI]: Client data updated")
 end
@@ -275,6 +278,7 @@ handler._connections["DailyButton"] = dailyButton.MouseButton1Click:Connect(func
 end)
 
 local dailyFrameMain = dailyFrame:WaitForChild("Main")
+local dailyFrameCloseButton = dailyFrame:WaitForChild("Close")
 local cardHolderFrame = dailyFrameMain:WaitForChild("CardHolder")
 local cardHolders = {
     DayOne = {
@@ -316,6 +320,23 @@ local cardHolders = {
 
 print(cardHolders, "Card Holders")
 
+function handler.UpdateRewardsStatus()
+    -- Get DailyRewardService to check collected rewards
+    print("Updating rewards status on client UI")
+    print(handler.data)
+    local collectedRewards = handler.data.Meta.CollectedRewards or {}
+    local DailyRewardsConfig = require(modules:WaitForChild("DailyRewards"))
+    
+    -- Update each card's status based on collected rewards
+    for _, cardData in pairs(cardHolders) do
+        local rewardID = DailyRewardsConfig.GetRewardIDForDay(cardData.Day)
+        print(rewardID, collectedRewards)
+        if rewardID and collectedRewards[rewardID] then
+            cardData.RedeemButton.Parent.PriceLabel.Text = "REDEEMED"
+        end
+    end
+end
+
 -- Connect all daily reward claim buttons to the server
 -- Client only sends the request - server handles everything including notifications
 local DailyRewardService = Knit.GetService("DailyRewardService")
@@ -326,31 +347,21 @@ for _, cardData in pairs(cardHolders) do
         -- Send claim request to server with the specific day number
         local success, _ = DailyRewardService:RequestCollectReward(cardData.Day)
         
-        -- If successful, update the TextLabel to "Redeemed"
-        if success then
-            cardData.TextLabel.Text = "Redeemed"
-        end
+        handler.UpdateRewardsStatus()
         
         -- Close the daily frame after clicking
         dailyFrame.Visible = false
     end)
 end
 
+handler._connections["DailyFrameClose"] = dailyFrameCloseButton.MouseButton1Click:Connect(function()
+    dailyFrame.Visible = false
+end)
+
 -- Listen for DataReady signal from server to update UI
-handler._connections["DataReady"] = DataService.DataReady:Connect(function()
+handler._connections["DataReady"] = DataService.DataReady:Connect(function(data)
     -- Call UpdateDataOnClient when data is ready
-    handler.UpdateDataOnClient(nil)
-    
-    -- Get collected rewards from server and update card labels
-    local collectedRewards = DailyRewardService:GetCollectedRewards()
-    local DailyRewardsConfig = require(modules:WaitForChild("DailyRewards"))
-    
-    for _, cardData in pairs(cardHolders) do
-        local rewardID = DailyRewardsConfig.GetRewardIDForDay(cardData.Day)
-        if rewardID and collectedRewards[rewardID] then
-            cardData.TextLabel.Text = "Redeemed"
-        end
-    end
+    handler.UpdateDataOnClient(data)
 end)
 
 handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(function()
