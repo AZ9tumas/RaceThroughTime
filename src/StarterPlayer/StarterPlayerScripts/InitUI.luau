@@ -56,8 +56,28 @@ local isRequestingTrack = false
 local GATE_PROXIMITY_DISTANCE = statsM.GateProximityDistance
 local MAX_GATE_INDEX = statsM.MaxGateIndex
 
--- Track gate references
-local TrackGates = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("Track_System"):WaitForChild("Track_Gates")
+-- Get TrackGates for the player's current world
+local function GetTrackGatesForCurrentWorld(): Folder?
+    local currentWorld = handler.data.Progression.CurrentWorld or "Main"
+    local worldFolder = Workspace:FindFirstChild(currentWorld)
+    if worldFolder then
+        local trackSystem = worldFolder:FindFirstChild("Track_System")
+        if trackSystem then
+            return trackSystem:FindFirstChild("Track_Gates")
+        end
+    end
+    
+    -- Fallback to Main world
+    local mainWorld = Workspace:FindFirstChild("Main")
+    if mainWorld then
+        local trackSystem = mainWorld:FindFirstChild("Track_System")
+        if trackSystem then
+            return trackSystem:FindFirstChild("Track_Gates")
+        end
+    end
+    
+    return nil
+end
 
 -- ui
 local mainUi: ScreenGui = PlayerGui:WaitForChild("RaceThroughTime_UI")
@@ -123,10 +143,14 @@ local function IsPlayerNearGate(): boolean
     
     local playerPosition = rootPart.Position
     
+    -- Get track gates for current world
+    local trackGates = GetTrackGatesForCurrentWorld()
+    if not trackGates then return false end
+    
     -- Check distance to each gate
     for i = 0, MAX_GATE_INDEX do
         local gateName = "Gate_" .. i
-        local gate = TrackGates:FindFirstChild(gateName)
+        local gate = trackGates:FindFirstChild(gateName)
         if gate then
             local gatePosition: Vector3
             if gate:IsA("BasePart") then
