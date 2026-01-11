@@ -11,19 +11,23 @@ Stats.BaseSpeed = 50
 -- World efficiency values for speed calculation
 Stats.WorldEfficiency = {
 	Main = 1,
+	StoneAge = 1.2, -- StoneAge has 20% higher efficiency than Main
 }
 
 -- World radius values for track movement (distance from center)
 Stats.WorldRadius = {
 	Main = 205,
+	StoneAge = 205, -- Same radius as Main
 }
 
 Stats.FuelConsumptionRate = {
 	Main = 25, -- Fuel consumed per second on the Main world
+	StoneAge = 28, -- Slightly higher fuel consumption in StoneAge
 }
 
 Stats.WorldCashRates = {
-	Main = 150 -- Cash per 1000 distance
+	Main = 150, -- Cash per 1000 distance
+	StoneAge = 180, -- 20% higher cash rate in StoneAge
 }
 
 -- Returns the maximum fuel value with multipliers applied

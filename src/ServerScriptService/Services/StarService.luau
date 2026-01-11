@@ -12,9 +12,6 @@ local HttpService = game:GetService("HttpService")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 
--- base parts for reference
-local SpawnLocation: SpawnLocation = workspace:FindFirstChild("RTT_Map_Final"):FindFirstChild("SpawnLocation")
-
 local StarService = Knit.CreateService({
 	Name = "StarService",
 	Client = {
@@ -30,6 +27,29 @@ local StarsFolder = nil
 -- Helper function for logging
 local function Log(message: string)
 	--print(string.format("[StarService]: %s", message))
+end
+
+-- Get SpawnLocation from the player's current world
+local function GetSpawnLocationForPlayer(player: Player): SpawnLocation?
+	local DataService = Knit.GetService("DataService")
+	local worldName = DataService:GetPlayerWorld(player)
+	
+	-- World folders are named directly in workspace (e.g., "Main", "StoneAge")
+	local worldFolder = Workspace:FindFirstChild(worldName)
+	if worldFolder then
+		local spawnLocation = worldFolder:FindFirstChild("SpawnLocation")
+		if spawnLocation then
+			return spawnLocation
+		end
+	end
+	
+	-- Fallback to Main world if the specified world is not found
+	local mainWorld = Workspace:FindFirstChild("Main")
+	if mainWorld then
+		return mainWorld:FindFirstChild("SpawnLocation")
+	end
+	
+	return nil
 end
 
 -- Initialize the Stars folder in Workspace
@@ -105,7 +125,15 @@ end
 function StarService:GenerateStarInformation(player: Player)
 	local userId = player.UserId
 	local character = player.Character
-	local spawnCenter = SpawnLocation.Position -- Default spawn center
+	
+	-- Get SpawnLocation from the player's current world
+	local spawnLocation = GetSpawnLocationForPlayer(player)
+	if not spawnLocation then
+		warn(string.format("[StarService]: No SpawnLocation found for player %s's world", player.Name))
+		return {}
+	end
+	
+	local spawnCenter = spawnLocation.Position -- Default spawn center
 
 	if character then
 		local rootPart = character:FindFirstChild("HumanoidRootPart")

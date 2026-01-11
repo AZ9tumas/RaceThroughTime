@@ -286,7 +286,7 @@ function DataService:GetProfile(player: Player)
 end
 
 -- Valid world names that exist in the game configuration
-local VALID_WORLDS = { "Main" } -- Add more worlds here as they are added to the game
+local VALID_WORLDS = { "Main", "StoneAge" } -- Add more worlds here as they are added to the game
 
 -- Get the player's current world (defaults to "Main" if not set or invalid)
 function DataService:GetPlayerWorld(player: Player): string
