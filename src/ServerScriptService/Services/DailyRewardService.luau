@@ -55,8 +55,7 @@ local function ApplyRewardItems(player: Player, items: { { ItemType: string, Qua
 		elseif itemType == "Fuel" then
 			local Stats = require(ReplicatedStorage.Modules.Stats)
 			DataService:Update(player, "Stats", function(stats)
-				local maxFuel = Stats.FuelMultiplier()
-				stats.Fuel = math.min((stats.Fuel or 0) + quantity, maxFuel)
+				stats.Fuel = (stats.Fuel or 0) + quantity
 				return stats
 			end)
 		elseif itemType == "Pet" and item.PetId then

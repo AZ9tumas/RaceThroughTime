@@ -233,8 +233,6 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 	local DataService = Knit.GetService("DataService")
 	DataService:Update(player, "Stats", function(stats)
 		local finalVal = starInfo.FuelValue + stats.Fuel
-		local maxFuel = Stats.FuelMultiplier()
-		finalVal = math.min(finalVal, maxFuel)
 		stats.Fuel = finalVal
 		return stats
 	end)

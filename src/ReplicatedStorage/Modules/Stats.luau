@@ -5,7 +5,6 @@
 
 local Stats = {}
 
-Stats.MaxBaseFuel = 1500
 Stats.BaseSpeed = 50
 
 -- World efficiency values for speed calculation
@@ -50,12 +49,6 @@ Stats.WorldOrder = {
 	"Industrial",
 	"Neon",
 }
-
--- Returns the maximum fuel value with multipliers applied
--- Currently returns base value * 1, can be extended for upgrades/boosts
-function Stats.FuelMultiplier(): number
-	return Stats.MaxBaseFuel * 1
-end
 
 -- Star Tiers and their spawn probabilities (must sum to 1.0)
 -- Yellow (Common): Most frequent, low fuel bonus

@@ -88,7 +88,6 @@ local centerHUD: Frame = mainUi:WaitForChild("CenterHUD")
 local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 local fuelBar = centerHUD:WaitForChild("FuelBar")
 local fuelText: TextLabel = fuelBar:WaitForChild("FuelText")
-local fuelBarFill = fuelBar:WaitForChild("Fill")
 local otherFrames: Frame = mainUi:WaitForChild("OtherFrames")
 
 -- sub frames
@@ -175,19 +174,6 @@ local function IsPlayerNearGate(): boolean
 end
 
 function handler.UpdateFuelUI(amount: number)
-    local maxFuel = statsM.FuelMultiplier()
-    local fillRatio = math.clamp(amount / maxFuel, 0, 1)
-    local targetSize = UDim2.new(fillRatio, 0, 1, 0)
-    
-    -- Cancel existing tween if running
-    if currentFuelTween then
-        currentFuelTween:Cancel()
-    end
-    
-    -- Create and play smooth tween for fuel bar fill
-    currentFuelTween = TweenService:Create(fuelBarFill, tweenInfo, {Size = targetSize})
-    currentFuelTween:Play()
-    
     -- Update fuel text
     fuelText.Text = "⭐ FUEL: " .. math.floor(amount)
 end
