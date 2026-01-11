@@ -78,10 +78,12 @@ Stats.StarFuelValues = {
 
 -- Star spawn configuration
 Stats.StarConfig = {
-	SpawnCount = 10,                  -- Number of stars to spawn per player
+	SpawnCount = 10,                  -- Number of stars to spawn initially per player
+	MaxStars = 30,                    -- Maximum number of stars that can exist at once per player
 	SpawnRadius = 140,                -- Radius around player spawn point for star placement
 	MinDistanceBetweenStars = 15, 	  -- Minimum distance between spawned stars
-	CollectionRadius = 15,             -- Distance within which a star can be collected
+	CollectionRadius = 15,            -- Distance within which a star can be collected
+	SpawnInterval = 3,                -- Seconds between spawning new stars (continuous spawning rate)
 }
 
 -- Track/Gate configuration

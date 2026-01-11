@@ -15,6 +15,7 @@ local StarService = Knit.CreateService({
 	Name = "StarService",
 	Client = {
 		SpawnStars = Knit.CreateSignal(), -- Signal to tell client to spawn stars
+		SpawnStar = Knit.CreateSignal(), -- Signal to tell client to spawn a single star (for continuous spawning)
 		RemoveStar = Knit.CreateSignal(), -- Signal to tell client to remove a collected star
 	},
 })
@@ -23,6 +24,7 @@ local StarService = Knit.CreateService({
 local UniversalTracker = {} -- [Player.UserId] = {StarInfo, StarInfo, ... 10 times}
 local StarsFolder = nil
 local TotalStarsCollected = 0 -- Counter for total stars collected by all players in the server
+local StarSpawnLoops = {} -- [Player.UserId] = true/false (whether spawn loop is active)
 
 -- Helper function for logging
 local function Log(message: string)
@@ -260,8 +262,105 @@ function StarService:GetTotalStarsCollected(): number
 	return TotalStarsCollected
 end
 
+-- Generate a single star for a player (used for continuous spawning)
+local function GenerateSingleStar(player: Player): ({ Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number }?)
+	local userId = player.UserId
+	local starInfoList = UniversalTracker[userId]
+	
+	if not starInfoList then
+		starInfoList = {}
+		UniversalTracker[userId] = starInfoList
+	end
+	
+	-- Check if we're at max stars
+	local config = Stats.StarConfig
+	if #starInfoList >= config.MaxStars then
+		return nil -- Max stars reached
+	end
+	
+	-- Get SpawnLocation from the player's current world
+	local spawnLocation = GetSpawnLocationForPlayer(player)
+	if not spawnLocation then
+		return nil
+	end
+	
+	local spawnCenter = spawnLocation.Position
+	
+	-- Collect existing positions
+	local existingPositions = {}
+	for _, starInfo in ipairs(starInfoList) do
+		table.insert(existingPositions, starInfo.Position)
+	end
+	
+	-- Generate position for new star
+	local position = GenerateRandomPosition(spawnCenter, existingPositions)
+	if not position then
+		return nil -- Could not find valid position
+	end
+	
+	local starName = GetRandomStarType()
+	local starInfo = {
+		Position = position,
+		ID = GenerateStarId(),
+		StarName = starName,
+		FuelValue = Stats.StarFuelValues[starName],
+		Index = #starInfoList + 1,
+	}
+	
+	table.insert(starInfoList, starInfo)
+	Log(string.format("Generated new star for player %s (total: %d)", player.Name, #starInfoList))
+	
+	return starInfo
+end
+
+-- Start continuous star spawning loop for a player
+function StarService:StartContinuousSpawning(player: Player)
+	local userId = player.UserId
+	
+	-- Don't start if already running
+	if StarSpawnLoops[userId] then
+		return
+	end
+	
+	StarSpawnLoops[userId] = true
+	Log(string.format("Started continuous star spawning for player %s", player.Name))
+	
+	task.spawn(function()
+		local config = Stats.StarConfig
+		
+		while StarSpawnLoops[userId] and player:IsDescendantOf(Players) do
+			-- Wait for spawn interval
+			task.wait(config.SpawnInterval)
+			
+			-- Check if still active
+			if not StarSpawnLoops[userId] or not player:IsDescendantOf(Players) then
+				break
+			end
+			
+			-- Try to spawn a star if below max
+			local starInfoList = UniversalTracker[userId]
+			if starInfoList and #starInfoList < config.MaxStars then
+				local newStar = GenerateSingleStar(player)
+				if newStar then
+					-- Notify client to spawn the new star
+					StarService.Client.SpawnStar:Fire(player, newStar)
+				end
+			end
+		end
+		
+		StarSpawnLoops[userId] = nil
+		Log(string.format("Stopped continuous star spawning for player %s", player.Name))
+	end)
+end
+
+-- Stop continuous star spawning for a player
+function StarService:StopContinuousSpawning(player: Player)
+	StarSpawnLoops[player.UserId] = nil
+end
+
 -- Clean up player data when they leave
 local function OnPlayerRemoving(player: Player)
+	StarSpawnLoops[player.UserId] = nil
 	UniversalTracker[player.UserId] = nil
 	Log(string.format("Cleared star data for player %s", player.Name))
 end

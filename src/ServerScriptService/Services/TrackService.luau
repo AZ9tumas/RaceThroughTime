@@ -471,6 +471,19 @@ local function OnHeartbeat(dt: number)
 		-- Calculate new position using UpdateCircularPosition for consistency
 		local targetCFrame, targetPosition = UpdateCircularPosition(center, radius, trackData.currentAngle, center.Y + 5, worldName)
 		
+		-- Dynamically adjust body mover responsiveness based on current speed
+		-- At higher speeds, we need higher responsiveness to prevent drifting toward center
+		-- Base responsiveness of 50, increases by 1 for every 10 studs/sec of speed
+		local baseResponsiveness = 50
+		local speedFactor = math.clamp(currentSpeed / 10, 1, 20) -- Max 20x boost
+		local dynamicResponsiveness = baseResponsiveness + (speedFactor * 10)
+		
+		-- Also adjust MaxVelocity to match current speed (with overhead)
+		local dynamicMaxVelocity = math.max(500, currentSpeed * 2)
+		
+		alignPosition.Responsiveness = dynamicResponsiveness
+		alignPosition.MaxVelocity = dynamicMaxVelocity
+		
 		-- Update body mover targets
 		alignPosition.Position = targetPosition
 		alignOrientation.CFrame = targetCFrame
