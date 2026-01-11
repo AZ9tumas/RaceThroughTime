@@ -27,6 +27,7 @@ local PlayersOnTrack = {} -- [Player.UserId] = { player, worldName, startTime, g
 local PlayerRequestDebounce = {} -- [Player.UserId] = lastRequestTime (for rate limiting)
 local HeartbeatConnection = nil -- Note: Connection persists for service lifetime, no cleanup needed
 local DEBOUNCE_COOLDOWN = 1 -- Minimum seconds between requests
+local TrackOriginalProperties = {} -- [worldName] = { Material, Transparency, ... } - Store original track properties
 
 -- Helper function for logging
 local function Log(message: string)
@@ -76,6 +77,69 @@ local function GetVisualTrackForWorld(worldName: string): BasePart?
 		end
 	end
 	return nil
+end
+
+-- Apply neon effect to track when player starts running
+local function ApplyNeonEffectToTrack(worldName: string)
+	local visualTrack = GetVisualTrackForWorld(worldName)
+	if not visualTrack then return end
+	
+	-- Store original properties if not already stored
+	if not TrackOriginalProperties[worldName] then
+		TrackOriginalProperties[worldName] = {
+			Material = visualTrack.Material,
+			Transparency = visualTrack.Transparency,
+		}
+	end
+	
+	-- Apply neon effect
+	visualTrack.Material = Enum.Material.Neon
+	visualTrack.Transparency = 0
+	
+	-- Add PointLight for glow effect if it doesn't exist
+	local pointLight = visualTrack:FindFirstChild("TrackGlow")
+	if not pointLight then
+		pointLight = Instance.new("PointLight")
+		pointLight.Name = "TrackGlow"
+		pointLight.Color = visualTrack.Color
+		pointLight.Brightness = 2
+		pointLight.Range = 30
+		pointLight.Parent = visualTrack
+	end
+	pointLight.Enabled = true
+	
+	Log(string.format("Applied neon effect to track in world %s", worldName))
+end
+
+-- Remove neon effect from track when player stops running
+local function RemoveNeonEffectFromTrack(worldName: string)
+	local visualTrack = GetVisualTrackForWorld(worldName)
+	if not visualTrack then return end
+	
+	-- Restore original properties
+	local originalProps = TrackOriginalProperties[worldName]
+	if originalProps then
+		visualTrack.Material = originalProps.Material
+		visualTrack.Transparency = originalProps.Transparency
+	end
+	
+	-- Disable PointLight
+	local pointLight = visualTrack:FindFirstChild("TrackGlow")
+	if pointLight then
+		pointLight.Enabled = false
+	end
+	
+	Log(string.format("Removed neon effect from track in world %s", worldName))
+end
+
+-- Check if any player is on track in a specific world
+local function IsAnyPlayerOnTrackInWorld(worldName: string): boolean
+	for _, trackData in pairs(PlayersOnTrack) do
+		if trackData.worldName == worldName then
+			return true
+		end
+	end
+	return false
 end
 
 -- Get the center position for circular movement (SpawnLocation position)
@@ -346,6 +410,11 @@ function TrackService:EndTrackRun(player: Player)
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
 	
+	-- Remove neon effect from track if no other players are on track in this world
+	if not IsAnyPlayerOnTrackInWorld(worldName) then
+		RemoveNeonEffectFromTrack(worldName)
+	end
+	
 	-- Fire signal to client that track has ended
 	TrackService.Client.TrackEnded:Fire(player, {
 		distanceTraveled = distanceTraveled,
@@ -530,6 +599,9 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	
 	Log(string.format("Player %s started track at %s in world %s, speed: %.2f, distance: %.2f", player.Name, closestGate, worldName, speed, totalDistance))
 	
+	-- Apply neon effect to track
+	ApplyNeonEffectToTrack(worldName)
+	
 	-- Fire signal to client that track has started
 	TrackService.Client.TrackStarted:Fire(player, {
 		gateName = closestGate,
@@ -573,6 +645,11 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 	
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
+	
+	-- Remove neon effect from track if no other players are on track in this world
+	if not IsAnyPlayerOnTrackInWorld(worldName) then
+		RemoveNeonEffectFromTrack(worldName)
+	end
 	
 	-- Fire signal to client that track has ended (cancelled, no rewards)
 	TrackService.Client.TrackEnded:Fire(player, {

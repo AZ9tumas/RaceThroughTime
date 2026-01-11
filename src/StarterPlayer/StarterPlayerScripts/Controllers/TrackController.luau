@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ContextActionService = game:GetService("ContextActionService")
 local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
 
 -- ui
 local player = Players.LocalPlayer
@@ -24,6 +25,9 @@ local TRACK_FOV = 90
 local FOV_TWEEN_TIME = 0.5
 local TRACK_END_LOADING_DELAY = 0.8 -- Seconds to show loading screen after track ends
 
+-- Lighting effect settings
+local LIGHTING_TWEEN_TIME = 0.5
+
 local TrackController = Knit.CreateController({
 	Name = "TrackController",
 })
@@ -35,10 +39,106 @@ local OriginalWalkSpeed = 16
 local OriginalJumpPower = 50
 local DistanceUpdateConnection = nil
 local DistanceValueInstance = nil
+local TrackLightingEffects = {} -- Store created lighting effects for cleanup
 
 -- Helper function for logging
 local function Log(message: string)
 	print(string.format("[TrackController]: %s", message))
+end
+
+-- Apply lighting effects when player starts running on track
+local function ApplyTrackLightingEffects()
+	-- Create BlurEffect for speed sensation
+	local blur = Instance.new("BlurEffect")
+	blur.Name = "TrackBlur"
+	blur.Size = 0
+	blur.Parent = Lighting
+	TrackLightingEffects.blur = blur
+	
+	-- Tween blur in
+	local blurTween = TweenService:Create(blur, TweenInfo.new(LIGHTING_TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Size = 6
+	})
+	blurTween:Play()
+	
+	-- Create ColorCorrectionEffect for vivid colors during track run
+	local colorCorrection = Instance.new("ColorCorrectionEffect")
+	colorCorrection.Name = "TrackColorCorrection"
+	colorCorrection.Saturation = 0
+	colorCorrection.Contrast = 0
+	colorCorrection.Brightness = 0
+	colorCorrection.Parent = Lighting
+	TrackLightingEffects.colorCorrection = colorCorrection
+	
+	-- Tween color correction in
+	local colorTween = TweenService:Create(colorCorrection, TweenInfo.new(LIGHTING_TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Saturation = 0.15,
+		Contrast = 0.1,
+		Brightness = 0.03
+	})
+	colorTween:Play()
+	
+	-- Create Bloom effect for glowing track
+	local bloom = Instance.new("BloomEffect")
+	bloom.Name = "TrackBloom"
+	bloom.Intensity = 0
+	bloom.Size = 24
+	bloom.Threshold = 1
+	bloom.Parent = Lighting
+	TrackLightingEffects.bloom = bloom
+	
+	-- Tween bloom in
+	local bloomTween = TweenService:Create(bloom, TweenInfo.new(LIGHTING_TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Intensity = 0.8,
+		Threshold = 0.9
+	})
+	bloomTween:Play()
+	
+	Log("Applied track lighting effects")
+end
+
+-- Remove lighting effects when player stops running on track
+local function RemoveTrackLightingEffects()
+	-- Tween out and destroy blur
+	if TrackLightingEffects.blur then
+		local blur = TrackLightingEffects.blur
+		local blurTween = TweenService:Create(blur, TweenInfo.new(LIGHTING_TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Size = 0
+		})
+		blurTween:Play()
+		blurTween.Completed:Connect(function()
+			blur:Destroy()
+		end)
+	end
+	
+	-- Tween out and destroy color correction
+	if TrackLightingEffects.colorCorrection then
+		local colorCorrection = TrackLightingEffects.colorCorrection
+		local colorTween = TweenService:Create(colorCorrection, TweenInfo.new(LIGHTING_TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Saturation = 0,
+			Contrast = 0,
+			Brightness = 0
+		})
+		colorTween:Play()
+		colorTween.Completed:Connect(function()
+			colorCorrection:Destroy()
+		end)
+	end
+	
+	-- Tween out and destroy bloom
+	if TrackLightingEffects.bloom then
+		local bloom = TrackLightingEffects.bloom
+		local bloomTween = TweenService:Create(bloom, TweenInfo.new(LIGHTING_TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Intensity = 0
+		})
+		bloomTween:Play()
+		bloomTween.Completed:Connect(function()
+			bloom:Destroy()
+		end)
+	end
+	
+	TrackLightingEffects = {}
+	Log("Removed track lighting effects")
 end
 
 -- Tween camera FOV
@@ -172,6 +272,9 @@ local function OnTrackStarted(trackData: { gateName: string, totalDistance: numb
 	-- Increase camera FOV for speed effect
 	TweenCameraFOV(TRACK_FOV, FOV_TWEEN_TIME)
 	
+	-- Apply lighting effects (blur, color correction, bloom)
+	ApplyTrackLightingEffects()
+	
 	-- Setup distance feedback from server
 	SetupDistanceFeedback(Players.LocalPlayer)
 	
@@ -206,6 +309,9 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	
 	-- Reset camera FOV to default
 	TweenCameraFOV(DEFAULT_FOV, FOV_TWEEN_TIME)
+	
+	-- Remove lighting effects (blur, color correction, bloom)
+	RemoveTrackLightingEffects()
 	
 	-- Re-enable player controls
 	EnablePlayerControls()
@@ -278,6 +384,9 @@ function TrackController:StopTrack()
 	
 	-- Reset camera FOV
 	TweenCameraFOV(DEFAULT_FOV, FOV_TWEEN_TIME)
+	
+	-- Remove lighting effects
+	RemoveTrackLightingEffects()
 	
 	-- Re-enable player controls
 	EnablePlayerControls()

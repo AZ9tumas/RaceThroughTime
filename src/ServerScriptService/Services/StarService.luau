@@ -22,6 +22,7 @@ local StarService = Knit.CreateService({
 -- Private state
 local UniversalTracker = {} -- [Player.UserId] = {StarInfo, StarInfo, ... 10 times}
 local StarsFolder = nil
+local TotalStarsCollected = 0 -- Counter for total stars collected by all players in the server
 
 -- Helper function for logging
 local function Log(message: string)
@@ -240,6 +241,10 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 
 	Log(string.format("Player %s collected %s, gained %d fuel", player.Name, starInfo.StarName, starInfo.FuelValue))
 
+	-- Increment total stars collected counter
+	TotalStarsCollected = TotalStarsCollected + 1
+	Log(string.format("Total stars collected on server: %d", TotalStarsCollected))
+
 	-- Remove star from tracker
 	local starInfoList = UniversalTracker[userId]
 	if starInfoList then
@@ -250,6 +255,11 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 	StarService.Client.RemoveStar:Fire(player, starId)
 
 	return true
+end
+
+-- Get the total number of stars collected by all players on the server
+function StarService:GetTotalStarsCollected(): number
+	return TotalStarsCollected
 end
 
 -- Clean up player data when they leave

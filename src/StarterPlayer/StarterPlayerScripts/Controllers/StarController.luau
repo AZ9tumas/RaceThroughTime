@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local StarAnimations = require(ReplicatedStorage.Modules.StarAnimations)
 
 local StarController = Knit.CreateController({
 	Name = "StarController",
@@ -91,6 +92,9 @@ local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: st
 
 	-- Store reference
 	SpawnedStars[starInfo.ID] = starClone
+	
+	-- Start star animations (pulsing and jumping)
+	StarAnimations.StartAnimations(starClone)
 
 	-- Set up touch detection
 	local touchParts = {}
@@ -141,6 +145,8 @@ end
 local function OnRemoveStar(starId: string)
 	local star = SpawnedStars[starId]
 	if star then
+		-- Stop animations before destroying
+		StarAnimations.StopAnimations(star)
 		star:Destroy()
 		SpawnedStars[starId] = nil
 		Log(string.format("Removed star %s", starId))
