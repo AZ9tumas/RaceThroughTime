@@ -30,15 +30,15 @@ Stats.WorldCashRates = {
 	StoneAge = 180, -- 20% higher cash rate in StoneAge
 }
 
--- World unlock requirements (fuel points needed to unlock next world)
+-- World unlock requirements (required distance traveled at once to unlock next world)
 -- Players need to accumulate this much fuel throughout their gameplay
 Stats.WorldUnlockRequirements = {
 	-- Main is unlocked by default
-	StoneAge = 10510,        -- 10.51k fuel to unlock StoneAge from Main
-	AncientEgypt = 110110,   -- 110.11k fuel to unlock AncientEgypt from StoneAge
-	Medieval = 250000,       -- 250k fuel to unlock Medieval from AncientEgypt
-	Industrial = 550000,     -- 550k fuel to unlock Industrial from Medieval
-	Neon = 1500000,          -- 1.5M fuel to unlock Neon from Industrial
+	StoneAge = 10510,        -- 10.51k distance to unlock StoneAge from Main
+	AncientEgypt = 110110,   -- 110.11k distance to unlock AncientEgypt from StoneAge
+	Medieval = 250000,       -- 250k distance to unlock Medieval from AncientEgypt
+	Industrial = 550000,     -- 550k distance to unlock Industrial from Medieval
+	Neon = 1500000,          -- 1.5M distance to unlock Neon from Industrial
 }
 
 -- World progression order (for reference)
