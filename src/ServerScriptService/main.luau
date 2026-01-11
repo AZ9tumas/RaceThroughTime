@@ -8,11 +8,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
-local function checkPrerequisites()
-	local SpawnLocation: SpawnLocation = workspace:WaitForChild("RTT_Map_Final", 10):WaitForChild("SpawnLocation", 10)
-	if not SpawnLocation then error("Expected a SpawnLocation under RTT_Map_Final in the workspace.", 3) end
-end
-
 --[[
     Circular Movement Logic (Polar to Cartesian)
     Use Case: "Race Through Time" Circular Track
@@ -74,9 +69,6 @@ return updateCircularPosition
 -- Main game loop function
 local function Main()
 	print("[Main]: Game loop starting...")
-
-	-- check some prerequisites
-	checkPrerequisites()
 
 	local DataService = Knit.GetService("DataService")
 	local StarService = Knit.GetService("StarService")
