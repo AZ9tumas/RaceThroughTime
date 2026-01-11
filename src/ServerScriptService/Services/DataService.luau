@@ -119,8 +119,24 @@ local function TryResolveSession(player: Player)
 
 	-- immediately send data right away
 	if profile then
+		local data = profile.Data
+		local worldName: string = data.Progression.CurrentWorld
+		local folder = workspace:FindFirstChild(worldName)
+		if not folder then
+			warn("Invalid world name saved", worldName)
+			worldName = "Main"
+			folder = workspace:FindFirstChild(worldName)
+		end
+
+		local spawnLocation = folder:FindFirstChild("SpawnLocation")
+		if spawnLocation then
+			player.RespawnLocation = spawnLocation
+			print("New spawn location set for", player.Name, "to", player.RespawnLocation)
+			player:LoadCharacterAsync()
+		end
+
 		-- Fire DataReady signal to client
-		DataService.Client.DataReady:Fire(player, profile.Data)
+		DataService.Client.DataReady:Fire(player, data)
 	end
 
 	if profile and clientReady and sessionPromise and sessionPromise.resolve then

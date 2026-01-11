@@ -6,7 +6,6 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
@@ -35,7 +34,8 @@ local function GetSpawnLocationForPlayer(player: Player): SpawnLocation?
 	local worldName = DataService:GetPlayerWorld(player)
 	
 	-- World folders are named directly in workspace (e.g., "Main", "StoneAge")
-	local worldFolder = Workspace:FindFirstChild(worldName)
+	local worldFolder = workspace:FindFirstChild(worldName)
+	print("World folder for star spawning:", worldFolder)
 	if worldFolder then
 		local spawnLocation = worldFolder:FindFirstChild("SpawnLocation")
 		if spawnLocation then
@@ -44,7 +44,7 @@ local function GetSpawnLocationForPlayer(player: Player): SpawnLocation?
 	end
 	
 	-- Fallback to Main world if the specified world is not found
-	local mainWorld = Workspace:FindFirstChild("Main")
+	local mainWorld = workspace:FindFirstChild("Main")
 	if mainWorld then
 		return mainWorld:FindFirstChild("SpawnLocation")
 	end
@@ -52,10 +52,10 @@ local function GetSpawnLocationForPlayer(player: Player): SpawnLocation?
 	return nil
 end
 
--- Initialize the Stars folder in Workspace
+-- Initialize the Stars folder in workspace
 local function InitializeStarsFolder()
 	-- Find or create Stars folder
-	StarsFolder = Workspace:FindFirstChild("Stars")
+	StarsFolder = workspace:FindFirstChild("Stars")
 	if StarsFolder then
 		-- Clear existing stars
 		StarsFolder:ClearAllChildren()
@@ -63,7 +63,7 @@ local function InitializeStarsFolder()
 	else
 		StarsFolder = Instance.new("Folder")
 		StarsFolder.Name = "Stars"
-		StarsFolder.Parent = Workspace
+		StarsFolder.Parent = workspace
 		Log("Stars folder created")
 	end
 end
@@ -134,15 +134,6 @@ function StarService:GenerateStarInformation(player: Player)
 	end
 	
 	local spawnCenter = spawnLocation.Position -- Default spawn center
-
-	if character then
-		local rootPart = character:FindFirstChild("HumanoidRootPart")
-		if rootPart then
-			--spawnCenter = rootPart.Position
-		end
-	end
-
-	print("Here, start service")
 
 	local starInfoList = {}
 	local existingPositions = {}
@@ -269,7 +260,7 @@ end
 
 -- Knit lifecycle
 function StarService:KnitInit()
-	-- Initialize Stars folder in Workspace
+	-- Initialize Stars folder in workspace
 	InitializeStarsFolder()
 
 	-- Clean up when player leaves
