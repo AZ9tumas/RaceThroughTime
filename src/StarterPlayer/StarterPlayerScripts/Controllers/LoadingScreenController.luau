@@ -11,6 +11,7 @@ local LoadingScreenController = Knit.CreateController({
 local IsDataReady = false
 local IsAssetsReady = false
 local LoadingFrame = nil
+local AutoHideThread = nil -- Track the auto-hide task to cancel if needed
 
 -- Tween settings
 local FADE_IN_TIME = 0.5
@@ -137,6 +138,35 @@ function LoadingScreenController:KnitStart()
 	local DataService = Knit.GetService("DataService")
 	DataService.DataReady:Connect(function()
 		self:SetDataReady()
+	end)
+	
+	-- Listen for LoadingScreenService signals from server
+	local LoadingScreenService = Knit.GetService("LoadingScreenService")
+	
+	LoadingScreenService.ShowLoadingScreen:Connect(function(duration: number?)
+		-- Cancel any existing auto-hide task
+		if AutoHideThread then
+			task.cancel(AutoHideThread)
+			AutoHideThread = nil
+		end
+		
+		self:ShowLoadingScreen()
+		-- If duration is provided, auto-hide after that time
+		if duration and duration > 0 then
+			AutoHideThread = task.delay(duration, function()
+				self:HideLoadingScreen()
+				AutoHideThread = nil
+			end)
+		end
+	end)
+	
+	LoadingScreenService.HideLoadingScreen:Connect(function()
+		-- Cancel any pending auto-hide task
+		if AutoHideThread then
+			task.cancel(AutoHideThread)
+			AutoHideThread = nil
+		end
+		self:HideLoadingScreen()
 	end)
 end
 
