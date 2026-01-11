@@ -139,23 +139,9 @@ local function CalculateInitialAngle(position: Vector3, center: Vector3): number
 	return math.atan2(dz, dx)
 end
 
--- Calculate the total distance to travel based on player's current fuel
-local function CalculateTotalDistance(player: Player, worldName: string): number
-	local DataService = Knit.GetService("DataService")
-	local playerData = DataService:Get(player, "Stats")
-	
-	if not playerData then
-		return 0
-	end
-	
-	local fuel = playerData.Fuel or 0
-	
-	-- Use Stats module's abstracted calculation
-	return Stats.CalculateDistanceFromFuel(fuel, worldName)
-end
-
 -- Calculate track parameters (initial speed, acceleration, max speed) based on fuel
-local function CalculateTrackParameters(player: Player, worldName: string): { initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
+local function CalculateTrackParameters(player: Player, worldName: string):
+	{ initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
 	local DataService = Knit.GetService("DataService")
 	local playerData = DataService:Get(player, "Stats")
 	
