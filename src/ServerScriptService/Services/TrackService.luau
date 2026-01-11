@@ -24,7 +24,7 @@ local TrackService = Knit.CreateService({
 })
 
 -- Private state
-local PlayersOnTrack = {} -- [Player.UserId] = { player, worldName, startTime, gateIndex, totalDistance, currentAngle, speed, distanceTraveled, startAngle, lapCount }
+local PlayersOnTrack = {} -- [Player.UserId] = { player, worldName, startTime, gateIndex, totalDistance, currentAngle, initialSpeed, acceleration, maxSpeed, totalTime, distanceTraveled, startAngle, lapCount, elapsedTime }
 local PlayerRequestDebounce = {} -- [Player.UserId] = lastRequestTime (for rate limiting)
 local HeartbeatConnection = nil -- Note: Connection persists for service lifetime, no cleanup needed
 local DEBOUNCE_COOLDOWN = 1 -- Minimum seconds between requests
@@ -140,7 +140,7 @@ local function CalculateInitialAngle(position: Vector3, center: Vector3): number
 end
 
 -- Calculate the total distance to travel based on player's current fuel
-local function CalculateTotalDistance(player: Player, speed: number, worldName: string): number
+local function CalculateTotalDistance(player: Player, worldName: string): number
 	local DataService = Knit.GetService("DataService")
 	local playerData = DataService:Get(player, "Stats")
 	
@@ -154,17 +154,23 @@ local function CalculateTotalDistance(player: Player, speed: number, worldName: 
 	return Stats.CalculateDistanceFromFuel(fuel, worldName)
 end
 
--- Calculate the player's speed based on their fuel
-local function CalculatePlayerSpeed(player: Player, worldName: string): number
+-- Calculate track parameters (initial speed, acceleration, max speed) based on fuel
+local function CalculateTrackParameters(player: Player, worldName: string): { initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
 	local DataService = Knit.GetService("DataService")
 	local playerData = DataService:Get(player, "Stats")
 	
 	if not playerData then
-		return Stats.BaseSpeed
+		return {
+			initialSpeed = Stats.BaseSpeed,
+			acceleration = Stats.BaseAcceleration,
+			maxSpeed = Stats.BaseSpeed * 2,
+			totalTime = 1,
+			totalDistance = Stats.BaseSpeed,
+		}
 	end
 	
 	local fuel = playerData.Fuel or 0
-	return Stats.CalculateSpeedFromFuel(fuel, worldName)
+	return Stats.CalculateTrackParameters(fuel, worldName)
 end
 
 -- Raycast parameters for ground detection
@@ -323,14 +329,8 @@ function TrackService:EndTrackRun(player: Player)
 	
 	Log(string.format("Player %s ended track run in %s, distance traveled: %.2f, cash earned: %d", player.Name, worldName, distanceTraveled, cashEarned))
 	
-	-- Update player data: set fuel to 0 and add cash
+	-- Update player data: DO NOT reset fuel, only add cash
 	local DataService = Knit.GetService("DataService")
-	
-	-- Set fuel to 0
-	DataService:Update(player, "Stats", function(stats)
-		stats.Fuel = 0
-		return stats
-	end)
 	
 	-- Add cash earned
 	if cashEarned > 0 then
@@ -383,9 +383,20 @@ local function OnHeartbeat(dt: number)
 		
 		if not center then continue end
 		
-		-- Calculate angular velocity (w = v / r)
-		local speed = trackData.speed
-		local angularVelocity = speed / radius
+		-- Update elapsed time
+		trackData.elapsedTime = trackData.elapsedTime + dt
+		
+		-- Calculate current speed using acceleration (v = v0 + a*t, capped at maxSpeed)
+		local currentSpeed = Stats.CalculateCurrentSpeed(
+			trackData.initialSpeed,
+			trackData.acceleration,
+			trackData.maxSpeed,
+			trackData.elapsedTime
+		)
+		
+		-- Convert linear speed to angular velocity for polar coordinate movement
+		-- ω = v / r (angular velocity = linear velocity / radius)
+		local angularVelocity = Stats.LinearSpeedToAngularVelocity(currentSpeed, radius)
 		
 		-- Store previous angle for lap detection
 		local previousAngle = trackData.currentAngle
@@ -393,8 +404,8 @@ local function OnHeartbeat(dt: number)
 		-- Update angle based on time delta
 		trackData.currentAngle = trackData.currentAngle + (angularVelocity * dt)
 		
-		-- Calculate distance traveled this frame
-		local distanceThisFrame = speed * dt
+		-- Calculate distance traveled this frame using current speed
+		local distanceThisFrame = currentSpeed * dt
 		trackData.distanceTraveled = trackData.distanceTraveled + distanceThisFrame
 		
 		-- Check for lap completion (crossed the starting angle after completing a full circle)
@@ -464,13 +475,14 @@ local function OnHeartbeat(dt: number)
 			end
 		end
 		
-		-- Check if player has completed their run (fuel ran out)
-		if trackData.distanceTraveled >= trackData.totalDistance then
+		-- Check if player has exceeded max time OR completed their run (distance reached)
+		-- Use small epsilon tolerance for floating point precision
+		if trackData.elapsedTime >= (trackData.totalTime - 0.001) or trackData.distanceTraveled >= trackData.totalDistance then
 			TrackService:EndTrackRun(player)
 			continue
 		end
 		
-		-- Calculate new position and orientation
+		-- Calculate new position using UpdateCircularPosition for consistency
 		local targetCFrame, targetPosition = UpdateCircularPosition(center, radius, trackData.currentAngle, center.Y + 5, worldName)
 		
 		-- Update body mover targets
@@ -556,9 +568,8 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		return false, "Failed to setup body movers"
 	end
 	
-	-- Calculate speed and total distance using player's world
-	local speed = CalculatePlayerSpeed(player, worldName)
-	local totalDistance = CalculateTotalDistance(player, speed, worldName)
+	-- Calculate track parameters with acceleration using player's world and fuel
+	local trackParams = CalculateTrackParameters(player, worldName)
 	
 	-- Track the player as running on the track (store player reference and world for efficient heartbeat loop)
 	PlayersOnTrack[userId] = {
@@ -566,21 +577,29 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		worldName = worldName,
 		startTime = tick(),
 		gateIndex = tonumber(closestGate:match("%d+")),
-		totalDistance = totalDistance,
+		totalDistance = trackParams.totalDistance,
 		currentAngle = initialAngle,
 		startAngle = initialAngle, -- Store starting angle for lap detection
-		speed = speed,
+		initialSpeed = trackParams.initialSpeed,
+		acceleration = trackParams.acceleration,
+		maxSpeed = trackParams.maxSpeed,
+		totalTime = trackParams.totalTime,
 		distanceTraveled = 0,
+		elapsedTime = 0, -- Track elapsed time for acceleration calculations
 		lapCount = 0, -- Track number of completed laps
 	}
 	
-	Log(string.format("Player %s started track at %s in world %s, speed: %.2f, distance: %.2f", player.Name, closestGate, worldName, speed, totalDistance))
+	Log(string.format("Player %s started track at %s in world %s, initialSpeed: %.2f, acceleration: %.2f, maxSpeed: %.2f, totalTime: %.2f, distance: %.2f", 
+		player.Name, closestGate, worldName, trackParams.initialSpeed, trackParams.acceleration, trackParams.maxSpeed, trackParams.totalTime, trackParams.totalDistance))
 	
 	-- Fire signal to client that track has started (client will apply visual effects)
 	TrackService.Client.TrackStarted:Fire(player, {
 		gateName = closestGate,
-		totalDistance = totalDistance,
-		speed = speed,
+		totalDistance = trackParams.totalDistance,
+		initialSpeed = trackParams.initialSpeed,
+		acceleration = trackParams.acceleration,
+		maxSpeed = trackParams.maxSpeed,
+		totalTime = trackParams.totalTime,
 		startAngle = initialAngle,
 		worldName = worldName, -- Include worldName so client can apply effects
 	})
@@ -609,14 +628,7 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 		CleanupBodyMovers(character)
 	end
 	
-	-- Update player data: set fuel to 0 (no cash reward on cancellation)
-	local DataService = Knit.GetService("DataService")
-	
-	-- Set fuel to 0
-	DataService:Update(player, "Stats", function(stats)
-		stats.Fuel = 0
-		return stats
-	end)
+	-- DO NOT reset fuel on cancellation
 	
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
