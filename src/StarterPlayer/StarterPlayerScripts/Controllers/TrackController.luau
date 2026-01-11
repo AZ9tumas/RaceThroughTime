@@ -3,6 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ContextActionService = game:GetService("ContextActionService")
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
 
 -- ui
 local player = Players.LocalPlayer
@@ -35,15 +36,180 @@ local TrackController = Knit.CreateController({
 -- Private state
 local IsOnTrack = false
 local TrackData = nil
+local CurrentWorldName = "Main"
 local OriginalWalkSpeed = 16
 local OriginalJumpPower = 50
 local DistanceUpdateConnection = nil
 local DistanceValueInstance = nil
 local TrackLightingEffects = {} -- Store created lighting effects for cleanup
+local TrackOriginalProperties = {} -- Store original track properties for restoration
+local TrackFireEffects = {} -- Store fire/smoke effects
 
 -- Helper function for logging
 local function Log(message: string)
 	print(string.format("[TrackController]: %s", message))
+end
+
+-- Get the world folder from workspace
+local function GetWorldFolder(worldName: string): Folder?
+	local worldFolder = Workspace:FindFirstChild(worldName)
+	if worldFolder then
+		return worldFolder
+	end
+	return Workspace:FindFirstChild("Main")
+end
+
+-- Get VisualTrack from the current world
+local function GetVisualTrackForWorld(worldName: string): BasePart?
+	local worldFolder = GetWorldFolder(worldName)
+	if worldFolder then
+		local trackSystem = worldFolder:FindFirstChild("Track_System")
+		if trackSystem then
+			return trackSystem:FindFirstChild("Visual_Track")
+		end
+	end
+	return nil
+end
+
+-- Apply neon effect to track when player starts running
+local function ApplyNeonEffectToTrack(worldName: string)
+	local visualTrack = GetVisualTrackForWorld(worldName)
+	if not visualTrack then return end
+	
+	-- Store original properties if not already stored
+	if not TrackOriginalProperties[worldName] then
+		TrackOriginalProperties[worldName] = {
+			Material = visualTrack.Material,
+			Transparency = visualTrack.Transparency,
+		}
+	end
+	
+	-- Apply neon effect
+	visualTrack.Material = Enum.Material.Neon
+	visualTrack.Transparency = 0
+	
+	-- Add PointLight for glow effect if it doesn't exist
+	local pointLight = visualTrack:FindFirstChild("TrackGlow")
+	if not pointLight then
+		pointLight = Instance.new("PointLight")
+		pointLight.Name = "TrackGlow"
+		pointLight.Color = visualTrack.Color
+		pointLight.Brightness = 2
+		pointLight.Range = 30
+		pointLight.Parent = visualTrack
+	end
+	pointLight.Enabled = true
+	
+	Log(string.format("Applied neon effect to track in world %s", worldName))
+end
+
+-- Remove neon effect from track when player stops running
+local function RemoveNeonEffectFromTrack(worldName: string)
+	local visualTrack = GetVisualTrackForWorld(worldName)
+	if not visualTrack then return end
+	
+	-- Restore original properties
+	local originalProps = TrackOriginalProperties[worldName]
+	if originalProps then
+		visualTrack.Material = originalProps.Material
+		visualTrack.Transparency = originalProps.Transparency
+	end
+	
+	-- Disable PointLight
+	local pointLight = visualTrack:FindFirstChild("TrackGlow")
+	if pointLight then
+		pointLight.Enabled = false
+	end
+	
+	Log(string.format("Removed neon effect from track in world %s", worldName))
+end
+
+-- Apply or update fire and smoke effects on track based on progress percentage
+local function UpdateFireEffectOnTrack(worldName: string, progressPercent: number)
+	local visualTrack = GetVisualTrackForWorld(worldName)
+	if not visualTrack then return end
+	
+	-- Fire only activates at 50% or above progress
+	if progressPercent < 0.5 then
+		-- Remove fire if exists and progress dropped below 50%
+		local effects = TrackFireEffects[worldName]
+		if effects then
+			if effects.Fire then effects.Fire:Destroy() end
+			if effects.Smoke then effects.Smoke:Destroy() end
+			TrackFireEffects[worldName] = nil
+		end
+		return
+	end
+	
+	-- Calculate intensity based on progress (50% to 100% maps to 0 to 1)
+	local intensityFactor = math.clamp((progressPercent - 0.5) / 0.5, 0, 1)
+	
+	-- Check if fire already exists
+	local effects = TrackFireEffects[worldName]
+	if not effects then
+		-- Create Fire effect
+		local fire = Instance.new("Fire")
+		fire.Name = "TrackFire"
+		fire.Heat = 5 + (intensityFactor * 10)
+		fire.Size = 5 + (intensityFactor * 10)
+		fire.Parent = visualTrack
+		
+		-- Create Smoke effect
+		local smoke = Instance.new("Smoke")
+		smoke.Name = "TrackSmoke"
+		smoke.Size = 2 + (intensityFactor * 5)
+		smoke.Opacity = 0.3 + (intensityFactor * 0.4)
+		smoke.RiseVelocity = 5 + (intensityFactor * 10)
+		smoke.Parent = visualTrack
+		
+		TrackFireEffects[worldName] = {
+			Fire = fire,
+			Smoke = smoke,
+		}
+		effects = TrackFireEffects[worldName]
+		
+		Log(string.format("Created fire effect on track in world %s at %.0f%% progress", worldName, progressPercent * 100))
+	end
+	
+	-- Update fire properties based on progress
+	if effects.Fire then
+		effects.Fire.Heat = 5 + (intensityFactor * 10)
+		effects.Fire.Size = 5 + (intensityFactor * 10)
+		
+		-- Color changes to purple at >90% progress
+		if progressPercent >= 0.9 then
+			effects.Fire.Color = Color3.fromRGB(128, 0, 255) -- Purple
+			effects.Fire.SecondaryColor = Color3.fromRGB(75, 0, 130) -- Indigo
+		else
+			effects.Fire.Color = Color3.fromRGB(255, 165, 0) -- Orange
+			effects.Fire.SecondaryColor = Color3.fromRGB(255, 69, 0) -- Orange-Red
+		end
+	end
+	
+	-- Update smoke properties
+	if effects.Smoke then
+		effects.Smoke.Size = 2 + (intensityFactor * 5)
+		effects.Smoke.Opacity = 0.3 + (intensityFactor * 0.4)
+		effects.Smoke.RiseVelocity = 5 + (intensityFactor * 10)
+		
+		-- Smoke color matches fire
+		if progressPercent >= 0.9 then
+			effects.Smoke.Color = Color3.fromRGB(75, 0, 130) -- Dark purple
+		else
+			effects.Smoke.Color = Color3.fromRGB(50, 50, 50) -- Dark gray
+		end
+	end
+end
+
+-- Remove fire and smoke effects from track
+local function RemoveFireEffectFromTrack(worldName: string)
+	local effects = TrackFireEffects[worldName]
+	if effects then
+		if effects.Fire then effects.Fire:Destroy() end
+		if effects.Smoke then effects.Smoke:Destroy() end
+		TrackFireEffects[worldName] = nil
+		Log(string.format("Removed fire effect from track in world %s", worldName))
+	end
 end
 
 -- Apply lighting effects when player starts running on track
@@ -256,9 +422,10 @@ local function EnablePlayerControls()
 end
 
 -- Handle track started signal from server
-local function OnTrackStarted(trackData: { gateName: string, totalDistance: number, speed: number, startAngle: number })
+local function OnTrackStarted(trackData: { gateName: string, totalDistance: number, speed: number, startAngle: number, worldName: string? })
 	IsOnTrack = true
 	TrackData = trackData
+	CurrentWorldName = trackData.worldName or "Main"
 	distanceCounter.Visible = true
 	
 	Log(string.format("Track started at %s, total distance: %.2f, speed: %.2f", trackData.gateName, trackData.totalDistance, trackData.speed or 0))
@@ -271,6 +438,9 @@ local function OnTrackStarted(trackData: { gateName: string, totalDistance: numb
 	
 	-- Increase camera FOV for speed effect
 	TweenCameraFOV(TRACK_FOV, FOV_TWEEN_TIME)
+	
+	-- Apply neon effect to track
+	ApplyNeonEffectToTrack(CurrentWorldName)
 	
 	-- Apply lighting effects (blur, color correction, bloom)
 	ApplyTrackLightingEffects()
@@ -309,6 +479,12 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	
 	-- Reset camera FOV to default
 	TweenCameraFOV(DEFAULT_FOV, FOV_TWEEN_TIME)
+	
+	-- Remove neon effect from track
+	RemoveNeonEffectFromTrack(CurrentWorldName)
+	
+	-- Remove fire effect from track
+	RemoveFireEffectFromTrack(CurrentWorldName)
 	
 	-- Remove lighting effects (blur, color correction, bloom)
 	RemoveTrackLightingEffects()
@@ -385,6 +561,12 @@ function TrackController:StopTrack()
 	-- Reset camera FOV
 	TweenCameraFOV(DEFAULT_FOV, FOV_TWEEN_TIME)
 	
+	-- Remove neon effect from track
+	RemoveNeonEffectFromTrack(CurrentWorldName)
+	
+	-- Remove fire effect from track
+	RemoveFireEffectFromTrack(CurrentWorldName)
+	
 	-- Remove lighting effects
 	RemoveTrackLightingEffects()
 	
@@ -392,6 +574,14 @@ function TrackController:StopTrack()
 	EnablePlayerControls()
 	
 	Log("Track stopped")
+end
+
+-- Handle track progress update from server for fire effects
+local function OnTrackProgressUpdate(progressData: { worldName: string, progressPercent: number, distanceTraveled: number, unlockRequirement: number })
+	if not IsOnTrack then return end
+	
+	-- Update fire effects based on progress (activates at 50%+)
+	UpdateFireEffectOnTrack(progressData.worldName, progressData.progressPercent)
 end
 
 -- Knit lifecycle
@@ -413,6 +603,7 @@ function TrackController:KnitStart()
 	TrackService.TrackStarted:Connect(OnTrackStarted)
 	TrackService.TrackEnded:Connect(OnTrackEnded)
 	TrackService.LapCompleted:Connect(OnLapCompleted)
+	TrackService.TrackProgressUpdate:Connect(OnTrackProgressUpdate)
 	
 	Log("TrackController started")
 end
