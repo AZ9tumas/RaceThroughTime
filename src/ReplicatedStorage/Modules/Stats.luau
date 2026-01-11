@@ -64,10 +64,10 @@ Stats.StarProbabilities = {
 
 -- Fuel bonuses for each star type
 Stats.StarFuelValues = {
-	YellowStar = 10,     -- Low fuel bonus
-	BlueStar = 25,       -- Medium fuel bonus
-	PurpleStar = 50,     -- High fuel bonus
-	WhiteStar = 100,     -- Very high fuel bonus
+	YellowStar = 100,     -- Low fuel bonus
+	BlueStar = 250,       -- Medium fuel bonus
+	PurpleStar = 500,     -- High fuel bonus
+	WhiteStar = 1000,     -- Very high fuel bonus
 }
 
 -- Star spawn configuration
@@ -75,7 +75,7 @@ Stats.StarConfig = {
 	SpawnCount = 10,                  -- Number of stars to spawn per player
 	SpawnRadius = 140,                -- Radius around player spawn point for star placement
 	MinDistanceBetweenStars = 15, 	  -- Minimum distance between spawned stars
-	CollectionRadius = 10,             -- Distance within which a star can be collected
+	CollectionRadius = 15,             -- Distance within which a star can be collected
 }
 
 -- Track/Gate configuration
