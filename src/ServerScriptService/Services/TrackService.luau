@@ -28,6 +28,7 @@ local PlayerRequestDebounce = {} -- [Player.UserId] = lastRequestTime (for rate 
 local HeartbeatConnection = nil -- Note: Connection persists for service lifetime, no cleanup needed
 local DEBOUNCE_COOLDOWN = 1 -- Minimum seconds between requests
 local TrackOriginalProperties = {} -- [worldName] = { Material, Transparency, ... } - Store original track properties
+local TrackFireEffects = {} -- [worldName] = { Fire, Smoke } - Store fire/smoke effects per world
 
 -- Helper function for logging
 local function Log(message: string)
@@ -130,6 +131,95 @@ local function RemoveNeonEffectFromTrack(worldName: string)
 	end
 	
 	Log(string.format("Removed neon effect from track in world %s", worldName))
+end
+
+-- Apply or update fire and smoke effects on track based on progress percentage
+-- progressPercent: 0.0 to 1.0+ representing progress toward world unlock
+local function UpdateFireEffectOnTrack(worldName: string, progressPercent: number)
+	local visualTrack = GetVisualTrackForWorld(worldName)
+	if not visualTrack then return end
+	
+	-- Fire only activates at 50% or above progress
+	if progressPercent < 0.5 then
+		-- Remove fire if exists and progress dropped below 50%
+		local effects = TrackFireEffects[worldName]
+		if effects then
+			if effects.Fire then effects.Fire:Destroy() end
+			if effects.Smoke then effects.Smoke:Destroy() end
+			TrackFireEffects[worldName] = nil
+		end
+		return
+	end
+	
+	-- Calculate intensity based on progress (50% to 100% maps to 0 to 1)
+	local intensityFactor = math.clamp((progressPercent - 0.5) / 0.5, 0, 1)
+	
+	-- Check if fire already exists
+	local effects = TrackFireEffects[worldName]
+	if not effects then
+		-- Create Fire effect
+		local fire = Instance.new("Fire")
+		fire.Name = "TrackFire"
+		fire.Heat = 5 + (intensityFactor * 10) -- 5 to 15
+		fire.Size = 5 + (intensityFactor * 10) -- 5 to 15
+		fire.Parent = visualTrack
+		
+		-- Create Smoke effect
+		local smoke = Instance.new("Smoke")
+		smoke.Name = "TrackSmoke"
+		smoke.Size = 2 + (intensityFactor * 5) -- 2 to 7
+		smoke.Opacity = 0.3 + (intensityFactor * 0.4) -- 0.3 to 0.7
+		smoke.RiseVelocity = 5 + (intensityFactor * 10) -- 5 to 15
+		smoke.Parent = visualTrack
+		
+		TrackFireEffects[worldName] = {
+			Fire = fire,
+			Smoke = smoke,
+		}
+		effects = TrackFireEffects[worldName]
+		
+		Log(string.format("Created fire effect on track in world %s at %.0f%% progress", worldName, progressPercent * 100))
+	end
+	
+	-- Update fire properties based on progress
+	if effects.Fire then
+		effects.Fire.Heat = 5 + (intensityFactor * 10)
+		effects.Fire.Size = 5 + (intensityFactor * 10)
+		
+		-- Color changes to purple at >90% progress
+		if progressPercent >= 0.9 then
+			effects.Fire.Color = Color3.fromRGB(128, 0, 255) -- Purple
+			effects.Fire.SecondaryColor = Color3.fromRGB(75, 0, 130) -- Indigo
+		else
+			effects.Fire.Color = Color3.fromRGB(255, 165, 0) -- Orange
+			effects.Fire.SecondaryColor = Color3.fromRGB(255, 69, 0) -- Orange-Red
+		end
+	end
+	
+	-- Update smoke properties
+	if effects.Smoke then
+		effects.Smoke.Size = 2 + (intensityFactor * 5)
+		effects.Smoke.Opacity = 0.3 + (intensityFactor * 0.4)
+		effects.Smoke.RiseVelocity = 5 + (intensityFactor * 10)
+		
+		-- Smoke color matches fire
+		if progressPercent >= 0.9 then
+			effects.Smoke.Color = Color3.fromRGB(75, 0, 130) -- Dark purple
+		else
+			effects.Smoke.Color = Color3.fromRGB(50, 50, 50) -- Dark gray
+		end
+	end
+end
+
+-- Remove fire and smoke effects from track
+local function RemoveFireEffectFromTrack(worldName: string)
+	local effects = TrackFireEffects[worldName]
+	if effects then
+		if effects.Fire then effects.Fire:Destroy() end
+		if effects.Smoke then effects.Smoke:Destroy() end
+		TrackFireEffects[worldName] = nil
+		Log(string.format("Removed fire effect from track in world %s", worldName))
+	end
 end
 
 -- Check if any player is on track in a specific world
@@ -410,9 +500,10 @@ function TrackService:EndTrackRun(player: Player)
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
 	
-	-- Remove neon effect from track if no other players are on track in this world
+	-- Remove neon effect and fire effect from track if no other players are on track in this world
 	if not IsAnyPlayerOnTrackInWorld(worldName) then
 		RemoveNeonEffectFromTrack(worldName)
+		RemoveFireEffectFromTrack(worldName)
 	end
 	
 	-- Fire signal to client that track has ended
@@ -487,7 +578,50 @@ local function OnHeartbeat(dt: number)
 			distanceValue.Value = trackData.distanceTraveled
 		end
 		
-		-- Check if player has completed their run
+		-- Get next world and unlock requirement for fire effects and auto-unlock
+		local WorldService = Knit.GetService("WorldService")
+		local nextWorld = WorldService:GetNextWorld(worldName)
+		local unlockRequirement = nextWorld and Stats.WorldUnlockRequirements[nextWorld] or nil
+		
+		-- Calculate progress toward world unlock and update fire effects
+		if unlockRequirement then
+			local progressPercent = trackData.distanceTraveled / unlockRequirement
+			
+			-- Update fire effects based on progress (activates at 50%+)
+			UpdateFireEffectOnTrack(worldName, progressPercent)
+			
+			-- Check if player has reached world unlock threshold
+			if trackData.distanceTraveled >= unlockRequirement then
+				Log(string.format("Player %s unlocked world %s with distance %.2f", player.Name, nextWorld, trackData.distanceTraveled))
+				
+				-- End the track run first (this cleans up body movers, effects, etc.)
+				TrackService:EndTrackRun(player)
+				
+				-- Unlock the new world for the player
+				WorldService:GiveWorldToPlayer(player, nextWorld)
+				
+				-- Teleport player to the new world
+				task.spawn(function()
+					local success, err = WorldService:TeleportPlayerToWorld(player, nextWorld)
+					if success then
+						-- Send notification about world unlock
+						local NotificationService = Knit.GetService("NotificationService")
+						NotificationService:SendNotification(
+							player,
+							string.format("🌟 Congratulations! You unlocked %s! 🌟", nextWorld),
+							NotificationService.Category.Success,
+							5
+						)
+					else
+						warn(string.format("[TrackService]: Failed to teleport player %s to %s: %s", player.Name, nextWorld, err or "unknown error"))
+					end
+				end)
+				
+				continue
+			end
+		end
+		
+		-- Check if player has completed their run (fuel ran out)
 		if trackData.distanceTraveled >= trackData.totalDistance then
 			TrackService:EndTrackRun(player)
 			continue
@@ -646,9 +780,10 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
 	
-	-- Remove neon effect from track if no other players are on track in this world
+	-- Remove neon effect and fire effect from track if no other players are on track in this world
 	if not IsAnyPlayerOnTrackInWorld(worldName) then
 		RemoveNeonEffectFromTrack(worldName)
+		RemoveFireEffectFromTrack(worldName)
 	end
 	
 	-- Fire signal to client that track has ended (cancelled, no rewards)
