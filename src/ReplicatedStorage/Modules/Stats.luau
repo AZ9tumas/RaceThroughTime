@@ -105,4 +105,22 @@ function Stats.CalculateSpeedFromFuel(fuel: number, worldName: string?): number
 	return totalSpeed
 end
 
+-- Calculate the total distance a player can travel based on fuel and world
+-- Uses CalculateSpeedFromFuel internally for speed calculation
+-- @param fuel number - The current fuel amount
+-- @param worldName string? - The world name (default: "Main")
+-- @return number - The calculated total distance (floored to integer)
+function Stats.CalculateDistanceFromFuel(fuel: number, worldName: string?): number
+	local world = worldName or "Main"
+	local speed = Stats.CalculateSpeedFromFuel(fuel, world)
+	local fuelConsumptionRate = Stats.FuelConsumptionRate[world] or Stats.FuelConsumptionRate.Main
+	
+	-- Time = Fuel / FuelConsumptionRate
+	-- Distance = Speed * Time
+	local timeLeft = fuel / fuelConsumptionRate
+	local totalDistance = speed * timeLeft
+	
+	return math.floor(totalDistance)
+end
+
 return Stats

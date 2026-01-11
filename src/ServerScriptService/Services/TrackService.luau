@@ -150,12 +150,8 @@ local function CalculateTotalDistance(player: Player, speed: number, worldName: 
 	
 	local fuel = playerData.Fuel or 0
 	
-	-- Total distance is based on fuel - more fuel = more distance on the track
-	local fuelConsumptionRate = Stats.FuelConsumptionRate[worldName] or Stats.FuelConsumptionRate.Main
-	local timeLeft = fuel / fuelConsumptionRate
-	local totalDistance = speed * timeLeft
-	
-	return math.floor(totalDistance)
+	-- Use Stats module's abstracted calculation
+	return Stats.CalculateDistanceFromFuel(fuel, worldName)
 end
 
 -- Calculate the player's speed based on their fuel
