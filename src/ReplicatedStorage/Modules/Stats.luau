@@ -12,7 +12,7 @@ Stats.MaxTrackTime = 30
 
 -- Maximum physical speed limit (for body movers and lap detection)
 -- Calculated speed can exceed this for stats/distance tracking, but physical movement is capped
-Stats.MaxPhysicalSpeed = 150
+Stats.MaxPhysicalSpeed = 250
 
 -- Base acceleration for track movement (studs/sec²)
 Stats.BaseAcceleration = 15
@@ -74,9 +74,9 @@ Stats.StarProbabilities = {
 
 -- Fuel bonuses for each star type
 Stats.StarFuelValues = {
-	YellowStar = 100,     -- Low fuel bonus
-	BlueStar = 250,       -- Medium fuel bonus
-	PurpleStar = 500,     -- High fuel bonus
+	YellowStar = 50,     -- Low fuel bonus
+	BlueStar = 100,       -- Medium fuel bonus
+	PurpleStar = 250,     -- High fuel bonus
 	WhiteStar = 1000,     -- Very high fuel bonus
 }
 
