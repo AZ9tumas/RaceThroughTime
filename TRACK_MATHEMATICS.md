@@ -248,6 +248,45 @@ Ground Y: raycastResult.Position.Y (or fallback if miss)
 | Main | 205 | 1.0 | 25/sec | 150/1000 |
 | StoneAge | 205 | 1.2 | 28/sec | 180/1000 |
 
+## Physical Speed Limit
+
+### Dual Speed System
+
+To prevent physics issues at high calculated speeds while still tracking accurate stats, the system uses two speed values:
+
+1. **Calculated Speed** (`calculatedSpeed`): The full speed based on fuel and acceleration, used for distance tracking and stats
+2. **Physical Speed** (`physicalSpeed`): Capped at `MaxPhysicalSpeed` (150 studs/sec), used for body movers and lap detection
+
+```
+physicalSpeed = min(calculatedSpeed, MaxPhysicalSpeed)
+```
+
+This means:
+- **Stats/Distance**: Uses `calculatedSpeed` - players earn full distance rewards
+- **Lap Detection**: Uses `physicalSpeed` - laps are counted based on actual circular motion
+- **Body Movers**: Uses `physicalSpeed` - prevents physics glitches at extreme speeds
+
+**Code (`TrackService.luau`):**
+```lua
+-- Calculate current speed using acceleration (for stats)
+local calculatedSpeed = Stats.CalculateCurrentSpeed(
+    trackData.initialSpeed,
+    trackData.acceleration,
+    trackData.maxSpeed,
+    trackData.elapsedTime
+)
+
+-- Physical speed is capped for body movers and lap detection
+local physicalSpeed = math.min(calculatedSpeed, Stats.MaxPhysicalSpeed)
+
+-- Angular velocity uses physical speed
+local angularVelocity = Stats.LinearSpeedToAngularVelocity(physicalSpeed, radius)
+
+-- Distance uses calculated speed for full tracking
+local distanceThisFrame = calculatedSpeed * dt
+trackData.distanceTraveled = trackData.distanceTraveled + distanceThisFrame
+```
+
 ## Summary of Motion
 
 1. **Calculate speed** from fuel using power law: `V = Base + Fuel^0.7 × Efficiency`
@@ -255,9 +294,10 @@ Ground Y: raycastResult.Position.Y (or fallback if miss)
 3. **Each frame:**
    - Update elapsed time
    - Calculate current speed with acceleration: `V = V₀ + a×t`
-   - Convert to angular velocity: `ω = V / r`
+   - Apply physical speed limit: `V_physical = min(V, MaxPhysicalSpeed)`
+   - Convert to angular velocity: `ω = V_physical / r`
    - Update angle: `θ += ω × dt`
    - Convert to Cartesian: `(x, z) = (center + r×cos(θ), center + r×sin(θ))`
    - Raycast to get ground Y
-   - Update body mover target with dynamic responsiveness
-   - Track distance: `D += V × dt`
+   - Update body mover target with dynamic responsiveness (based on physical speed)
+   - Track distance: `D += V × dt` (using full calculated speed)

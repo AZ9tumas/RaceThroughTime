@@ -373,25 +373,32 @@ local function OnHeartbeat(dt: number)
 		trackData.elapsedTime = trackData.elapsedTime + dt
 		
 		-- Calculate current speed using acceleration (v = v0 + a*t, capped at maxSpeed)
-		local currentSpeed = Stats.CalculateCurrentSpeed(
+		-- This is the "calculated speed" used for stats and distance tracking
+		local calculatedSpeed = Stats.CalculateCurrentSpeed(
 			trackData.initialSpeed,
 			trackData.acceleration,
 			trackData.maxSpeed,
 			trackData.elapsedTime
 		)
 		
+		-- Physical speed is capped at MaxPhysicalSpeed for body movers and lap detection
+		-- This prevents high-speed physics issues while still tracking full distance for stats
+		local physicalSpeed = math.min(calculatedSpeed, Stats.MaxPhysicalSpeed)
+		
 		-- Convert linear speed to angular velocity for polar coordinate movement
 		-- ω = v / r (angular velocity = linear velocity / radius)
-		local angularVelocity = Stats.LinearSpeedToAngularVelocity(currentSpeed, radius)
+		-- Use physical speed for actual movement to prevent drifting/cutting corners
+		local angularVelocity = Stats.LinearSpeedToAngularVelocity(physicalSpeed, radius)
 		
 		-- Store previous angle for lap detection
 		local previousAngle = trackData.currentAngle
 		
-		-- Update angle based on time delta
+		-- Update angle based on time delta (using physical speed for lap detection)
 		trackData.currentAngle = trackData.currentAngle + (angularVelocity * dt)
 		
-		-- Calculate distance traveled this frame using current speed
-		local distanceThisFrame = currentSpeed * dt
+		-- Calculate distance traveled this frame using CALCULATED speed (not physical)
+		-- This allows stats to reflect the true distance even if physical movement is capped
+		local distanceThisFrame = calculatedSpeed * dt
 		trackData.distanceTraveled = trackData.distanceTraveled + distanceThisFrame
 		
 		-- Check for lap completion (crossed the starting angle after completing a full circle)
@@ -471,15 +478,15 @@ local function OnHeartbeat(dt: number)
 		-- Calculate new position using UpdateCircularPosition for consistency
 		local targetCFrame, targetPosition = UpdateCircularPosition(center, radius, trackData.currentAngle, center.Y + 5, worldName)
 		
-		-- Dynamically adjust body mover responsiveness based on current speed
+		-- Dynamically adjust body mover responsiveness based on physical speed
 		-- At higher speeds, we need higher responsiveness to prevent drifting toward center
 		-- Base responsiveness of 50, increases by 1 for every 10 studs/sec of speed
 		local baseResponsiveness = 50
-		local speedFactor = math.clamp(currentSpeed / 10, 1, 20) -- Max 20x boost
+		local speedFactor = math.clamp(physicalSpeed / 10, 1, 20) -- Max 20x boost
 		local dynamicResponsiveness = baseResponsiveness + (speedFactor * 10)
 		
-		-- Also adjust MaxVelocity to match current speed (with overhead)
-		local dynamicMaxVelocity = math.max(500, currentSpeed * 2)
+		-- Also adjust MaxVelocity to match physical speed (with overhead)
+		local dynamicMaxVelocity = math.max(500, physicalSpeed * 2)
 		
 		alignPosition.Responsiveness = dynamicResponsiveness
 		alignPosition.MaxVelocity = dynamicMaxVelocity
