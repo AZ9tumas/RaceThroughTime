@@ -124,65 +124,9 @@ local function GenerateRandomPosition(centerPosition: Vector3, existingPositions
 	return nil
 end
 
--- Generate star information for a player
-function StarService:GenerateStarInformation(player: Player)
-	local userId = player.UserId
-	local character = player.Character
-	
-	-- Get SpawnLocation from the player's current world
-	local spawnLocation = GetSpawnLocationForPlayer(player)
-	if not spawnLocation then
-		warn(string.format("[StarService]: No SpawnLocation found for player %s's world", player.Name))
-		return {}
-	end
-	
-	local spawnCenter = spawnLocation.Position -- Default spawn center
-
-	local starInfoList = {}
-	local existingPositions = {}
-	local config = Stats.StarConfig
-
-	for i = 1, config.SpawnCount do
-		local position = GenerateRandomPosition(spawnCenter, existingPositions)
-		if position then
-			table.insert(existingPositions, position)
-
-			local starName = GetRandomStarType()
-			local starInfo = {
-				Position = position,
-				ID = GenerateStarId(),
-				StarName = starName,
-				FuelValue = Stats.StarFuelValues[starName],
-				Index = i,
-			}
-			table.insert(starInfoList, starInfo)
-		end
-	end
-
-	UniversalTracker[userId] = starInfoList
-	Log(string.format("Generated %d stars for player %s", #starInfoList, player.Name))
-
-	return starInfoList
-end
-
 -- Get star information for a player
 function StarService:GetStarInformation(player: Player)
 	return UniversalTracker[player.UserId]
-end
-
--- Spawn stars for a player (sends data to client)
-function StarService:SpawnStarsForPlayer(player: Player)
-	local userId = player.UserId
-	local starInfoList = UniversalTracker[userId]
-
-	if not starInfoList or #starInfoList == 0 then
-		warn(string.format("[StarService]: No star information found for player %s. Generate star information first.", player.Name))
-		return
-	end
-
-	-- Send star information to the client
-	self.Client.SpawnStars:Fire(player, starInfoList)
-	Log(string.format("Sent %d stars to player %s for spawning", #starInfoList, player.Name))
 end
 
 -- Find star info by ID in player's tracker
@@ -262,21 +206,16 @@ function StarService:GetTotalStarsCollected(): number
 	return TotalStarsCollected
 end
 
--- Generate a single star for a player (used for continuous spawning)
-local function GenerateSingleStar(player: Player): ({ Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number }?)
+-- Generate a single star for a player
+local function GenerateStar(player: Player)
 	local userId = player.UserId
+	
+	-- Initialize tracker if needed
+	if not UniversalTracker[userId] then
+		UniversalTracker[userId] = {}
+	end
+	
 	local starInfoList = UniversalTracker[userId]
-	
-	if not starInfoList then
-		starInfoList = {}
-		UniversalTracker[userId] = starInfoList
-	end
-	
-	-- Check if we're at max stars
-	local config = Stats.StarConfig
-	if #starInfoList >= config.MaxStars then
-		return nil -- Max stars reached
-	end
 	
 	-- Get SpawnLocation from the player's current world
 	local spawnLocation = GetSpawnLocationForPlayer(player)
@@ -297,7 +236,7 @@ local function GenerateSingleStar(player: Player): ({ Position: Vector3, ID: str
 	if not position then
 		return nil -- Could not find valid position
 	end
-	
+
 	local starName = GetRandomStarType()
 	local starInfo = {
 		Position = position,
@@ -306,56 +245,54 @@ local function GenerateSingleStar(player: Player): ({ Position: Vector3, ID: str
 		FuelValue = Stats.StarFuelValues[starName],
 		Index = #starInfoList + 1,
 	}
-	
+
 	table.insert(starInfoList, starInfo)
-	Log(string.format("Generated new star for player %s (total: %d)", player.Name, #starInfoList))
-	
 	return starInfo
 end
 
--- Start continuous star spawning loop for a player
-function StarService:StartContinuousSpawning(player: Player)
+-- Start star spawning logic for a player
+function StarService:Start(player: Player)
 	local userId = player.UserId
-	
-	-- Don't start if already running
-	if StarSpawnLoops[userId] then
-		return
-	end
-	
+
+	-- Start loop
+	if StarSpawnLoops[userId] then return end
 	StarSpawnLoops[userId] = true
-	Log(string.format("Started continuous star spawning for player %s", player.Name))
-	
+
 	task.spawn(function()
-		local config = Stats.StarConfig
+		Log(string.format("Started star loop for %s", player.Name))
 		
-		while StarSpawnLoops[userId] and player:IsDescendantOf(Players) do
-			-- Wait for spawn interval
-			task.wait(config.SpawnInterval)
+		while player:IsDescendantOf(Players) and StarSpawnLoops[userId] do
+			local starInfoList = UniversalTracker[userId] or {}
+			local count = #starInfoList
+			local target = Stats.StarConfig.SpawnCount
 			
-			-- Check if still active
-			if not StarSpawnLoops[userId] or not player:IsDescendantOf(Players) then
-				break
-			end
-			
-			-- Try to spawn a star if below max
-			local starInfoList = UniversalTracker[userId]
-			if starInfoList and #starInfoList < config.MaxStars then
-				local newStar = GenerateSingleStar(player)
-				if newStar then
-					-- Notify client to spawn the new star
-					StarService.Client.SpawnStar:Fire(player, newStar)
+			-- Check if below threshold (50% of required)
+			if count < (target * 0.5) then
+				local newStars = {}
+				
+				-- Generate stars until we reach target
+				while #starInfoList < target do
+					local star = GenerateStar(player)
+					if star then
+						table.insert(newStars, star)
+						starInfoList = UniversalTracker[userId] -- Update reference
+					else
+						break -- No valid positions or error
+					end
+				end
+				
+				-- Send to client after generation is done
+				if #newStars > 0 then
+					self.Client.SpawnStars:Fire(player, newStars)
+					Log(string.format("Spawned %d new stars for %s", #newStars, player.Name))
 				end
 			end
+			
+			task.wait(1)
 		end
 		
 		StarSpawnLoops[userId] = nil
-		Log(string.format("Stopped continuous star spawning for player %s", player.Name))
 	end)
-end
-
--- Stop continuous star spawning for a player
-function StarService:StopContinuousSpawning(player: Player)
-	StarSpawnLoops[player.UserId] = nil
 end
 
 -- Clean up player data when they leave
