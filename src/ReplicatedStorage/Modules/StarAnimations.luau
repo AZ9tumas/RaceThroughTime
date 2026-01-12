@@ -15,13 +15,13 @@ local StarAnimations = {}
 local PULSE_SIZE_INCREASE = 1.15 -- 15% size increase during pulse
 local PULSE_DURATION = 0.3 -- Duration of size increase
 local PULSE_HOLD_TIME = 0.5 -- Time to hold the increased size
-local PULSE_INTERVAL_MIN = 2 -- Minimum time between pulses (seconds)
-local PULSE_INTERVAL_MAX = 3.5 -- Maximum time between pulses (seconds)
+local PULSE_INTERVAL_MIN = 0.5 -- Minimum time between pulses (seconds)
+local PULSE_INTERVAL_MAX = 1.5 -- Maximum time between pulses (seconds)
 
 local JUMP_HEIGHT = 2 -- Studs to jump up
 local JUMP_DURATION = 0.25 -- Time for one jump direction
-local JUMP_INTERVAL_MIN = 4 -- Minimum time between jumps
-local JUMP_INTERVAL_MAX = 7 -- Maximum time between jumps
+local JUMP_INTERVAL_MIN = 1.0 -- Minimum time between jumps
+local JUMP_INTERVAL_MAX = 3.0 -- Maximum time between jumps
 
 -- Private state to track animated stars
 local AnimatingStars = {} -- [starInstance] = { pulseThread, jumpThread, originalSize, originalPosition }

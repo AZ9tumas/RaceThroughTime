@@ -89,6 +89,7 @@ local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 local fuelBar = centerHUD:WaitForChild("FuelBar")
 local fuelText: TextLabel = fuelBar:WaitForChild("FuelText")
 local otherFrames: Frame = mainUi:WaitForChild("OtherFrames")
+local worldlabel: TextLabel = mainUi:WaitForChild("TopInfo"):WaitForChild("WorldName")
 
 -- sub frames
 local dailyButton: TextButton = leftPanel:WaitForChild("DailyButton")
@@ -375,6 +376,7 @@ handler._connections["DataReady"] = DataService.DataReady:Connect(function(data)
 end)
 
 handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(function()
+    worldlabel.Text = "🌍 " .. (handler.data.Progression.CurrentWorld or "Main")
     handler.UpdateFuelUI(fuelVal.Value)
     handler.UpdateCashUI(cashVal.Value)
     handler.UpdateGemsUI(gemsVal.Value)

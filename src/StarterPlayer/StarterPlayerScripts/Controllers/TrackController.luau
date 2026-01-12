@@ -458,7 +458,7 @@ local function OnTrackStarted(trackData: { gateName: string, totalDistance: numb
 	local NotificationController = Knit.GetController("NotificationController")
 	if NotificationController then
 		NotificationController:ShowNotification(
-			"Track Run Started! Distance: " .. trackData.totalDistance,
+			"Track Run Started! Distance: " .. math.floor(trackData.totalDistance),
 			NotificationController.Category.Alert,
 			3
 		)

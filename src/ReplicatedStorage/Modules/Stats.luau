@@ -30,8 +30,8 @@ Stats.WorldRadius = {
 }
 
 Stats.FuelConsumptionRate = {
-	Main = 25, -- Fuel consumed per second on the Main world
-	StoneAge = 28, -- Slightly higher fuel consumption in StoneAge
+	Main = 150, -- Fuel consumed per second on the Main world
+	StoneAge = 200, -- Slightly higher fuel consumption in StoneAge
 }
 
 Stats.WorldCashRates = {
@@ -66,10 +66,10 @@ Stats.WorldOrder = {
 -- Purple (Rare): Low spawn rate, high fuel bonus
 -- White (Legendary): Extremely rare, very high fuel bonus
 Stats.StarProbabilities = {
-	YellowStar = 0.60,   -- 60% chance (Common)
-	BlueStar = 0.25,     -- 25% chance (Uncommon)
-	PurpleStar = 0.12,   -- 12% chance (Rare)
-	WhiteStar = 0.03,    -- 3% chance (Legendary)
+	YellowStar = 0.65,   -- 60% chance (Common)
+	BlueStar = 0.30,     -- 25% chance (Uncommon)
+	PurpleStar = 0.03,   -- 5% chance (Rare)
+	WhiteStar = 0.02,    -- 1% chance (Legendary)
 }
 
 -- Fuel bonuses for each star type
@@ -82,9 +82,8 @@ Stats.StarFuelValues = {
 
 -- Star spawn configuration
 Stats.StarConfig = {
-	SpawnCount = 10,                  -- Number of stars to spawn initially per player
-	MaxStars = 30,                    -- Maximum number of stars that can exist at once per player
-	SpawnRadius = 140,                -- Radius around player spawn point for star placement
+	MaxStars = 15,                    -- Maximum number of stars that can exist at once per player
+	SpawnRadius = 130,                -- Radius around player spawn point for star placement
 	MinDistanceBetweenStars = 15, 	  -- Minimum distance between spawned stars
 	CollectionRadius = 15,            -- Distance within which a star can be collected
 	SpawnInterval = 3,                -- Seconds between spawning new stars (continuous spawning rate)
@@ -102,7 +101,6 @@ function Stats.CalculateMultipliers(): number
 end
 
 -- Calculate base speed from fuel using the formula:
--- V_base_fuel = (V_base + F^0.7 * E_world) * Σ(M_pets + M_rebirth + M_boosts)
 -- @param fuel number - The current fuel amount
 -- @param worldName string? - The world name to get efficiency for (default: "Main")
 -- @return number - The calculated base speed component from fuel
@@ -111,7 +109,7 @@ function Stats.CalculateSpeedFromFuel(fuel: number, worldName: string?): number
 	local worldEfficiency = Stats.WorldEfficiency[worldName or "Main"] or 1
 	local multipliers = Stats.CalculateMultipliers()
 	
-	local fuelComponent = math.pow(fuel, 0.7) * worldEfficiency
+	local fuelComponent = math.pow(fuel, 0.3) * worldEfficiency
 	local totalSpeed = (baseSpeed + fuelComponent) * multipliers
 	
 	return totalSpeed

@@ -17,6 +17,7 @@ local StarService = Knit.CreateService({
 		SpawnStars = Knit.CreateSignal(), -- Signal to tell client to spawn stars
 		SpawnStar = Knit.CreateSignal(), -- Signal to tell client to spawn a single star (for continuous spawning)
 		RemoveStar = Knit.CreateSignal(), -- Signal to tell client to remove a collected star
+		RemoveAllStars = Knit.CreateSignal(), -- Signal to tell client to remove all stars
 	},
 })
 
@@ -24,7 +25,7 @@ local StarService = Knit.CreateService({
 local UniversalTracker = {} -- [Player.UserId] = {StarInfo, StarInfo, ... 10 times}
 local StarsFolder = nil
 local TotalStarsCollected = 0 -- Counter for total stars collected by all players in the server
-local StarSpawnLoops = {} -- [Player.UserId] = true/false (whether spawn loop is active)
+local StarSpawnLoops = {} -- [Player.UserId] = thread (spawn loop thread)
 
 -- Helper function for logging
 local function Log(message: string)
@@ -198,7 +199,27 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 	-- Notify client to remove the star
 	StarService.Client.RemoveStar:Fire(player, starId)
 
+	-- Show notification for star collection
+	local NotificationService = Knit.GetService("NotificationService")
+	NotificationService:SendNotification(player, "Star collected! ⭐ +" .. starInfo.FuelValue .. " Fuel", {
+		icon = "⭐", sound = "CollectStar", name = "Custom"
+	}, 2)
+
 	return true
+end
+
+-- Remove all stars for a player
+function StarService:RemoveAllStarsForPlayer(player: Player)
+	local userId = player.UserId
+	
+	-- Clear tracker data
+	if UniversalTracker[userId] then
+		UniversalTracker[userId] = {}
+	end
+	
+	-- Notify client to clear visuals
+	self.Client.RemoveAllStars:Fire(player)
+	Log(string.format("Removed all stars for player %s", player.Name))
 end
 
 -- Get the total number of stars collected by all players on the server
@@ -254,23 +275,28 @@ end
 function StarService:Start(player: Player)
 	local userId = player.UserId
 
-	-- Start loop
-	if StarSpawnLoops[userId] then return end
-	StarSpawnLoops[userId] = true
+	-- Cancel existing loop if any
+	if StarSpawnLoops[userId] then
+		task.cancel(StarSpawnLoops[userId])
+	end
 
-	task.spawn(function()
+	StarSpawnLoops[userId] = task.spawn(function()
 		Log(string.format("Started star loop for %s", player.Name))
 		
-		while player:IsDescendantOf(Players) and StarSpawnLoops[userId] do
+		while player:IsDescendantOf(Players) do
+			local config = Stats.StarConfig
+			-- Wait for spawn interval
+			task.wait(config.SpawnInterval)
+			
 			local starInfoList = UniversalTracker[userId] or {}
 			local count = #starInfoList
-			local target = Stats.StarConfig.SpawnCount
+			local target = config.MaxStars
 			
-			-- Check if below threshold (50% of required)
-			if count < (target * 0.5) then
+			-- Check if below MaxStars
+			if count < target then
 				local newStars = {}
 				
-				-- Generate stars until we reach target
+				-- Generate stars until we reach MaxStars
 				while #starInfoList < target do
 					local star = GenerateStar(player)
 					if star then
@@ -287,8 +313,6 @@ function StarService:Start(player: Player)
 					Log(string.format("Spawned %d new stars for %s", #newStars, player.Name))
 				end
 			end
-			
-			task.wait(1)
 		end
 		
 		StarSpawnLoops[userId] = nil
@@ -297,7 +321,10 @@ end
 
 -- Clean up player data when they leave
 local function OnPlayerRemoving(player: Player)
-	StarSpawnLoops[player.UserId] = nil
+	if StarSpawnLoops[player.UserId] then
+		task.cancel(StarSpawnLoops[player.UserId])
+		StarSpawnLoops[player.UserId] = nil
+	end
 	UniversalTracker[player.UserId] = nil
 	Log(string.format("Cleared star data for player %s", player.Name))
 end

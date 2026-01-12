@@ -334,6 +334,11 @@ function TrackService:EndTrackRun(player: Player)
 		distanceTraveled = distanceTraveled,
 		cashEarned = cashEarned,
 	})
+
+	-- clear all stars
+	local StarService = Knit.GetService("StarService")
+	StarService:RemoveAllStarsForPlayer(player)
+	StarService:Start(player)
 end
 
 -- Remove player from track (alias for EndTrackRun)
@@ -423,6 +428,7 @@ local function OnHeartbeat(dt: number)
 		local WorldService = Knit.GetService("WorldService")
 		local nextWorld = WorldService:GetNextWorld(worldName)
 		local unlockRequirement = nextWorld and Stats.WorldUnlockRequirements[nextWorld] or nil
+		unlockRequirement = workspace:FindFirstChild(nextWorld) and unlockRequirement or nil
 		
 		-- Calculate progress toward world unlock and send to client for effects
 		local progressPercent = 0
@@ -594,9 +600,6 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		elapsedTime = 0, -- Track elapsed time for acceleration calculations
 		lapCount = 0, -- Track number of completed laps
 	}
-	
-	Log(string.format("Player %s started track at %s in world %s, initialSpeed: %.2f, acceleration: %.2f, maxSpeed: %.2f, totalTime: %.2f, distance: %.2f", 
-		player.Name, closestGate, worldName, trackParams.initialSpeed, trackParams.acceleration, trackParams.maxSpeed, trackParams.totalTime, trackParams.totalDistance))
 	
 	-- Fire signal to client that track has started (client will apply visual effects)
 	TrackService.Client.TrackStarted:Fire(player, {

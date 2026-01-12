@@ -150,13 +150,16 @@ local function OnRemoveStar(starId: string)
 		star:Destroy()
 		SpawnedStars[starId] = nil
 		Log(string.format("Removed star %s", starId))
-		
-		-- Show notification for star collection
-		local NotificationController = Knit.GetController("NotificationController")
-		NotificationController:ShowNotification("Star collected! ⭐ +Fuel", {
-			icon = "⭐", sound = "CollectStar", name = "Custom"
-		}, 2)
 	end
+end
+
+-- Handle remove all stars signal from server
+local function OnRemoveAllStars()
+	Log("Removing all stars")
+	for starId, _ in pairs(SpawnedStars) do
+		OnRemoveStar(starId)
+	end
+	table.clear(SpawnedStars)
 end
 
 -- Knit lifecycle
@@ -171,6 +174,7 @@ function StarController:KnitStart()
 
 	StarService.SpawnStars:Connect(OnSpawnStars)
 	StarService.RemoveStar:Connect(OnRemoveStar)
+	StarService.RemoveAllStars:Connect(OnRemoveAllStars)
 
 	Log("StarController started")
 end
