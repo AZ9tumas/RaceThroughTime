@@ -14,7 +14,6 @@ local function Main()
 
 	local DataService = Knit.GetService("DataService")
 	local StarService = Knit.GetService("StarService")
-	local EggService = Knit.GetService("EggService")
 	local PetService = Knit.GetService("PetService")
 
 	-- Set up session ready handler for each player
@@ -23,9 +22,8 @@ local function Main()
 		DataService:OnSessionReady(player):andThen(function()
 			print(string.format("[Main]: Player %s session fully initialized", player.Name))
 
-			-- Initialize eggs and pets for the player (IDs are session-only, not persisted)
-			EggService:InitializeEggs(player)
-			--PetService:InitializePets(player)
+			-- Initialize pet IDs for the player (IDs are session-only, not persisted)
+			PetService:InitializePets(player)
 
 			-- Start star automated spawning
 			StarService:Start(player)

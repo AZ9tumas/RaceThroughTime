@@ -20,7 +20,6 @@ local handler = {
             PetInventory = {},
             EquippedPets = {},
             Potions = {},
-            Eggs = {},
         },
         Meta = {
             DailyStreak = 0,
@@ -200,11 +199,8 @@ function handler.UpdateGemsUI(amount: number)
 end
 
 function handler.UpdateShopUI()
-    -- Check if Standard Egg is owned
-    local eggs = handler.data.Inventory.Eggs or {}
-    if eggs["StandardEgg"] then
-        standardEggBuy.Text = "Purchased"
-    end
+    -- Shop UI updates can be extended here for other items
+    -- Eggs are no longer tracked as they immediately hatch to pets
 end
 
 
@@ -387,29 +383,20 @@ end)
 local EggService = Knit.GetService("EggService")
 
 handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connect(function()
-    
-    -- Check if already purchased
-    local eggs = handler.data.Inventory.Eggs or {}
-    if eggs["StandardEgg"] then
-        return
-    end
-
-    EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, eggInfo)
-        if success and eggInfo then
-            print("Purchased StandardEgg with ID:", eggInfo.id)
+    -- Purchase egg and immediately receive pet
+    EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, petInfo)
+        if success and petInfo then
+            print("Obtained pet from StandardEgg:", petInfo.Name, "ID:", petInfo.ID)
             
-            -- Update local data
-            if not handler.data.Inventory.Eggs then
-                handler.data.Inventory.Eggs = {}
+            -- Update local pet inventory
+            if not handler.data.Inventory.PetInventory then
+                handler.data.Inventory.PetInventory = {}
             end
             
-            handler.data.Inventory.Eggs["StandardEgg"] = {
-                id = eggInfo.id,
-                purchased = true
-            }
-            
-            handler.UpdateShopUI()
-            print("Purchased StandardEgg with ID:", eggInfo.id)
+            table.insert(handler.data.Inventory.PetInventory, {
+                Name = petInfo.Name,
+                Multiplier = petInfo.Multiplier,
+            })
         else
             print("Failed to purchase StandardEgg:", errorMsg or "Unknown error")
         end

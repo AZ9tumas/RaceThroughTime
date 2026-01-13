@@ -1,7 +1,7 @@
 --[[
 	PetService
-	Handles pet hatching, inventory, and equipping.
-	Pets are hatched from eggs and stored in player's inventory.
+	Handles pet inventory and equipping.
+	Pets are obtained directly from egg purchases and stored in player's inventory.
 	Maximum 3 pets can be equipped at once.
 ]]
 
@@ -15,7 +15,6 @@ local Stats = require(ReplicatedStorage.Modules.Stats)
 local PetService = Knit.CreateService({
 	Name = "PetService",
 	Client = {
-		PetHatched = Knit.CreateSignal(), -- Signal to notify client when a pet is hatched
 		PetEquipped = Knit.CreateSignal(), -- Signal to notify client when a pet is equipped
 		PetUnequipped = Knit.CreateSignal(), -- Signal to notify client when a pet is unequipped
 	},
@@ -27,7 +26,7 @@ local PlayerPetIDs = {}
 
 -- Helper function for logging
 local function Log(message: string)
-	--print(string.format("[PetService]: %s", message))
+	print(string.format("[PetService]: %s", message))
 end
 
 -- Generate a unique ID for pets
@@ -48,7 +47,6 @@ function PetService:InitializePets(player: Player)
 	
 	-- Get player's pet inventory from data store
 	local inventory = DataService:Get(player, "Inventory")
-	print("inventory:", inventory)
 	if inventory and inventory.PetInventory then
 		-- Assign IDs to existing pets
 		for index, petData in ipairs(inventory.PetInventory) do
@@ -59,6 +57,21 @@ function PetService:InitializePets(player: Player)
 	end
 	
 	Log(string.format("Initialized pets for player %s", player.Name))
+end
+
+-- Register a pet ID (called by EggService when a pet is obtained)
+function PetService:RegisterPetID(player: Player, petIndex: number, petID: string)
+	local userId = player.UserId
+	
+	if not PlayerPetIDs[userId] then
+		PlayerPetIDs[userId] = {
+			petIndexToID = {},
+			idToPetIndex = {},
+		}
+	end
+	
+	PlayerPetIDs[userId].petIndexToID[petIndex] = petID
+	PlayerPetIDs[userId].idToPetIndex[petID] = petIndex
 end
 
 -- Get pet ID by inventory index
@@ -75,113 +88,6 @@ function PetService:GetPetIndexByID(player: Player, petID: string): number?
 	if not petIDs then return nil end
 	
 	return petIDs.idToPetIndex[petID]
-end
-
--- Hatch an egg (receive egg ID, return pet info)
-function PetService:HatchEgg(player: Player, eggID: string): (boolean, string?, { Name: string, ID: string, Multiplier: number }?)
-	local EggService = Knit.GetService("EggService")
-	local DataService = Knit.GetService("DataService")
-	local NotificationService = Knit.GetService("NotificationService")
-	
-	-- Get egg type from ID
-	local eggType = EggService:GetEggTypeByID(player, eggID)
-	if not eggType then
-		NotificationService:SendNotification(
-			player,
-			"Invalid egg ID.",
-			NotificationService.Category.Error
-		)
-		return false, "Invalid egg ID", nil
-	end
-	
-	-- Get egg config
-	local eggConfig = Stats.Eggs[eggType]
-	if not eggConfig then
-		NotificationService:SendNotification(
-			player,
-			"Egg configuration not found.",
-			NotificationService.Category.Error
-		)
-		return false, "Egg config not found", nil
-	end
-	
-	-- Get pet type from egg
-	local petType = eggConfig.Pet
-	local petConfig = Stats.Pets[petType]
-	if not petConfig then
-		NotificationService:SendNotification(
-			player,
-			"Pet configuration not found.",
-			NotificationService.Category.Error
-		)
-		return false, "Pet config not found", nil
-	end
-	
-	-- Remove the egg
-	local removed = EggService:RemoveEgg(player, eggType)
-	if not removed then
-		NotificationService:SendNotification(
-			player,
-			"Failed to remove egg.",
-			NotificationService.Category.Error
-		)
-		return false, "Failed to remove egg", nil
-	end
-	
-	-- Generate pet ID
-	local petID = GeneratePetID()
-	
-	-- Add pet to player's inventory
-	local newPetIndex = nil
-	DataService:Update(player, "Inventory", function(inventory)
-		if not inventory.PetInventory then
-			inventory.PetInventory = {}
-		end
-		
-		-- Add pet with name and multiplier (no ID stored in data)
-		local petEntry = {
-			PetType = petType,
-			Name = petConfig.Name,
-			Multiplier = petConfig.Multiplier,
-			ObtainedAt = os.time(),
-		}
-		table.insert(inventory.PetInventory, petEntry)
-		newPetIndex = #inventory.PetInventory
-		
-		return inventory
-	end)
-	
-	-- Store the runtime ID mapping
-	local userId = player.UserId
-	if not PlayerPetIDs[userId] then
-		PlayerPetIDs[userId] = {
-			petIndexToID = {},
-			idToPetIndex = {},
-		}
-	end
-	
-	PlayerPetIDs[userId].petIndexToID[newPetIndex] = petID
-	PlayerPetIDs[userId].idToPetIndex[petID] = newPetIndex
-	
-	Log(string.format("Player %s hatched %s from %s (ID: %s)", 
-		player.Name, petConfig.Name, eggType, petID))
-	
-	NotificationService:SendNotification(
-		player,
-		string.format("Hatched %s!", petConfig.Name),
-		NotificationService.Category.Success
-	)
-	
-	local petInfo = {
-		Name = petConfig.Name,
-		ID = petID,
-		Multiplier = petConfig.Multiplier,
-	}
-	
-	-- Fire signal to client
-	PetService.Client.PetHatched:Fire(player, petInfo)
-	
-	return true, nil, petInfo
 end
 
 -- Equip a pet
@@ -348,11 +254,6 @@ function PetService:GetPlayerPets(player: Player): { { ID: string, Name: string,
 	end
 	
 	return pets
-end
-
--- Client request to hatch an egg
-function PetService.Client:RequestHatchEgg(player: Player, eggID: string): (boolean, string?, { Name: string, ID: string, Multiplier: number }?)
-	return PetService:HatchEgg(player, eggID)
 end
 
 -- Client request to equip a pet

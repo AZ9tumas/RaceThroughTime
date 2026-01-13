@@ -1,7 +1,8 @@
 --[[
 	EggService
-	Handles egg purchasing and tracking for players.
-	Only one egg per kind can be purchased. Eggs have unique IDs assigned on purchase.
+	Handles egg purchasing for players.
+	When an egg is purchased, the pet hatches immediately and is added to inventory.
+	No eggs are stored - only the resulting pets are persisted.
 ]]
 
 local Players = game:GetService("Players")
@@ -14,62 +15,25 @@ local Stats = require(ReplicatedStorage.Modules.Stats)
 local EggService = Knit.CreateService({
 	Name = "EggService",
 	Client = {
-		EggPurchased = Knit.CreateSignal(), -- Signal to notify client when an egg is purchased
+		PetObtained = Knit.CreateSignal(), -- Signal to notify client when a pet is obtained from egg purchase
 	},
 })
 
--- Private state
--- [Player.UserId] = { [EggType] = { id = string, purchased = boolean } }
-local PlayerEggs = {}
-
 -- Helper function for logging
 local function Log(message: string)
-	--print(string.format("[EggService]: %s", message))
+	print(string.format("[EggService]: %s", message))
 end
 
--- Generate a unique ID for eggs
-local function GenerateEggID(): string
+-- Generate a unique ID for pets
+local function GeneratePetID(): string
 	return HttpService:GenerateGUID(false)
 end
 
--- Initialize eggs for a player (called after data is loaded)
-function EggService:InitializeEggs(player: Player)
-	local userId = player.UserId
-	
-	-- Initialize player egg storage if not exists
-	if not PlayerEggs[userId] then
-		PlayerEggs[userId] = {}
-	end
-	
-	Log(string.format("Initialized eggs for player %s", player.Name))
-end
-
--- Get all eggs for a player
-function EggService:GetPlayerEggs(player: Player): { [string]: { id: string, purchased: boolean } }
-	return PlayerEggs[player.UserId] or {}
-end
-
--- Check if player has purchased a specific egg type
-function EggService:HasEgg(player: Player, eggType: string): boolean
-	local eggs = PlayerEggs[player.UserId]
-	if not eggs then return false end
-	
-	local egg = eggs[eggType]
-	return egg ~= nil and egg.purchased == true
-end
-
--- Get egg data for a specific egg type
-function EggService:GetEgg(player: Player, eggType: string): { id: string, purchased: boolean }?
-	local eggs = PlayerEggs[player.UserId]
-	if not eggs then return nil end
-	
-	return eggs[eggType]
-end
-
--- Purchase an egg for the player
-function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, string?, { id: string }?)
+-- Purchase an egg and immediately hatch it to get a pet
+function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, string?, { Name: string, ID: string, Multiplier: number }?)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
+	local PetService = Knit.GetService("PetService")
 	
 	-- Check if egg type exists
 	local eggConfig = Stats.Eggs[eggType]
@@ -82,14 +46,16 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		return false, "Invalid egg type", nil
 	end
 	
-	-- Check if player already has this egg
-	if self:HasEgg(player, eggType) then
+	-- Get pet type from egg
+	local petType = eggConfig.Pet
+	local petConfig = Stats.Pets[petType]
+	if not petConfig then
 		NotificationService:SendNotification(
 			player,
-			"You already own this egg!",
-			NotificationService.Category.Warning
+			"Pet configuration not found.",
+			NotificationService.Category.Error
 		)
-		return false, "Already owned", nil
+		return false, "Pet config not found", nil
 	end
 	
 	-- Get player currencies
@@ -123,85 +89,59 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		return curr
 	end)
 	
-	-- Generate unique ID and store egg
-	local eggID = GenerateEggID()
-	local userId = player.UserId
+	-- Generate pet ID and add pet to inventory immediately
+	local petID = GeneratePetID()
+	local newPetIndex = nil
 	
-	if not PlayerEggs[userId] then
-		PlayerEggs[userId] = {}
-	end
+	DataService:Update(player, "Inventory", function(inventory)
+		if not inventory.PetInventory then
+			inventory.PetInventory = {}
+		end
+		
+		-- Add pet with name and multiplier
+		local petEntry = {
+			PetType = petType,
+			Name = petConfig.Name,
+			Multiplier = petConfig.Multiplier,
+			ObtainedAt = os.time(),
+		}
+		table.insert(inventory.PetInventory, petEntry)
+		newPetIndex = #inventory.PetInventory
+		
+		return inventory
+	end)
 	
-	PlayerEggs[userId][eggType] = {
-		id = eggID,
-		purchased = true,
-	}
+	-- Register the runtime pet ID with PetService
+	PetService:RegisterPetID(player, newPetIndex, petID)
 	
-	Log(string.format("Player %s purchased %s (ID: %s) for %d %s", 
-		player.Name, eggType, eggID, cost, currencyType))
+	Log(string.format("Player %s purchased %s and obtained %s (ID: %s) for %d %s", 
+		player.Name, eggType, petConfig.Name, petID, cost, currencyType))
 	
 	NotificationService:SendNotification(
 		player,
-		string.format("Purchased %s!", eggType),
+		string.format("Obtained %s!", petConfig.Name),
 		NotificationService.Category.Success
 	)
 	
+	local petInfo = {
+		Name = petConfig.Name,
+		ID = petID,
+		Multiplier = petConfig.Multiplier,
+	}
+	
 	-- Fire signal to client
-	EggService.Client.EggPurchased:Fire(player, {
-		eggType = eggType,
-		id = eggID,
-	})
+	EggService.Client.PetObtained:Fire(player, petInfo)
 	
-	return true, nil, { id = eggID }
+	return true, nil, petInfo
 end
 
--- Remove egg after hatching (called by PetService)
-function EggService:RemoveEgg(player: Player, eggType: string): boolean
-	local userId = player.UserId
-	local eggs = PlayerEggs[userId]
-	
-	if not eggs or not eggs[eggType] then
-		return false
-	end
-	
-	eggs[eggType] = nil
-	Log(string.format("Removed egg %s from player %s", eggType, player.Name))
-	
-	return true
-end
-
--- Get egg type by ID
-function EggService:GetEggTypeByID(player: Player, eggID: string): string?
-	local eggs = PlayerEggs[player.UserId]
-	if not eggs then return nil end
-	
-	for eggType, eggData in pairs(eggs) do
-		if eggData.id == eggID then
-			return eggType
-		end
-	end
-	
-	return nil
-end
-
--- Client request to purchase an egg
-function EggService.Client:RequestPurchaseEgg(player: Player, eggType: string): (boolean, string?, { id: string }?)
+-- Client request to purchase an egg (immediately hatches to pet)
+function EggService.Client:RequestPurchaseEgg(player: Player, eggType: string): (boolean, string?, { Name: string, ID: string, Multiplier: number }?)
 	return EggService:PurchaseEgg(player, eggType)
-end
-
--- Client request to get owned eggs
-function EggService.Client:GetOwnedEggs(player: Player): { [string]: { id: string, purchased: boolean } }
-	return EggService:GetPlayerEggs(player)
-end
-
--- Clean up when player leaves
-local function OnPlayerRemoving(player: Player)
-	PlayerEggs[player.UserId] = nil
-	Log(string.format("Cleared egg data for player %s", player.Name))
 end
 
 -- Knit lifecycle
 function EggService:KnitInit()
-	Players.PlayerRemoving:Connect(OnPlayerRemoving)
 	Log("EggService initialized")
 end
 
