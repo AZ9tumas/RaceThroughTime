@@ -8,11 +8,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
-local function checkPrerequisites()
-	local SpawnLocation: SpawnLocation = workspace:WaitForChild("RTT_Map_Final", 10):WaitForChild("SpawnLocation", 10)
-	if not SpawnLocation then error("Expected a SpawnLocation under RTT_Map_Final in the workspace.", 3) end
-end
-
 --[[
     Circular Movement Logic (Polar to Cartesian)
     Use Case: "Race Through Time" Circular Track
@@ -75,9 +70,6 @@ return updateCircularPosition
 local function Main()
 	print("[Main]: Game loop starting...")
 
-	-- check some prerequisites
-	checkPrerequisites()
-
 	local DataService = Knit.GetService("DataService")
 	local StarService = Knit.GetService("StarService")
 
@@ -87,9 +79,8 @@ local function Main()
 		DataService:OnSessionReady(player):andThen(function()
 			print(string.format("[Main]: Player %s session fully initialized", player.Name))
 
-			-- Generate and spawn stars for this player
-			StarService:GenerateStarInformation(player)
-			StarService:SpawnStarsForPlayer(player)
+			-- Start star automated spawning
+			StarService:Start(player)
 
 			-- Additional game initialization for this player can go here
 			-- Example: Initialize player's game state, start tutorials, etc.

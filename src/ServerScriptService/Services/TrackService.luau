@@ -13,22 +13,18 @@ local RunService = game:GetService("RunService")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 
--- Track references
-local TrackGates = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("Track_System"):WaitForChild("Track_Gates")
-local SpawnLocation = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("SpawnLocation")
-local VisualTrack = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("Track_System"):WaitForChild("Visual_Track")
-
 local TrackService = Knit.CreateService({
 	Name = "TrackService",
 	Client = {
 		TrackStarted = Knit.CreateSignal(), -- Signal to notify client when track run starts
 		TrackEnded = Knit.CreateSignal(), -- Signal to notify client when track run ends
 		LapCompleted = Knit.CreateSignal(), -- Signal to notify client when a lap is completed
+		TrackProgressUpdate = Knit.CreateSignal(), -- Signal to send progress updates to client for effects
 	},
 })
 
 -- Private state
-local PlayersOnTrack = {} -- [Player.UserId] = { player, worldName, startTime, gateIndex, totalDistance, currentAngle, speed, distanceTraveled, startAngle, lapCount }
+local PlayersOnTrack = {} -- [Player.UserId] = { player, worldName, startTime, gateIndex, totalDistance, currentAngle, initialSpeed, acceleration, maxSpeed, totalTime, distanceTraveled, startAngle, lapCount, elapsedTime }
 local PlayerRequestDebounce = {} -- [Player.UserId] = lastRequestTime (for rate limiting)
 local HeartbeatConnection = nil -- Note: Connection persists for service lifetime, no cleanup needed
 local DEBOUNCE_COOLDOWN = 1 -- Minimum seconds between requests
@@ -38,17 +34,71 @@ local function Log(message: string)
 	print(string.format("[TrackService]: %s", message))
 end
 
--- Get the center position for circular movement (SpawnLocation position)
-local function GetTrackCenter(): Vector3
-	return SpawnLocation.Position
+-- Get the world folder for a player's current world
+local function GetWorldFolder(worldName: string): Folder?
+	-- World folders are named directly in workspace (e.g., "Main", "StoneAge")
+	local worldFolder = Workspace:FindFirstChild(worldName)
+	if worldFolder then
+		return worldFolder
+	end
+	
+	-- Fallback to Main world if the specified world is not found
+	return Workspace:FindFirstChild("Main")
 end
 
--- Get all track gate positions
-local function GetGatePositions(): { [string]: Vector3 }
+-- Get SpawnLocation from the player's current world
+local function GetSpawnLocationForWorld(worldName: string): SpawnLocation?
+	local worldFolder = GetWorldFolder(worldName)
+	if worldFolder then
+		return worldFolder:FindFirstChild("SpawnLocation")
+	end
+	return nil
+end
+
+-- Get TrackGates from the player's current world
+local function GetTrackGatesForWorld(worldName: string): Folder?
+	local worldFolder = GetWorldFolder(worldName)
+	if worldFolder then
+		local trackSystem = worldFolder:FindFirstChild("Track_System")
+		if trackSystem then
+			return trackSystem:FindFirstChild("Track_Gates")
+		end
+	end
+	return nil
+end
+
+-- Get VisualTrack from the player's current world
+local function GetVisualTrackForWorld(worldName: string): BasePart?
+	local worldFolder = GetWorldFolder(worldName)
+	if worldFolder then
+		local trackSystem = worldFolder:FindFirstChild("Track_System")
+		if trackSystem then
+			return trackSystem:FindFirstChild("Visual_Track")
+		end
+	end
+	return nil
+end
+
+-- Get the center position for circular movement (SpawnLocation position)
+local function GetTrackCenterForWorld(worldName: string): Vector3?
+	local spawnLocation = GetSpawnLocationForWorld(worldName)
+	if spawnLocation then
+		return spawnLocation.Position
+	end
+	return nil
+end
+
+-- Get all track gate positions for a specific world
+local function GetGatePositionsForWorld(worldName: string): { [string]: Vector3 }
 	local gates = {}
+	local trackGates = GetTrackGatesForWorld(worldName)
+	if not trackGates then
+		return gates
+	end
+	
 	for i = 0, 3 do
 		local gateName = "Gate_" .. i
-		local gate = TrackGates:FindFirstChild(gateName)
+		local gate = trackGates:FindFirstChild(gateName)
 		if gate then
 			if gate:IsA("BasePart") then
 				gates[gateName] = gate.Position
@@ -63,9 +113,9 @@ local function GetGatePositions(): { [string]: Vector3 }
 	return gates
 end
 
--- Find the closest gate to the player
-local function FindClosestGate(playerPosition: Vector3): (string?, Vector3?, number?)
-	local gates = GetGatePositions()
+-- Find the closest gate to the player in a specific world
+local function FindClosestGate(playerPosition: Vector3, worldName: string): (string?, Vector3?, number?)
+	local gates = GetGatePositionsForWorld(worldName)
 	local closestGate = nil
 	local closestPosition = nil
 	local closestDistance = math.huge
@@ -89,36 +139,24 @@ local function CalculateInitialAngle(position: Vector3, center: Vector3): number
 	return math.atan2(dz, dx)
 end
 
--- Calculate the total distance to travel based on player's current fuel
-local function CalculateTotalDistance(player: Player, speed: number, worldName: string): number
+-- Calculate track parameters (initial speed, acceleration, max speed) based on fuel
+local function CalculateTrackParameters(player: Player, worldName: string):
+	{ initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
 	local DataService = Knit.GetService("DataService")
 	local playerData = DataService:Get(player, "Stats")
 	
 	if not playerData then
-		return 0
+		return {
+			initialSpeed = Stats.BaseSpeed,
+			acceleration = Stats.BaseAcceleration,
+			maxSpeed = Stats.BaseSpeed * 2,
+			totalTime = 1,
+			totalDistance = Stats.BaseSpeed,
+		}
 	end
 	
 	local fuel = playerData.Fuel or 0
-	
-	-- Total distance is based on fuel - more fuel = more distance on the track
-	local fuelConsumptionRate = Stats.FuelConsumptionRate[worldName] or Stats.FuelConsumptionRate.Main
-	local timeLeft = fuel / fuelConsumptionRate
-	local totalDistance = speed * timeLeft
-	
-	return math.floor(totalDistance)
-end
-
--- Calculate the player's speed based on their fuel
-local function CalculatePlayerSpeed(player: Player, worldName: string): number
-	local DataService = Knit.GetService("DataService")
-	local playerData = DataService:Get(player, "Stats")
-	
-	if not playerData then
-		return Stats.BaseSpeed
-	end
-	
-	local fuel = playerData.Fuel or 0
-	return Stats.CalculateSpeedFromFuel(fuel, worldName)
+	return Stats.CalculateTrackParameters(fuel, worldName)
 end
 
 -- Raycast parameters for ground detection
@@ -126,13 +164,23 @@ local RAYCAST_HEIGHT_OFFSET = 50 -- Start raycast from this height above the fal
 local RAYCAST_DISTANCE = 100 -- Maximum raycast distance downward
 local GROUND_OFFSET = 3 -- Height offset above ground for player placement (approximate hip height)
 
--- Raycast params to only hit the visual track
-local RaycastFilterParams = RaycastParams.new()
-RaycastFilterParams.FilterType = Enum.RaycastFilterType.Include
-RaycastFilterParams.FilterDescendantsInstances = { VisualTrack }
+-- Create raycast params for a specific world's visual track
+local function CreateRaycastParamsForWorld(worldName: string): RaycastParams
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Include
+	
+	local visualTrack = GetVisualTrackForWorld(worldName)
+	if visualTrack then
+		raycastParams.FilterDescendantsInstances = { visualTrack }
+	else
+		raycastParams.FilterDescendantsInstances = {}
+	end
+	
+	return raycastParams
+end
 
 -- Update circular position using polar to cartesian conversion with ground detection
-local function UpdateCircularPosition(center: Vector3, radius: number, angle: number, fallbackY: number): (CFrame, Vector3)
+local function UpdateCircularPosition(center: Vector3, radius: number, angle: number, fallbackY: number, worldName: string): (CFrame, Vector3)
 	-- Polar to Cartesian conversion
 	local x = center.X + radius * math.cos(angle)
 	local z = center.Z + radius * math.sin(angle)
@@ -141,7 +189,9 @@ local function UpdateCircularPosition(center: Vector3, radius: number, angle: nu
 	local rayOrigin = Vector3.new(x, fallbackY + RAYCAST_HEIGHT_OFFSET, z)
 	local rayDirection = Vector3.new(0, -RAYCAST_DISTANCE, 0)
 	
-	local raycastResult = Workspace:Raycast(rayOrigin, rayDirection, RaycastFilterParams)
+	-- Create world-specific raycast params
+	local raycastParams = CreateRaycastParamsForWorld(worldName)
+	local raycastResult = Workspace:Raycast(rayOrigin, rayDirection, raycastParams)
 	
 	local groundY = fallbackY -- Default to fallback if raycast fails
 	if raycastResult then
@@ -265,14 +315,8 @@ function TrackService:EndTrackRun(player: Player)
 	
 	Log(string.format("Player %s ended track run in %s, distance traveled: %.2f, cash earned: %d", player.Name, worldName, distanceTraveled, cashEarned))
 	
-	-- Update player data: set fuel to 0 and add cash
+	-- Update player data: DO NOT reset fuel, only add cash
 	local DataService = Knit.GetService("DataService")
-	
-	-- Set fuel to 0
-	DataService:Update(player, "Stats", function(stats)
-		stats.Fuel = 0
-		return stats
-	end)
 	
 	-- Add cash earned
 	if cashEarned > 0 then
@@ -290,6 +334,11 @@ function TrackService:EndTrackRun(player: Player)
 		distanceTraveled = distanceTraveled,
 		cashEarned = cashEarned,
 	})
+
+	-- clear all stars
+	local StarService = Knit.GetService("StarService")
+	StarService:RemoveAllStarsForPlayer(player)
+	StarService:Start(player)
 end
 
 -- Remove player from track (alias for EndTrackRun)
@@ -299,8 +348,6 @@ end
 
 -- Main heartbeat update for all players on track
 local function OnHeartbeat(dt: number)
-	local center = GetTrackCenter()
-	
 	for userId, trackData in pairs(PlayersOnTrack) do
 		local player = trackData.player
 		if not player or not player:IsDescendantOf(Players) then
@@ -320,22 +367,43 @@ local function OnHeartbeat(dt: number)
 		
 		if not alignPosition or not alignOrientation then continue end
 		
-		-- Get world-specific radius
+		-- Get world-specific values
 		local worldName = trackData.worldName or "Main"
 		local radius = Stats.WorldRadius[worldName] or Stats.WorldRadius.Main
+		local center = GetTrackCenterForWorld(worldName)
 		
-		-- Calculate angular velocity (w = v / r)
-		local speed = trackData.speed
-		local angularVelocity = speed / radius
+		if not center then continue end
+		
+		-- Update elapsed time
+		trackData.elapsedTime = trackData.elapsedTime + dt
+		
+		-- Calculate current speed using acceleration (v = v0 + a*t, capped at maxSpeed)
+		-- This is the "calculated speed" used for stats and distance tracking
+		local calculatedSpeed = Stats.CalculateCurrentSpeed(
+			trackData.initialSpeed,
+			trackData.acceleration,
+			trackData.maxSpeed,
+			trackData.elapsedTime
+		)
+		
+		-- Physical speed is capped at MaxPhysicalSpeed for body movers and lap detection
+		-- This prevents high-speed physics issues while still tracking full distance for stats
+		local physicalSpeed = math.min(calculatedSpeed, Stats.MaxPhysicalSpeed)
+		
+		-- Convert linear speed to angular velocity for polar coordinate movement
+		-- ω = v / r (angular velocity = linear velocity / radius)
+		-- Use physical speed for actual movement to prevent drifting/cutting corners
+		local angularVelocity = Stats.LinearSpeedToAngularVelocity(physicalSpeed, radius)
 		
 		-- Store previous angle for lap detection
 		local previousAngle = trackData.currentAngle
 		
-		-- Update angle based on time delta
+		-- Update angle based on time delta (using physical speed for lap detection)
 		trackData.currentAngle = trackData.currentAngle + (angularVelocity * dt)
 		
-		-- Calculate distance traveled this frame
-		local distanceThisFrame = speed * dt
+		-- Calculate distance traveled this frame using CALCULATED speed (not physical)
+		-- This allows stats to reflect the true distance even if physical movement is capped
+		local distanceThisFrame = calculatedSpeed * dt
 		trackData.distanceTraveled = trackData.distanceTraveled + distanceThisFrame
 		
 		-- Check for lap completion (crossed the starting angle after completing a full circle)
@@ -356,14 +424,78 @@ local function OnHeartbeat(dt: number)
 			distanceValue.Value = trackData.distanceTraveled
 		end
 		
-		-- Check if player has completed their run
-		if trackData.distanceTraveled >= trackData.totalDistance then
+		-- Get next world and unlock requirement for auto-unlock
+		local WorldService = Knit.GetService("WorldService")
+		local nextWorld = WorldService:GetNextWorld(worldName)
+		local unlockRequirement = nextWorld and Stats.WorldUnlockRequirements[nextWorld] or nil
+		unlockRequirement = workspace:FindFirstChild(nextWorld) and unlockRequirement or nil
+		
+		-- Calculate progress toward world unlock and send to client for effects
+		local progressPercent = 0
+		if unlockRequirement then
+			progressPercent = trackData.distanceTraveled / unlockRequirement
+			
+			-- Send progress update to client for visual effects (fire, neon, etc.)
+			TrackService.Client.TrackProgressUpdate:Fire(player, {
+				worldName = worldName,
+				progressPercent = progressPercent,
+				distanceTraveled = trackData.distanceTraveled,
+				unlockRequirement = unlockRequirement,
+			})
+			
+			-- Check if player has reached world unlock threshold
+			if trackData.distanceTraveled >= unlockRequirement then
+				Log(string.format("Player %s unlocked world %s with distance %.2f", player.Name, nextWorld, trackData.distanceTraveled))
+				
+				-- End the track run first (this cleans up body movers, etc.)
+				TrackService:EndTrackRun(player)
+				
+				-- Unlock the new world for the player
+				WorldService:GiveWorldToPlayer(player, nextWorld)
+				
+				-- Teleport player to the new world
+				task.spawn(function()
+					local success, err = WorldService:TeleportPlayerToWorld(player, nextWorld)
+					if success then
+						-- Send notification about world unlock
+						local NotificationService = Knit.GetService("NotificationService")
+						NotificationService:SendNotification(
+							player,
+							string.format("🌟 Congratulations! You unlocked %s! 🌟", nextWorld),
+							NotificationService.Category.Success,
+							5
+						)
+					else
+						warn(string.format("[TrackService]: Failed to teleport player %s to %s: %s", player.Name, nextWorld, err or "unknown error"))
+					end
+				end)
+				
+				continue
+			end
+		end
+		
+		-- Check if player has exceeded max time OR completed their run (distance reached)
+		-- Use small epsilon tolerance for floating point precision
+		if trackData.elapsedTime >= (trackData.totalTime - 0.001) or trackData.distanceTraveled >= trackData.totalDistance then
 			TrackService:EndTrackRun(player)
 			continue
 		end
 		
-		-- Calculate new position and orientation
-		local targetCFrame, targetPosition = UpdateCircularPosition(center, radius, trackData.currentAngle, center.Y + 5)
+		-- Calculate new position using UpdateCircularPosition for consistency
+		local targetCFrame, targetPosition = UpdateCircularPosition(center, radius, trackData.currentAngle, center.Y + 5, worldName)
+		
+		-- Dynamically adjust body mover responsiveness based on physical speed
+		-- At higher speeds, we need higher responsiveness to prevent drifting toward center
+		-- Base responsiveness of 50, increases by 1 for every 10 studs/sec of speed
+		local baseResponsiveness = 50
+		local speedFactor = math.clamp(physicalSpeed / 10, 1, 20) -- Max 20x boost
+		local dynamicResponsiveness = baseResponsiveness + (speedFactor * 10)
+		
+		-- Also adjust MaxVelocity to match physical speed (with overhead)
+		local dynamicMaxVelocity = math.max(500, physicalSpeed * 2)
+		
+		alignPosition.Responsiveness = dynamicResponsiveness
+		alignPosition.MaxVelocity = dynamicMaxVelocity
 		
 		-- Update body mover targets
 		alignPosition.Position = targetPosition
@@ -418,7 +550,7 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	local playerPosition = rootPart.Position
 	
 	-- Find the closest gate and check proximity
-	local closestGate, gatePosition, gateDistance = FindClosestGate(playerPosition)
+	local closestGate, gatePosition, gateDistance = FindClosestGate(playerPosition, worldName)
 	if not closestGate or not gatePosition then
 		return false, "No gates found"
 	end
@@ -429,14 +561,17 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		return false, string.format("Must be within %d studs of a gate (currently %.1f studs away)", gateProximityDistance, gateDistance)
 	end
 	
-	-- Get track center
-	local center = GetTrackCenter()
+	-- Get track center for player's world
+	local center = GetTrackCenterForWorld(worldName)
+	if not center then
+		return false, "No track center found for world"
+	end
 	
 	-- Calculate initial angle based on player's actual position (not gate position)
 	local initialAngle = CalculateInitialAngle(playerPosition, center)
 	
 	-- Position player on the track at their current angle (no teleporting, just align to track)
-	local teleportCFrame, _ = UpdateCircularPosition(center, radius, initialAngle, center.Y + 5)
+	local teleportCFrame, _ = UpdateCircularPosition(center, radius, initialAngle, center.Y + 5, worldName)
 	rootPart.CFrame = teleportCFrame
 	
 	-- Setup body movers for smooth movement
@@ -445,9 +580,8 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		return false, "Failed to setup body movers"
 	end
 	
-	-- Calculate speed and total distance using player's world
-	local speed = CalculatePlayerSpeed(player, worldName)
-	local totalDistance = CalculateTotalDistance(player, speed, worldName)
+	-- Calculate track parameters with acceleration using player's world and fuel
+	local trackParams = CalculateTrackParameters(player, worldName)
 	
 	-- Track the player as running on the track (store player reference and world for efficient heartbeat loop)
 	PlayersOnTrack[userId] = {
@@ -455,22 +589,28 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		worldName = worldName,
 		startTime = tick(),
 		gateIndex = tonumber(closestGate:match("%d+")),
-		totalDistance = totalDistance,
+		totalDistance = trackParams.totalDistance,
 		currentAngle = initialAngle,
 		startAngle = initialAngle, -- Store starting angle for lap detection
-		speed = speed,
+		initialSpeed = trackParams.initialSpeed,
+		acceleration = trackParams.acceleration,
+		maxSpeed = trackParams.maxSpeed,
+		totalTime = trackParams.totalTime,
 		distanceTraveled = 0,
+		elapsedTime = 0, -- Track elapsed time for acceleration calculations
 		lapCount = 0, -- Track number of completed laps
 	}
 	
-	Log(string.format("Player %s started track at %s in world %s, speed: %.2f, distance: %.2f", player.Name, closestGate, worldName, speed, totalDistance))
-	
-	-- Fire signal to client that track has started
+	-- Fire signal to client that track has started (client will apply visual effects)
 	TrackService.Client.TrackStarted:Fire(player, {
 		gateName = closestGate,
-		totalDistance = totalDistance,
-		speed = speed,
+		totalDistance = trackParams.totalDistance,
+		initialSpeed = trackParams.initialSpeed,
+		acceleration = trackParams.acceleration,
+		maxSpeed = trackParams.maxSpeed,
+		totalTime = trackParams.totalTime,
 		startAngle = initialAngle,
+		worldName = worldName, -- Include worldName so client can apply effects
 	})
 	
 	return true, nil
@@ -497,14 +637,7 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 		CleanupBodyMovers(character)
 	end
 	
-	-- Update player data: set fuel to 0 (no cash reward on cancellation)
-	local DataService = Knit.GetService("DataService")
-	
-	-- Set fuel to 0
-	DataService:Update(player, "Stats", function(stats)
-		stats.Fuel = 0
-		return stats
-	end)
+	-- DO NOT reset fuel on cancellation
 	
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil

@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local StarAnimations = require(ReplicatedStorage.Modules.StarAnimations)
 
 local StarController = Knit.CreateController({
 	Name = "StarController",
@@ -91,6 +92,9 @@ local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: st
 
 	-- Store reference
 	SpawnedStars[starInfo.ID] = starClone
+	
+	-- Start star animations (pulsing and jumping)
+	StarAnimations.StartAnimations(starClone)
 
 	-- Set up touch detection
 	local touchParts = {}
@@ -141,16 +145,21 @@ end
 local function OnRemoveStar(starId: string)
 	local star = SpawnedStars[starId]
 	if star then
+		-- Stop animations before destroying
+		StarAnimations.StopAnimations(star)
 		star:Destroy()
 		SpawnedStars[starId] = nil
 		Log(string.format("Removed star %s", starId))
-		
-		-- Show notification for star collection
-		local NotificationController = Knit.GetController("NotificationController")
-		NotificationController:ShowNotification("Star collected! ⭐ +Fuel", {
-			icon = "⭐", sound = "CollectStar", name = "Custom"
-		}, 2)
 	end
+end
+
+-- Handle remove all stars signal from server
+local function OnRemoveAllStars()
+	Log("Removing all stars")
+	for starId, _ in pairs(SpawnedStars) do
+		OnRemoveStar(starId)
+	end
+	table.clear(SpawnedStars)
 end
 
 -- Knit lifecycle
@@ -165,6 +174,7 @@ function StarController:KnitStart()
 
 	StarService.SpawnStars:Connect(OnSpawnStars)
 	StarService.RemoveStar:Connect(OnRemoveStar)
+	StarService.RemoveAllStars:Connect(OnRemoveAllStars)
 
 	Log("StarController started")
 end

@@ -119,8 +119,10 @@ local function TryResolveSession(player: Player)
 
 	-- immediately send data right away
 	if profile then
+		local data = profile.Data
+
 		-- Fire DataReady signal to client
-		DataService.Client.DataReady:Fire(player, profile.Data)
+		DataService.Client.DataReady:Fire(player, data)
 	end
 
 	if profile and clientReady and sessionPromise and sessionPromise.resolve then
@@ -162,6 +164,17 @@ local function OnPlayerAdded(player: Player)
 		PlayerProfiles[player] = profile
 
 		print(player, "Data Loaded")
+
+		local worldName = profile.Data.Progression.CurrentWorld or "Main"
+		local folder = workspace:FindFirstChild(worldName)
+		-- in case there is an invalid world we default to main
+		if not folder then
+			folder = workspace:FindFirstChild("Main")
+			--profile.Data.Progression.CurrentWorld = "Main"
+		end
+		local spawnLocation = folder:FindFirstChild("SpawnLocation")
+		player.RespawnLocation = spawnLocation
+		player:LoadCharacterAsync()
 
 		-- Initialize leaderstats after data is ready
 		InitializeLeaderstats(player, profile.Data)
@@ -286,7 +299,7 @@ function DataService:GetProfile(player: Player)
 end
 
 -- Valid world names that exist in the game configuration
-local VALID_WORLDS = { "Main" } -- Add more worlds here as they are added to the game
+local VALID_WORLDS = { "Main", "StoneAge" } -- Add more worlds here as they are added to the game
 
 -- Get the player's current world (defaults to "Main" if not set or invalid)
 function DataService:GetPlayerWorld(player: Player): string

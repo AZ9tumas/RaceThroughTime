@@ -56,11 +56,32 @@ local isRequestingTrack = false
 local GATE_PROXIMITY_DISTANCE = statsM.GateProximityDistance
 local MAX_GATE_INDEX = statsM.MaxGateIndex
 
--- Track gate references
-local TrackGates = Workspace:WaitForChild("RTT_Map_Final"):WaitForChild("Track_System"):WaitForChild("Track_Gates")
+-- Get TrackGates for the player's current world
+local function GetTrackGatesForCurrentWorld(): Folder?
+    local currentWorld = handler.data.Progression.CurrentWorld or "Main"
+    local worldFolder = Workspace:FindFirstChild(currentWorld)
+    if worldFolder then
+        local trackSystem = worldFolder:FindFirstChild("Track_System")
+        if trackSystem then
+            return trackSystem:FindFirstChild("Track_Gates")
+        end
+    end
+    
+    -- Fallback to Main world
+    local mainWorld = Workspace:FindFirstChild("Main")
+    if mainWorld then
+        local trackSystem = mainWorld:FindFirstChild("Track_System")
+        if trackSystem then
+            return trackSystem:FindFirstChild("Track_Gates")
+        end
+    end
+    
+    return nil
+end
 
 -- ui
 local mainUi: ScreenGui = PlayerGui:WaitForChild("RaceThroughTime_UI")
+local uiShop: ScreenGui = PlayerGui:WaitForChild("UI_Shop")
 local leftPanel: Frame = mainUi:WaitForChild("LeftPanel")
 local cashDisplay: TextLabel = leftPanel:WaitForChild("CashDisplay")
 local GemsDisplay: TextLabel = leftPanel:WaitForChild("GemsDisplay")
@@ -68,14 +89,22 @@ local centerHUD: Frame = mainUi:WaitForChild("CenterHUD")
 local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 local fuelBar = centerHUD:WaitForChild("FuelBar")
 local fuelText: TextLabel = fuelBar:WaitForChild("FuelText")
-local fuelBarFill = fuelBar:WaitForChild("Fill")
 local otherFrames: Frame = mainUi:WaitForChild("OtherFrames")
+local worldlabel: TextLabel = mainUi:WaitForChild("TopInfo"):WaitForChild("WorldName")
 
 -- sub frames
 local dailyButton: TextButton = leftPanel:WaitForChild("DailyButton")
 local dailyFrame: Frame = otherFrames:WaitForChild("DailyFrame")
 local shopButton: TextButton = leftPanel:WaitForChild("ShopButton")
-local shopFrame: Frame = otherFrames:WaitForChild("StoreFrame")
+
+-- Shop Internal UI
+local shopMain = uiShop:WaitForChild("MainFrame")
+local shopTop = shopMain:WaitForChild("Top")
+local shopCashCount = shopTop:WaitForChild("Cash"):WaitForChild("Count")
+local shopGemsCount = shopTop:WaitForChild("Gems"):WaitForChild("Count")
+
+local shopEggsContainer = shopMain:WaitForChild("ScrollingFrame"):WaitForChild("Eggs"):WaitForChild("MainFrame")
+local standardEggBuy = shopEggsContainer:WaitForChild("StandardEgg"):WaitForChild("Buy")
 
 -- vals
 local leaderstats = player:WaitForChild("leaderstats")
@@ -123,10 +152,14 @@ local function IsPlayerNearGate(): boolean
     
     local playerPosition = rootPart.Position
     
+    -- Get track gates for current world
+    local trackGates = GetTrackGatesForCurrentWorld()
+    if not trackGates then return false end
+    
     -- Check distance to each gate
     for i = 0, MAX_GATE_INDEX do
         local gateName = "Gate_" .. i
-        local gate = TrackGates:FindFirstChild(gateName)
+        local gate = trackGates:FindFirstChild(gateName)
         if gate then
             local gatePosition: Vector3
             if gate:IsA("BasePart") then
@@ -151,29 +184,18 @@ local function IsPlayerNearGate(): boolean
 end
 
 function handler.UpdateFuelUI(amount: number)
-    local maxFuel = statsM.FuelMultiplier()
-    local fillRatio = math.clamp(amount / maxFuel, 0, 1)
-    local targetSize = UDim2.new(fillRatio, 0, 1, 0)
-    
-    -- Cancel existing tween if running
-    if currentFuelTween then
-        currentFuelTween:Cancel()
-    end
-    
-    -- Create and play smooth tween for fuel bar fill
-    currentFuelTween = TweenService:Create(fuelBarFill, tweenInfo, {Size = targetSize})
-    currentFuelTween:Play()
-    
     -- Update fuel text
     fuelText.Text = "⭐ FUEL: " .. math.floor(amount)
 end
 
 function handler.UpdateCashUI(amount: number)
     cashDisplay.Text = "💵 " .. truncateNumber(amount)
+    shopCashCount.Text = truncateNumber(amount)
 end
 
 function handler.UpdateGemsUI(amount: number)
     GemsDisplay.Text = "💎 " .. truncateNumber(amount)
+    shopGemsCount.Text = truncateNumber(amount)
 end
 
 
@@ -358,6 +380,19 @@ handler._connections["DailyFrameClose"] = dailyFrameCloseButton.MouseButton1Clic
     dailyFrame.Visible = false
 end)
 
+handler._connections["ShopButton"] = shopButton.MouseButton1Click:Connect(function()
+    shopMain.Visible = not shopMain.Visible
+end)
+
+-- shop
+handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connect(function()
+    print("Standard Egg Buy Pressed")
+end)
+
+handler._connections["ShopClose"] = shopMain:WaitForChild("Close").MouseButton1Click:Connect(function()
+    shopMain.Visible = false
+end)
+
 -- Listen for DataReady signal from server to update UI
 handler._connections["DataReady"] = DataService.DataReady:Connect(function(data)
     -- Call UpdateDataOnClient when data is ready
@@ -365,6 +400,7 @@ handler._connections["DataReady"] = DataService.DataReady:Connect(function(data)
 end)
 
 handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(function()
+    worldlabel.Text = "🌍 " .. (handler.data.Progression.CurrentWorld or "Main")
     handler.UpdateFuelUI(fuelVal.Value)
     handler.UpdateCashUI(cashVal.Value)
     handler.UpdateGemsUI(gemsVal.Value)

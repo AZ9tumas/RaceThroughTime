@@ -6,36 +6,60 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 
--- base parts for reference
-local SpawnLocation: SpawnLocation = workspace:FindFirstChild("RTT_Map_Final"):FindFirstChild("SpawnLocation")
-
 local StarService = Knit.CreateService({
 	Name = "StarService",
 	Client = {
 		SpawnStars = Knit.CreateSignal(), -- Signal to tell client to spawn stars
+		SpawnStar = Knit.CreateSignal(), -- Signal to tell client to spawn a single star (for continuous spawning)
 		RemoveStar = Knit.CreateSignal(), -- Signal to tell client to remove a collected star
+		RemoveAllStars = Knit.CreateSignal(), -- Signal to tell client to remove all stars
 	},
 })
 
 -- Private state
 local UniversalTracker = {} -- [Player.UserId] = {StarInfo, StarInfo, ... 10 times}
 local StarsFolder = nil
+local TotalStarsCollected = 0 -- Counter for total stars collected by all players in the server
+local StarSpawnLoops = {} -- [Player.UserId] = thread (spawn loop thread)
 
 -- Helper function for logging
 local function Log(message: string)
 	--print(string.format("[StarService]: %s", message))
 end
 
--- Initialize the Stars folder in Workspace
+-- Get SpawnLocation from the player's current world
+local function GetSpawnLocationForPlayer(player: Player): SpawnLocation?
+	local DataService = Knit.GetService("DataService")
+	local worldName = DataService:GetPlayerWorld(player)
+	
+	-- World folders are named directly in workspace (e.g., "Main", "StoneAge")
+	local worldFolder = workspace:FindFirstChild(worldName)
+	print("World folder for star spawning:", worldFolder)
+	if worldFolder then
+		local spawnLocation = worldFolder:FindFirstChild("SpawnLocation")
+		if spawnLocation then
+			return spawnLocation
+		end
+	end
+	
+	-- Fallback to Main world if the specified world is not found
+	local mainWorld = workspace:FindFirstChild("Main")
+	if mainWorld then
+		return mainWorld:FindFirstChild("SpawnLocation")
+	end
+	
+	return nil
+end
+
+-- Initialize the Stars folder in workspace
 local function InitializeStarsFolder()
 	-- Find or create Stars folder
-	StarsFolder = Workspace:FindFirstChild("Stars")
+	StarsFolder = workspace:FindFirstChild("Stars")
 	if StarsFolder then
 		-- Clear existing stars
 		StarsFolder:ClearAllChildren()
@@ -43,7 +67,7 @@ local function InitializeStarsFolder()
 	else
 		StarsFolder = Instance.new("Folder")
 		StarsFolder.Name = "Stars"
-		StarsFolder.Parent = Workspace
+		StarsFolder.Parent = workspace
 		Log("Stars folder created")
 	end
 end
@@ -101,66 +125,9 @@ local function GenerateRandomPosition(centerPosition: Vector3, existingPositions
 	return nil
 end
 
--- Generate star information for a player
-function StarService:GenerateStarInformation(player: Player)
-	local userId = player.UserId
-	local character = player.Character
-	local spawnCenter = SpawnLocation.Position -- Default spawn center
-
-	if character then
-		local rootPart = character:FindFirstChild("HumanoidRootPart")
-		if rootPart then
-			--spawnCenter = rootPart.Position
-		end
-	end
-
-	print("Here, start service")
-
-	local starInfoList = {}
-	local existingPositions = {}
-	local config = Stats.StarConfig
-
-	for i = 1, config.SpawnCount do
-		local position = GenerateRandomPosition(spawnCenter, existingPositions)
-		if position then
-			table.insert(existingPositions, position)
-
-			local starName = GetRandomStarType()
-			local starInfo = {
-				Position = position,
-				ID = GenerateStarId(),
-				StarName = starName,
-				FuelValue = Stats.StarFuelValues[starName],
-				Index = i,
-			}
-			table.insert(starInfoList, starInfo)
-		end
-	end
-
-	UniversalTracker[userId] = starInfoList
-	Log(string.format("Generated %d stars for player %s", #starInfoList, player.Name))
-
-	return starInfoList
-end
-
 -- Get star information for a player
 function StarService:GetStarInformation(player: Player)
 	return UniversalTracker[player.UserId]
-end
-
--- Spawn stars for a player (sends data to client)
-function StarService:SpawnStarsForPlayer(player: Player)
-	local userId = player.UserId
-	local starInfoList = UniversalTracker[userId]
-
-	if not starInfoList or #starInfoList == 0 then
-		warn(string.format("[StarService]: No star information found for player %s. Generate star information first.", player.Name))
-		return
-	end
-
-	-- Send star information to the client
-	self.Client.SpawnStars:Fire(player, starInfoList)
-	Log(string.format("Sent %d stars to player %s for spawning", #starInfoList, player.Name))
 end
 
 -- Find star info by ID in player's tracker
@@ -213,13 +180,15 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 	local DataService = Knit.GetService("DataService")
 	DataService:Update(player, "Stats", function(stats)
 		local finalVal = starInfo.FuelValue + stats.Fuel
-		local maxFuel = Stats.FuelMultiplier()
-		finalVal = math.min(finalVal, maxFuel)
 		stats.Fuel = finalVal
 		return stats
 	end)
 
 	Log(string.format("Player %s collected %s, gained %d fuel", player.Name, starInfo.StarName, starInfo.FuelValue))
+
+	-- Increment total stars collected counter
+	TotalStarsCollected = TotalStarsCollected + 1
+	Log(string.format("Total stars collected on server: %d", TotalStarsCollected))
 
 	-- Remove star from tracker
 	local starInfoList = UniversalTracker[userId]
@@ -230,18 +199,139 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 	-- Notify client to remove the star
 	StarService.Client.RemoveStar:Fire(player, starId)
 
+	-- Show notification for star collection
+	local NotificationService = Knit.GetService("NotificationService")
+	NotificationService:SendNotification(player, "Star collected! ⭐ +" .. starInfo.FuelValue .. " Fuel", {
+		icon = "⭐", sound = "CollectStar", name = "Custom"
+	}, 2)
+
 	return true
+end
+
+-- Remove all stars for a player
+function StarService:RemoveAllStarsForPlayer(player: Player)
+	local userId = player.UserId
+	
+	-- Clear tracker data
+	if UniversalTracker[userId] then
+		UniversalTracker[userId] = {}
+	end
+	
+	-- Notify client to clear visuals
+	self.Client.RemoveAllStars:Fire(player)
+	Log(string.format("Removed all stars for player %s", player.Name))
+end
+
+-- Get the total number of stars collected by all players on the server
+function StarService:GetTotalStarsCollected(): number
+	return TotalStarsCollected
+end
+
+-- Generate a single star for a player
+local function GenerateStar(player: Player)
+	local userId = player.UserId
+	
+	-- Initialize tracker if needed
+	if not UniversalTracker[userId] then
+		UniversalTracker[userId] = {}
+	end
+	
+	local starInfoList = UniversalTracker[userId]
+	
+	-- Get SpawnLocation from the player's current world
+	local spawnLocation = GetSpawnLocationForPlayer(player)
+	if not spawnLocation then
+		return nil
+	end
+	
+	local spawnCenter = spawnLocation.Position
+	
+	-- Collect existing positions
+	local existingPositions = {}
+	for _, starInfo in ipairs(starInfoList) do
+		table.insert(existingPositions, starInfo.Position)
+	end
+	
+	-- Generate position for new star
+	local position = GenerateRandomPosition(spawnCenter, existingPositions)
+	if not position then
+		return nil -- Could not find valid position
+	end
+
+	local starName = GetRandomStarType()
+	local starInfo = {
+		Position = position,
+		ID = GenerateStarId(),
+		StarName = starName,
+		FuelValue = Stats.StarFuelValues[starName],
+		Index = #starInfoList + 1,
+	}
+
+	table.insert(starInfoList, starInfo)
+	return starInfo
+end
+
+-- Start star spawning logic for a player
+function StarService:Start(player: Player)
+	local userId = player.UserId
+
+	-- Cancel existing loop if any
+	if StarSpawnLoops[userId] then
+		task.cancel(StarSpawnLoops[userId])
+	end
+
+	StarSpawnLoops[userId] = task.spawn(function()
+		Log(string.format("Started star loop for %s", player.Name))
+		
+		while player:IsDescendantOf(Players) do
+			local config = Stats.StarConfig
+			-- Wait for spawn interval
+			task.wait(config.SpawnInterval)
+			
+			local starInfoList = UniversalTracker[userId] or {}
+			local count = #starInfoList
+			local target = config.MaxStars
+			
+			-- Check if below MaxStars
+			if count < target then
+				local newStars = {}
+				
+				-- Generate stars until we reach MaxStars
+				while #starInfoList < target do
+					local star = GenerateStar(player)
+					if star then
+						table.insert(newStars, star)
+						starInfoList = UniversalTracker[userId] -- Update reference
+					else
+						break -- No valid positions or error
+					end
+				end
+				
+				-- Send to client after generation is done
+				if #newStars > 0 then
+					self.Client.SpawnStars:Fire(player, newStars)
+					Log(string.format("Spawned %d new stars for %s", #newStars, player.Name))
+				end
+			end
+		end
+		
+		StarSpawnLoops[userId] = nil
+	end)
 end
 
 -- Clean up player data when they leave
 local function OnPlayerRemoving(player: Player)
+	if StarSpawnLoops[player.UserId] then
+		task.cancel(StarSpawnLoops[player.UserId])
+		StarSpawnLoops[player.UserId] = nil
+	end
 	UniversalTracker[player.UserId] = nil
 	Log(string.format("Cleared star data for player %s", player.Name))
 end
 
 -- Knit lifecycle
 function StarService:KnitInit()
-	-- Initialize Stars folder in Workspace
+	-- Initialize Stars folder in workspace
 	InitializeStarsFolder()
 
 	-- Clean up when player leaves
