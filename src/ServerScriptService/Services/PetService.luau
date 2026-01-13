@@ -59,7 +59,13 @@ function PetService:InitializePets(player: Player)
 	Log(string.format("Initialized pets for player %s", player.Name))
 end
 
--- Register a pet ID (called by EggService when a pet is obtained)
+--[[
+	Register a pet ID mapping (called by EggService when a pet is obtained).
+	This associates a runtime session ID with a pet's inventory index.
+	@param player Player - The player who owns the pet
+	@param petIndex number - The index of the pet in the inventory
+	@param petID string - The unique runtime ID for the pet
+]]
 function PetService:RegisterPetID(player: Player, petIndex: number, petID: string)
 	local userId = player.UserId
 	

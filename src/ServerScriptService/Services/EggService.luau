@@ -29,7 +29,13 @@ local function GeneratePetID(): string
 	return HttpService:GenerateGUID(false)
 end
 
--- Purchase an egg and immediately hatch it to get a pet
+--[[
+	Purchase an egg and immediately hatch it to get a pet.
+	The egg is not stored - the resulting pet is added directly to inventory.
+	@param player Player - The player purchasing the egg
+	@param eggType string - The type of egg to purchase (e.g., "StandardEgg")
+	@return (boolean, string?, { Name: string, ID: string, Multiplier: number }?) - Success status, error message if failed, pet info if successful
+]]
 function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, string?, { Name: string, ID: string, Multiplier: number }?)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")

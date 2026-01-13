@@ -394,6 +394,7 @@ handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connec
             end
             
             table.insert(handler.data.Inventory.PetInventory, {
+                ID = petInfo.ID,
                 Name = petInfo.Name,
                 Multiplier = petInfo.Multiplier,
             })
