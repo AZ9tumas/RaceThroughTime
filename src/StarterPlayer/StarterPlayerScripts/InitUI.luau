@@ -385,8 +385,17 @@ handler._connections["ShopButton"] = shopButton.MouseButton1Click:Connect(functi
 end)
 
 -- shop
+local EggService = Knit.GetService("EggService")
+
 handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connect(function()
     print("Standard Egg Buy Pressed")
+    EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, eggInfo)
+        if success and eggInfo then
+            print("Purchased StandardEgg with ID:", eggInfo.id)
+        else
+            print("Failed to purchase StandardEgg:", errorMsg or "Unknown error")
+        end
+    end)
 end)
 
 handler._connections["ShopClose"] = shopMain:WaitForChild("Close").MouseButton1Click:Connect(function()

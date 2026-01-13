@@ -234,4 +234,26 @@ function Stats.PolarToCartesian(centerX: number, centerZ: number, radius: number
 	return x, z
 end
 
+-- Egg Configuration
+-- Egg types with their costs and the pet they produce
+Stats.Eggs = {
+	StandardEgg = {
+		Cost = 500,
+		Currency = "Cash",
+		Pet = "StandardPet",
+	},
+}
+
+-- Pet Configuration
+-- Pet types with their names and multipliers
+Stats.Pets = {
+	StandardPet = {
+		Name = "Standard Pet",
+		Multiplier = 1.1, -- 10% boost
+	},
+}
+
+-- Maximum number of pets that can be equipped at once
+Stats.MaxEquippedPets = 3
+
 return Stats
