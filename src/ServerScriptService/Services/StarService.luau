@@ -39,7 +39,6 @@ local function GetSpawnLocationForPlayer(player: Player): SpawnLocation?
 	
 	-- World folders are named directly in workspace (e.g., "Main", "StoneAge")
 	local worldFolder = workspace:FindFirstChild(worldName)
-	print("World folder for star spawning:", worldFolder)
 	if worldFolder then
 		local spawnLocation = worldFolder:FindFirstChild("SpawnLocation")
 		if spawnLocation then

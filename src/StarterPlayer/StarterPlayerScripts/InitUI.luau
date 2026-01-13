@@ -20,6 +20,7 @@ local handler = {
             PetInventory = {},
             EquippedPets = {},
             Potions = {},
+            Eggs = {},
         },
         Meta = {
             DailyStreak = 0,
@@ -198,12 +199,19 @@ function handler.UpdateGemsUI(amount: number)
     shopGemsCount.Text = truncateNumber(amount)
 end
 
+function handler.UpdateShopUI()
+    -- Check if Standard Egg is owned
+    local eggs = handler.data.Inventory.Eggs or {}
+    if eggs["StandardEgg"] then
+        standardEggBuy.Text = "Purchased"
+    end
+end
+
 
 -- Function to update UI with loaded data from server
 -- Called after data has been loaded on the server
 function handler.UpdateDataOnClient(newData)
     -- Update handler.Data with new data
-    print("Client data update: ", newData)
     if newData then
         handler.data = newData
     end
@@ -213,21 +221,18 @@ function handler.UpdateDataOnClient(newData)
     handler.UpdateCashUI(cashVal.Value)
     handler.UpdateGemsUI(gemsVal.Value)
     handler.UpdateRewardsStatus()
-    
-    print("[InitUI]: Client data updated")
+    handler.UpdateShopUI()
 end
 
 handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function()
     -- Debounce: prevent spam requests while one is already in progress
     if isRequestingTrack then
-        print("[InitUI]: Track request already in progress, ignoring click")
         return
     end
     
     -- Check if player is already on track (via TrackController)
     local TrackController = Knit.GetController("TrackController")
     if TrackController and TrackController:IsOnTrack() then
-        print("[InitUI]: Already on track, ignoring click")
         return
     end
     
@@ -250,7 +255,6 @@ handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function
         print(success, gateName)
     
         if success then
-            print("[InitUI]: Track start successful")
             runButton.Visible = false
         else
             print(string.format("[InitUI]: Track start failed - %s", gateName or "Unknown error"))
@@ -340,19 +344,14 @@ local cardHolders = {
     },
 }
 
-print(cardHolders, "Card Holders")
-
 function handler.UpdateRewardsStatus()
     -- Get DailyRewardService to check collected rewards
-    print("Updating rewards status on client UI")
-    print(handler.data)
     local collectedRewards = handler.data.Meta.CollectedRewards or {}
     local DailyRewardsConfig = require(modules:WaitForChild("DailyRewards"))
     
     -- Update each card's status based on collected rewards
     for _, cardData in pairs(cardHolders) do
         local rewardID = DailyRewardsConfig.GetRewardIDForDay(cardData.Day)
-        print(rewardID, collectedRewards)
         if rewardID and collectedRewards[rewardID] then
             cardData.RedeemButton.Parent.PriceLabel.Text = "REDEEMED"
         end
@@ -388,9 +387,28 @@ end)
 local EggService = Knit.GetService("EggService")
 
 handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connect(function()
-    print("Standard Egg Buy Pressed")
+    
+    -- Check if already purchased
+    local eggs = handler.data.Inventory.Eggs or {}
+    if eggs["StandardEgg"] then
+        return
+    end
+
     EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, eggInfo)
         if success and eggInfo then
+            print("Purchased StandardEgg with ID:", eggInfo.id)
+            
+            -- Update local data
+            if not handler.data.Inventory.Eggs then
+                handler.data.Inventory.Eggs = {}
+            end
+            
+            handler.data.Inventory.Eggs["StandardEgg"] = {
+                id = eggInfo.id,
+                purchased = true
+            }
+            
+            handler.UpdateShopUI()
             print("Purchased StandardEgg with ID:", eggInfo.id)
         else
             print("Failed to purchase StandardEgg:", errorMsg or "Unknown error")

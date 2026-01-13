@@ -6,7 +6,7 @@ local uiInit = require(script.Parent:WaitForChild("InitUI"))
 
 -- Wait for Knit to be started before accessing controllers
 Knit.OnStart():andThen(function()
-	print("client is ready")
+	
 end):catch(function(err)
 	warn("[Test]: Failed to get AssetLoaderController -", err)
 end)

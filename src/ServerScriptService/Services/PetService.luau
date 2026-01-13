@@ -27,7 +27,7 @@ local PlayerPetIDs = {}
 
 -- Helper function for logging
 local function Log(message: string)
-	print(string.format("[PetService]: %s", message))
+	--print(string.format("[PetService]: %s", message))
 end
 
 -- Generate a unique ID for pets
@@ -48,6 +48,7 @@ function PetService:InitializePets(player: Player)
 	
 	-- Get player's pet inventory from data store
 	local inventory = DataService:Get(player, "Inventory")
+	print("inventory:", inventory)
 	if inventory and inventory.PetInventory then
 		-- Assign IDs to existing pets
 		for index, petData in ipairs(inventory.PetInventory) do

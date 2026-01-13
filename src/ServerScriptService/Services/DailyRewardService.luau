@@ -13,7 +13,7 @@ local DailyRewardService = Knit.CreateService({
 local SECONDS_IN_DAY = 86400 -- 24 hours in seconds
 
 local function Log(message: string)
-	print(string.format("[DailyRewardService]: %s", message))
+	--print(string.format("[DailyRewardService]: %s", message))
 end
 
 local function GetCurrentDayRewardID(streak: number): string?

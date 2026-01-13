@@ -34,7 +34,7 @@ local WorldService = Knit.CreateService({
 
 -- Helper function for logging
 local function Log(message: string)
-	print(string.format("[WorldService]: %s", message))
+	--print(string.format("[WorldService]: %s", message))
 end
 
 -- Get the world folder from workspace
