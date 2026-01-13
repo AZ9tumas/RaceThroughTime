@@ -81,6 +81,7 @@ end
 
 -- ui
 local mainUi: ScreenGui = PlayerGui:WaitForChild("RaceThroughTime_UI")
+local uiShop: ScreenGui = PlayerGui:WaitForChild("UI_Shop")
 local leftPanel: Frame = mainUi:WaitForChild("LeftPanel")
 local cashDisplay: TextLabel = leftPanel:WaitForChild("CashDisplay")
 local GemsDisplay: TextLabel = leftPanel:WaitForChild("GemsDisplay")
@@ -95,7 +96,15 @@ local worldlabel: TextLabel = mainUi:WaitForChild("TopInfo"):WaitForChild("World
 local dailyButton: TextButton = leftPanel:WaitForChild("DailyButton")
 local dailyFrame: Frame = otherFrames:WaitForChild("DailyFrame")
 local shopButton: TextButton = leftPanel:WaitForChild("ShopButton")
-local shopFrame: Frame = otherFrames:WaitForChild("StoreFrame")
+
+-- Shop Internal UI
+local shopMain = uiShop:WaitForChild("MainFrame")
+local shopTop = shopMain:WaitForChild("Top")
+local shopCashCount = shopTop:WaitForChild("Cash"):WaitForChild("Count")
+local shopGemsCount = shopTop:WaitForChild("Gems"):WaitForChild("Count")
+
+local shopEggsContainer = shopMain:WaitForChild("ScrollingFrame"):WaitForChild("Eggs"):WaitForChild("MainFrame")
+local standardEggBuy = shopEggsContainer:WaitForChild("StandardEgg"):WaitForChild("Buy")
 
 -- vals
 local leaderstats = player:WaitForChild("leaderstats")
@@ -181,10 +190,12 @@ end
 
 function handler.UpdateCashUI(amount: number)
     cashDisplay.Text = "💵 " .. truncateNumber(amount)
+    shopCashCount.Text = truncateNumber(amount)
 end
 
 function handler.UpdateGemsUI(amount: number)
     GemsDisplay.Text = "💎 " .. truncateNumber(amount)
+    shopGemsCount.Text = truncateNumber(amount)
 end
 
 
@@ -367,6 +378,19 @@ end
 
 handler._connections["DailyFrameClose"] = dailyFrameCloseButton.MouseButton1Click:Connect(function()
     dailyFrame.Visible = false
+end)
+
+handler._connections["ShopButton"] = shopButton.MouseButton1Click:Connect(function()
+    shopMain.Visible = not shopMain.Visible
+end)
+
+-- shop
+handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connect(function()
+    print("Standard Egg Buy Pressed")
+end)
+
+handler._connections["ShopClose"] = shopMain:WaitForChild("Close").MouseButton1Click:Connect(function()
+    shopMain.Visible = false
 end)
 
 -- Listen for DataReady signal from server to update UI
