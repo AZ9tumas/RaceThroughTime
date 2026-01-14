@@ -93,8 +93,8 @@ local uiInventory: ScreenGui = PlayerGui:WaitForChild("UI_Inventory")
 local inventoryMainFrame: Frame = uiInventory:WaitForChild("MainFrame")
 local inventoryPetCount: TextLabel = inventoryMainFrame:WaitForChild("PetCount")
 local inventoryScrollingFrame: ScrollingFrame = inventoryMainFrame:WaitForChild("ScrollingFrame")
-local inventoryPetTemplate: Frame = inventoryScrollingFrame:WaitForChild("Template")
-local inventoryCloseButton: TextButton = inventoryMainFrame:WaitForChild("Close")
+local inventoryPetTemplate: Frame = inventoryScrollingFrame:WaitForChild("UIGridLayout"):WaitForChild("Template")
+local inventoryCloseButton: TextButton = inventoryMainFrame:WaitForChild("CloseButton")
 
 -- vals
 local leaderstats = player:WaitForChild("leaderstats")
@@ -236,7 +236,7 @@ function handler.UpdatePetsInventory()
     local petInventory = handler.data.Inventory.PetInventory or {}
     
     -- Update pet count display
-    inventoryPetCount.Text = "Pets: " .. #petInventory
+    inventoryPetCount.Count.Text = #petInventory .. "/3"
     
     -- Create a frame for each pet
     for index, petData in ipairs(petInventory) do
@@ -244,11 +244,8 @@ function handler.UpdatePetsInventory()
         petFrame.Name = "Pet_" .. index
         petFrame.Visible = true
         
-        -- Set the pet name (TextLabel directly under the frame)
-        local nameLabel = petFrame:FindFirstChild("TextLabel")
-        if nameLabel then
-            nameLabel.Text = petData.Name or "Unknown Pet"
-        end
+        local nameLabel = petFrame:FindFirstChild("PetName")
+        nameLabel.Text = petData.Name or "Unknown Pet"
         
         -- Set the multiplier text (TextLabel under Multiplier frame)
         local multiplierFrame = petFrame:FindFirstChild("Multiplier")
