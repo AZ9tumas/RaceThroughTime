@@ -29,6 +29,13 @@ Stats.WorldRadius = {
 	StoneAge = 205, -- Same radius as Main
 }
 
+-- Arena radius values for each world (radius of the 1_Central_Arena part)
+-- Used to determine if player is inside the arena
+Stats.ArenaRadius = {
+	Main = 200,
+	StoneAge = 200,
+}
+
 Stats.FuelConsumptionRate = {
 	Main = 150, -- Fuel consumed per second on the Main world
 	StoneAge = 200, -- Slightly higher fuel consumption in StoneAge
