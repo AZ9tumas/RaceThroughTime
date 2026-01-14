@@ -79,15 +79,13 @@ end
 
 -- Check if loading is complete and fade out if so
 local function TryCompleteLoading()
-	if IsDataReady and IsAssetsReady then
+	if IsDataReady and IsAssetsReady and PlayerData then
 		-- We execute initui.luau here to ensure UI is ready before hiding loading screen
 		-- InitUI sets up all the UI event handlers
 		local uiInit = require(script.Parent.Parent:WaitForChild("InitUI"))
 		
 		-- Initialize UI with the player data we received from server
-		if PlayerData then
-			uiInit.UpdateDataOnClient(PlayerData)
-		end
+		uiInit.UpdateDataOnClient(PlayerData)
 		
 		FadeOut(LoadingFrame)
 	end
@@ -148,7 +146,11 @@ function LoadingScreenController:KnitStart()
 	-- Listen for DataReady signal from server
 	local DataService = Knit.GetService("DataService")
 	DataService.DataReady:Connect(function(data)
-		self:SetDataReady(data)
+		if data then
+			self:SetDataReady(data)
+		else
+			warn("[LoadingScreenController]: Received nil data from DataReady signal")
+		end
 	end)
 	
 	-- Listen for LoadingScreenService signals from server
