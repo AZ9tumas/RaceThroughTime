@@ -15,6 +15,7 @@ local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
+local PetMergeStats = require(ReplicatedStorage.Modules.PetMergeStats)
 
 local PetService = Knit.CreateService({
 	Name = "PetService",
@@ -691,6 +692,8 @@ function PetService:GetPlayerPets(player: Player): { { ID: string, Name: string,
 				PickupRangeBonus = petData.PickupRangeBonus or 1.0,
 				World = petData.World or "Main",
 				Level = petData.Level or 1,
+				TierLevel = petData.TierLevel or petData.Level or 1,
+				TierName = petData.TierName or "Common",
 				Rarity = petData.Rarity or "Standard",
 				Equipped = equippedSet[index] == true,
 			})
@@ -700,9 +703,10 @@ function PetService:GetPlayerPets(player: Player): { { ID: string, Name: string,
 	return pets
 end
 
--- Merge two pets to create a higher level pet
--- Requires Gems based on the pet's current level
+-- Merge two pets to create a higher tier pet
+-- Requires Gems based on the pet's current tier (from PetMergeStats config)
 -- Both pets must be from the same world
+-- Uses formula: NewStats = OldStats × (2 + RarityBonus)
 function PetService:MergePets(player: Player, petID1: string, petID2: string): (boolean, string?, { Name: string, ID: string, Level: number }?)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
@@ -756,7 +760,7 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 	local world1 = pet1.World or "Main"
 	local world2 = pet2.World or "Main"
 	
-	if world1 ~= world2 then
+	if PetMergeStats.WorldRestrictions.RequireSameWorld and world1 ~= world2 then
 		NotificationService:SendNotification(
 			player,
 			"Pets must be from the same world to merge.",
@@ -765,22 +769,20 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		return false, "Different worlds", nil
 	end
 	
-	-- Check if pet is already at max level
-	local currentLevel = pet1.Level or 1
-	local petConfig = Stats.Pets[pet1.PetType] or Stats.Pets.StandardPet
-	local maxLevel = petConfig.MaxLevel or 10
+	-- Get current tier level and check if at max
+	local currentTierLevel = pet1.TierLevel or pet1.Level or 1
 	
-	if currentLevel >= maxLevel then
+	if PetMergeStats.IsMaxTier(currentTierLevel) then
 		NotificationService:SendNotification(
 			player,
-			"Pet is already at maximum level.",
+			"Pet is already at maximum tier.",
 			NotificationService.Category.Warning
 		)
-		return false, "Max level reached", nil
+		return false, "Max tier reached", nil
 	end
 	
-	-- Check if player has enough Gems
-	local mergeCost = Stats.MergeCost[currentLevel] or 10
+	-- Get merge cost from PetMergeStats config
+	local mergeCost = PetMergeStats.GetMergeCost(currentTierLevel)
 	local currencies = DataService:Get(player, "Currencies")
 	
 	if not currencies or (currencies.Gems or 0) < mergeCost then
@@ -808,11 +810,15 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		return curr
 	end)
 	
-	-- Calculate new stats
-	local newLevel = currentLevel + 1
-	local newMultiplier = (pet1.Multiplier or 1.0) + Stats.MergeBonus.MultiplierPerLevel
-	local newFuelBonus = (pet1.FuelBonus or 1.0) + Stats.MergeBonus.FuelBonusPerLevel
-	local newPickupRangeBonus = (pet1.PickupRangeBonus or 1.0) + Stats.MergeBonus.PickupRangeBonusPerLevel
+	-- Calculate new stats using PetMergeStats formula: NewStats = OldStats × (2 + RarityBonus)
+	local newTierLevel = currentTierLevel + 1
+	local oldStats = {
+		Multiplier = pet1.Multiplier or 1.0,
+		FuelBonus = pet1.FuelBonus or 1.0,
+		PickupRangeBonus = pet1.PickupRangeBonus or 1.0,
+	}
+	local newStats = PetMergeStats.CalculateMergedStats(oldStats, currentTierLevel)
+	local newTier = PetMergeStats.GetTierByLevel(newTierLevel)
 	
 	-- Despawn pet2 if equipped before removing from inventory
 	if pet2Equipped then
@@ -821,11 +827,13 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 	
 	-- Update inventory: upgrade pet1 and remove pet2
 	DataService:Update(player, "Inventory", function(inv)
-		-- Upgrade pet1
-		inv.PetInventory[petIndex1].Level = newLevel
-		inv.PetInventory[petIndex1].Multiplier = newMultiplier
-		inv.PetInventory[petIndex1].FuelBonus = newFuelBonus
-		inv.PetInventory[petIndex1].PickupRangeBonus = newPickupRangeBonus
+		-- Upgrade pet1 with new tier and stats
+		inv.PetInventory[petIndex1].Level = newTierLevel
+		inv.PetInventory[petIndex1].TierLevel = newTierLevel
+		inv.PetInventory[petIndex1].TierName = newTier.Name
+		inv.PetInventory[petIndex1].Multiplier = newStats.Multiplier
+		inv.PetInventory[petIndex1].FuelBonus = newStats.FuelBonus
+		inv.PetInventory[petIndex1].PickupRangeBonus = newStats.PickupRangeBonus
 		
 		-- Remove pet2 from inventory
 		table.remove(inv.PetInventory, petIndex2)
@@ -871,21 +879,23 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 	-- Get the new ID for the merged pet
 	local newPetID = self:GetPetIDByIndex(player, petIndex1 > petIndex2 and petIndex1 - 1 or petIndex1)
 	
-	Log(string.format("Player %s merged pets to create Level %d %s", player.Name, newLevel, pet1.Name))
+	Log(string.format("Player %s merged pets to create %s tier %s (Level %d)", player.Name, newTier.Name, pet1.Name, newTierLevel))
 	
 	NotificationService:SendNotification(
 		player,
-		string.format("Merged! %s is now Level %d!", pet1.Name, newLevel),
+		string.format("Merged! %s is now %s tier!", pet1.Name, newTier.Name),
 		NotificationService.Category.Success
 	)
 	
 	return true, nil, {
 		Name = pet1.Name,
 		ID = newPetID or petID1,
-		Level = newLevel,
-		Multiplier = newMultiplier,
-		FuelBonus = newFuelBonus,
-		PickupRangeBonus = newPickupRangeBonus,
+		Level = newTierLevel,
+		TierLevel = newTierLevel,
+		TierName = newTier.Name,
+		Multiplier = newStats.Multiplier,
+		FuelBonus = newStats.FuelBonus,
+		PickupRangeBonus = newStats.PickupRangeBonus,
 	}
 end
 

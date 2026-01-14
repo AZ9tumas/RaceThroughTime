@@ -112,7 +112,9 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 			FuelBonus = petConfig.FuelBonus or 1.1,
 			PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
 			World = petConfig.World or eggConfig.World or "Main",
-			Level = petConfig.BaseLevel or 1,
+			Level = petConfig.BaseTierLevel or 1,
+			TierLevel = petConfig.BaseTierLevel or 1,
+			TierName = "Common", -- Starting tier name
 			Rarity = petConfig.Rarity or "Standard",
 			ObtainedAt = os.time(),
 		}
@@ -142,7 +144,9 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		FuelBonus = petConfig.FuelBonus or 1.1,
 		PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
 		World = petConfig.World or eggConfig.World or "Main",
-		Level = petConfig.BaseLevel or 1,
+		Level = petConfig.BaseTierLevel or 1,
+		TierLevel = petConfig.BaseTierLevel or 1,
+		TierName = "Common",
 		Rarity = petConfig.Rarity or "Standard",
 	}
 	

@@ -268,31 +268,13 @@ Stats.Pets = {
 		FuelBonus = 1.1, -- 10% fuel collection increase
 		PickupRangeBonus = 1.0, -- No range extension (base range)
 		World = "Main", -- Associated world for merging
-		BaseLevel = 1, -- Starting level
-		MaxLevel = 10, -- Maximum level through merging
+		BaseTierLevel = 1, -- Starting tier level
 		Rarity = "Standard", -- Standard, Premium, or LimitedTime
 	},
 }
 
--- Merge cost configuration (Gems required per level)
-Stats.MergeCost = {
-	[1] = 10, -- Level 1 -> 2
-	[2] = 25, -- Level 2 -> 3
-	[3] = 50, -- Level 3 -> 4
-	[4] = 100, -- Level 4 -> 5
-	[5] = 200, -- Level 5 -> 6
-	[6] = 400, -- Level 6 -> 7
-	[7] = 800, -- Level 7 -> 8
-	[8] = 1500, -- Level 8 -> 9
-	[9] = 3000, -- Level 9 -> 10
-}
-
--- Stats increase per level when merging
-Stats.MergeBonus = {
-	MultiplierPerLevel = 0.05, -- +5% multiplier per level
-	FuelBonusPerLevel = 0.05, -- +5% fuel bonus per level
-	PickupRangeBonusPerLevel = 0.1, -- +10% pickup range per level
-}
+-- Note: Merge costs, bonuses, and grind wall configuration are now in PetMergeStats.luau
+-- See ReplicatedStorage.Modules.PetMergeStats for merge system configuration
 
 -- Maximum number of pets that can be equipped at once
 Stats.MaxEquippedPets = 3
