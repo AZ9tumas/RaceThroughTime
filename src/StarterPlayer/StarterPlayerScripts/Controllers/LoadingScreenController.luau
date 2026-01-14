@@ -12,6 +12,7 @@ local IsDataReady = false
 local IsAssetsReady = false
 local LoadingFrame = nil
 local AutoHideThread = nil -- Track the auto-hide task to cancel if needed
+local PlayerData = nil -- Store the player data received from server
 
 -- Tween settings
 local FADE_IN_TIME = 0.5
@@ -70,30 +71,41 @@ local function FadeOut(frame)
 	frame.Visible = false
 end
 
+-- Signal server that client is ready (after assets are loaded)
+local function SignalServerReady()
+	local DataService = Knit.GetService("DataService")
+	DataService:SignalReady()
+end
+
 -- Check if loading is complete and fade out if so
 local function TryCompleteLoading()
 	if IsDataReady and IsAssetsReady then
-		
-		-- we execute initui.luau here to ensure UI is ready before hiding loading screen
+		-- We execute initui.luau here to ensure UI is ready before hiding loading screen
+		-- InitUI sets up all the UI event handlers
 		local uiInit = require(script.Parent.Parent:WaitForChild("InitUI"))
+		
+		-- Initialize UI with the player data we received from server
+		if PlayerData then
+			uiInit.UpdateDataOnClient(PlayerData)
+		end
+		
 		FadeOut(LoadingFrame)
-
-		-- Request character spawn from server
-		local DataService = Knit.GetService("DataService")
-		DataService:SignalReady()
 	end
 end
 
--- Mark data as ready
-function LoadingScreenController:SetDataReady()
+-- Mark data as ready (with player data from server)
+function LoadingScreenController:SetDataReady(data)
 	IsDataReady = true
+	PlayerData = data
 	TryCompleteLoading()
 end
 
--- Mark assets as ready
+-- Mark assets as ready and signal server
 function LoadingScreenController:SetAssetsReady()
 	IsAssetsReady = true
-	TryCompleteLoading()
+	-- Signal the server that assets are loaded and client is ready
+	-- The server will then fire DataReady which triggers SetDataReady
+	SignalServerReady()
 end
 
 -- Check if loading is complete
@@ -135,8 +147,8 @@ function LoadingScreenController:KnitStart()
 
 	-- Listen for DataReady signal from server
 	local DataService = Knit.GetService("DataService")
-	DataService.DataReady:Connect(function()
-		self:SetDataReady()
+	DataService.DataReady:Connect(function(data)
+		self:SetDataReady(data)
 	end)
 	
 	-- Listen for LoadingScreenService signals from server
