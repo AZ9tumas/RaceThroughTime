@@ -1,13 +1,17 @@
 --[[
 	PetService
-	Handles pet inventory and equipping.
+	Handles pet inventory, equipping, spawning, and behavior.
 	Pets are obtained directly from egg purchases and stored in player's inventory.
 	Maximum 3 pets can be equipped at once.
+	Equipped pets follow the player and collect stars when in the arena.
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+local PathfindingService = game:GetService("PathfindingService")
 local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
@@ -24,6 +28,24 @@ local PetService = Knit.CreateService({
 -- [Player.UserId] = { petIndexToID: { [index] = id }, idToPetIndex: { [id] = index } }
 local PlayerPetIDs = {}
 
+-- Spawned pet models for each player
+-- [Player.UserId] = { [petIndex] = { Model = Model, TargetStarID = string? } }
+local SpawnedPets = {}
+
+-- Arena status tracking for each player
+-- [Player.UserId] = boolean
+local PlayerArenaStatus = {}
+
+-- Pet behavior update loop thread
+local PetBehaviorThread = nil
+
+-- Constants for pet behavior
+local PET_FOLLOW_DISTANCE = 8 -- Distance behind player to follow
+local PET_FOLLOW_OFFSET_SPACING = 5 -- Spacing between multiple pets
+local PET_STAR_COLLECTION_RADIUS = 5 -- Distance from star to collect it
+local ARENA_CHECK_INTERVAL = 0.1 -- How often to check arena status (seconds)
+local PET_UPDATE_INTERVAL = 0.2 -- How often to update pet behavior (seconds)
+
 -- Helper function for logging
 local function Log(message: string)
 	print(string.format("[PetService]: %s", message))
@@ -32,6 +54,397 @@ end
 -- Generate a unique ID for pets
 local function GeneratePetID(): string
 	return HttpService:GenerateGUID(false)
+end
+
+-- Get the central arena part for a player's current world
+local function GetCentralArenaForPlayer(player: Player): BasePart?
+	local DataService = Knit.GetService("DataService")
+	local worldName = DataService:GetPlayerWorld(player)
+	
+	local worldFolder = workspace:FindFirstChild(worldName)
+	if worldFolder then
+		local centralArena = worldFolder:FindFirstChild("1_Central_Arena")
+		if centralArena and centralArena:IsA("BasePart") then
+			return centralArena
+		end
+	end
+	
+	-- Fallback to Main world
+	local mainWorld = workspace:FindFirstChild("Main")
+	if mainWorld then
+		local centralArena = mainWorld:FindFirstChild("1_Central_Arena")
+		if centralArena and centralArena:IsA("BasePart") then
+			return centralArena
+		end
+	end
+	
+	return nil
+end
+
+-- Check if a player is inside the arena
+local function CheckPlayerInArena(player: Player): boolean
+	local character = player.Character
+	if not character then return false end
+	
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return false end
+	
+	local centralArena = GetCentralArenaForPlayer(player)
+	if not centralArena then return false end
+	
+	local DataService = Knit.GetService("DataService")
+	local worldName = DataService:GetPlayerWorld(player)
+	local arenaRadius = Stats.ArenaRadius[worldName] or Stats.ArenaRadius.Main or 200
+	
+	-- Calculate horizontal distance (ignoring Y axis) from arena center to player
+	local arenaCenter = centralArena.Position
+	local playerPos = rootPart.Position
+	local horizontalDistance = math.sqrt(
+		(playerPos.X - arenaCenter.X)^2 + 
+		(playerPos.Z - arenaCenter.Z)^2
+	)
+	
+	return horizontalDistance <= arenaRadius
+end
+
+-- Update arena status for a player
+local function UpdatePlayerArenaStatus(player: Player)
+	local userId = player.UserId
+	local wasInArena = PlayerArenaStatus[userId] or false
+	local isInArena = CheckPlayerInArena(player)
+	
+	PlayerArenaStatus[userId] = isInArena
+	
+	-- Log state changes for debugging
+	if wasInArena ~= isInArena then
+		if isInArena then
+			Log(string.format("Player %s entered arena", player.Name))
+		else
+			Log(string.format("Player %s left arena", player.Name))
+		end
+	end
+	
+	return isInArena
+end
+
+-- Check if player is in arena (public function)
+function PetService:IsPlayerInArena(player: Player): boolean
+	return PlayerArenaStatus[player.UserId] or false
+end
+
+-- Get a pet model from ServerStorage
+local function GetPetModel(petType: string): Model?
+	local assetsFolder = ServerStorage:FindFirstChild("Assets")
+	if not assetsFolder then
+		warn("[PetService]: Assets folder not found in ServerStorage")
+		return nil
+	end
+	
+	local petModelsFolder = assetsFolder:FindFirstChild("PetModels")
+	if not petModelsFolder then
+		warn("[PetService]: PetModels folder not found in ServerStorage.Assets")
+		return nil
+	end
+	
+	local petModel = petModelsFolder:FindFirstChild(petType)
+	if not petModel then
+		warn(string.format("[PetService]: Pet model '%s' not found", petType))
+		return nil
+	end
+	
+	return petModel:Clone()
+end
+
+-- Spawn a pet model for a player
+local function SpawnPetModel(player: Player, petIndex: number, petData: { Name: string, PetType: string?, Multiplier: number })
+	local userId = player.UserId
+	
+	-- Initialize spawned pets table for player if needed
+	if not SpawnedPets[userId] then
+		SpawnedPets[userId] = {}
+	end
+	
+	-- Don't spawn if already spawned
+	if SpawnedPets[userId][petIndex] then
+		return
+	end
+	
+	local petType = petData.PetType or "StandardPet"
+	local petModel = GetPetModel(petType)
+	
+	if not petModel then
+		-- Create a simple placeholder if model not found
+		petModel = Instance.new("Model")
+		petModel.Name = petData.Name or "Pet"
+		
+		local part = Instance.new("Part")
+		part.Name = "PetPart"
+		part.Size = Vector3.new(2, 2, 2)
+		part.BrickColor = BrickColor.new("Bright yellow")
+		part.Anchored = false
+		part.CanCollide = false
+		part.Parent = petModel
+		petModel.PrimaryPart = part
+	end
+	
+	-- Position near player
+	local character = player.Character
+	if character then
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+		if rootPart then
+			local offset = Vector3.new(3 + (petIndex - 1) * PET_FOLLOW_OFFSET_SPACING, 0, 3)
+			petModel:SetPrimaryPartCFrame(CFrame.new(rootPart.Position + offset))
+		end
+	end
+	
+	-- Create a BodyPosition to make the pet float/follow
+	local primaryPart = petModel.PrimaryPart
+	if primaryPart then
+		local bodyPosition = Instance.new("BodyPosition")
+		bodyPosition.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+		bodyPosition.D = 1000
+		bodyPosition.P = 10000
+		bodyPosition.Parent = primaryPart
+		
+		-- Make pet not collide with players
+		primaryPart.CollisionGroup = "Pets"
+	end
+	
+	petModel.Parent = workspace
+	
+	SpawnedPets[userId][petIndex] = {
+		Model = petModel,
+		TargetStarID = nil,
+	}
+	
+	Log(string.format("Spawned pet %s for player %s", petData.Name, player.Name))
+end
+
+-- Despawn a pet model for a player
+local function DespawnPetModel(player: Player, petIndex: number)
+	local userId = player.UserId
+	
+	if not SpawnedPets[userId] then return end
+	
+	local petInfo = SpawnedPets[userId][petIndex]
+	if petInfo and petInfo.Model then
+		petInfo.Model:Destroy()
+		SpawnedPets[userId][petIndex] = nil
+		Log(string.format("Despawned pet at index %d for player %s", petIndex, player.Name))
+	end
+end
+
+-- Despawn all pets for a player
+local function DespawnAllPets(player: Player)
+	local userId = player.UserId
+	
+	if not SpawnedPets[userId] then return end
+	
+	for petIndex, petInfo in pairs(SpawnedPets[userId]) do
+		if petInfo.Model then
+			petInfo.Model:Destroy()
+		end
+	end
+	
+	SpawnedPets[userId] = {}
+	Log(string.format("Despawned all pets for player %s", player.Name))
+end
+
+-- Get all currently targeted star IDs for a player's pets
+local function GetTargetedStarIDs(userId: number): { [string]: boolean }
+	local targeted = {}
+	
+	if not SpawnedPets[userId] then return targeted end
+	
+	for _, petInfo in pairs(SpawnedPets[userId]) do
+		if petInfo.TargetStarID then
+			targeted[petInfo.TargetStarID] = true
+		end
+	end
+	
+	return targeted
+end
+
+-- Find nearest available star for a pet to collect
+local function FindNearestAvailableStar(player: Player, petPosition: Vector3): ({ Position: Vector3, ID: string, StarName: string, FuelValue: number }?, number?)
+	local StarService = Knit.GetService("StarService")
+	local starInfo = StarService:GetStarInformation(player)
+	
+	if not starInfo or #starInfo == 0 then
+		return nil, nil
+	end
+	
+	local targetedStars = GetTargetedStarIDs(player.UserId)
+	local nearestStar = nil
+	local nearestDistance = math.huge
+	local nearestIndex = nil
+	
+	for index, star in ipairs(starInfo) do
+		-- Skip if already targeted by another pet
+		if not targetedStars[star.ID] then
+			local distance = (petPosition - star.Position).Magnitude
+			if distance < nearestDistance then
+				nearestDistance = distance
+				nearestStar = star
+				nearestIndex = index
+			end
+		end
+	end
+	
+	return nearestStar, nearestIndex
+end
+
+-- Collect a star via pet (server-side collection)
+local function CollectStarViaPet(player: Player, starId: string): boolean
+	local StarService = Knit.GetService("StarService")
+	local starInfo = StarService:GetStarInformation(player)
+	
+	if not starInfo then return false end
+	
+	-- Find the star
+	local foundStar = nil
+	local foundIndex = nil
+	for index, star in ipairs(starInfo) do
+		if star.ID == starId then
+			foundStar = star
+			foundIndex = index
+			break
+		end
+	end
+	
+	if not foundStar then return false end
+	
+	-- Add fuel to player
+	local DataService = Knit.GetService("DataService")
+	DataService:Update(player, "Stats", function(stats)
+		stats.Fuel = stats.Fuel + foundStar.FuelValue
+		return stats
+	end)
+	
+	-- Remove star from tracker
+	table.remove(starInfo, foundIndex)
+	
+	-- Notify client to remove the star
+	StarService.Client.RemoveStar:Fire(player, starId)
+	
+	Log(string.format("Pet collected %s for player %s, gained %d fuel", foundStar.StarName, player.Name, foundStar.FuelValue))
+	
+	return true
+end
+
+-- Update pet behavior for a single player
+local function UpdatePetBehavior(player: Player)
+	local userId = player.UserId
+	local character = player.Character
+	
+	if not character or not SpawnedPets[userId] then return end
+	
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+	
+	local isInArena = PlayerArenaStatus[userId] or false
+	local petIndex = 0
+	
+	for index, petInfo in pairs(SpawnedPets[userId]) do
+		petIndex = petIndex + 1
+		local petModel = petInfo.Model
+		if not petModel or not petModel.PrimaryPart then continue end
+		
+		local primaryPart = petModel.PrimaryPart
+		local bodyPosition = primaryPart:FindFirstChild("BodyPosition")
+		if not bodyPosition then continue end
+		
+		local petPosition = primaryPart.Position
+		
+		if isInArena then
+			-- In arena: try to collect stars
+			if petInfo.TargetStarID then
+				-- Check if target star still exists
+				local StarService = Knit.GetService("StarService")
+				local starInfoList = StarService:GetStarInformation(player)
+				local targetFound = false
+				local targetStar = nil
+				
+				if starInfoList then
+					for _, star in ipairs(starInfoList) do
+						if star.ID == petInfo.TargetStarID then
+							targetFound = true
+							targetStar = star
+							break
+						end
+					end
+				end
+				
+				if targetFound and targetStar then
+					-- Move towards target star
+					bodyPosition.Position = targetStar.Position
+					
+					-- Check if close enough to collect
+					local distance = (petPosition - targetStar.Position).Magnitude
+					if distance < PET_STAR_COLLECTION_RADIUS then
+						-- Collect the star
+						if CollectStarViaPet(player, petInfo.TargetStarID) then
+							petInfo.TargetStarID = nil
+						end
+					end
+				else
+					-- Target star no longer exists, clear target
+					petInfo.TargetStarID = nil
+				end
+			else
+				-- Find a new star to target
+				local nearestStar, _ = FindNearestAvailableStar(player, petPosition)
+				if nearestStar then
+					petInfo.TargetStarID = nearestStar.ID
+				else
+					-- No stars available, follow player
+					local offset = Vector3.new(
+						math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
+						2,
+						math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
+					)
+					bodyPosition.Position = rootPart.Position + offset
+				end
+			end
+		else
+			-- Not in arena: follow the player
+			petInfo.TargetStarID = nil -- Clear any star targets
+			
+			local offset = Vector3.new(
+				math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
+				2,
+				math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
+			)
+			bodyPosition.Position = rootPart.Position + offset
+		end
+	end
+end
+
+-- Main pet behavior update loop
+local function StartPetBehaviorLoop()
+	if PetBehaviorThread then return end
+	
+	local lastArenaCheck = 0
+	
+	PetBehaviorThread = RunService.Heartbeat:Connect(function(deltaTime)
+		lastArenaCheck = lastArenaCheck + deltaTime
+		
+		for _, player in ipairs(Players:GetPlayers()) do
+			-- Update arena status periodically
+			if lastArenaCheck >= ARENA_CHECK_INTERVAL then
+				UpdatePlayerArenaStatus(player)
+			end
+			
+			-- Update pet behavior
+			UpdatePetBehavior(player)
+		end
+		
+		if lastArenaCheck >= ARENA_CHECK_INTERVAL then
+			lastArenaCheck = 0
+		end
+	end)
+	
+	Log("Pet behavior loop started")
 end
 
 -- Initialize pet IDs for a player (called after data is loaded)
@@ -45,6 +458,9 @@ function PetService:InitializePets(player: Player)
 		idToPetIndex = {},
 	}
 	
+	-- Initialize arena status
+	PlayerArenaStatus[userId] = false
+	
 	-- Get player's pet inventory from data store
 	local inventory = DataService:Get(player, "Inventory")
 	if inventory and inventory.PetInventory then
@@ -53,6 +469,16 @@ function PetService:InitializePets(player: Player)
 			local petID = GeneratePetID()
 			PlayerPetIDs[userId].petIndexToID[index] = petID
 			PlayerPetIDs[userId].idToPetIndex[petID] = index
+		end
+		
+		-- Spawn equipped pets
+		if inventory.EquippedPets then
+			for _, petIndex in ipairs(inventory.EquippedPets) do
+				local petData = inventory.PetInventory[petIndex]
+				if petData then
+					SpawnPetModel(player, petIndex, petData)
+				end
+			end
 		end
 	end
 	
@@ -148,7 +574,7 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 		return false, "Max equipped"
 	end
 	
-	-- Equip the pet
+	-- Equip the pet (save to data)
 	DataService:Update(player, "Inventory", function(inv)
 		if not inv.EquippedPets then
 			inv.EquippedPets = {}
@@ -159,6 +585,9 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 	
 	local petData = inventory.PetInventory[petIndex]
 	Log(string.format("Player %s equipped %s", player.Name, petData.Name))
+	
+	-- Spawn the pet model
+	SpawnPetModel(player, petIndex, petData)
 	
 	-- Fire signal to client
 	PetService.Client.PetEquipped:Fire(player, {
@@ -222,6 +651,9 @@ function PetService:UnequipPet(player: Player, petID: string): (boolean, string?
 	
 	Log(string.format("Player %s unequipped pet at index %d", player.Name, petIndex))
 	
+	-- Despawn the pet model
+	DespawnPetModel(player, petIndex)
+	
 	-- Fire signal to client
 	PetService.Client.PetUnequipped:Fire(player, {
 		ID = petID,
@@ -279,17 +711,36 @@ end
 
 -- Clean up when player leaves
 local function OnPlayerRemoving(player: Player)
-	PlayerPetIDs[player.UserId] = nil
+	local userId = player.UserId
+	
+	-- Despawn all pets
+	DespawnAllPets(player)
+	
+	-- Clean up data
+	PlayerPetIDs[userId] = nil
+	SpawnedPets[userId] = nil
+	PlayerArenaStatus[userId] = nil
+	
 	Log(string.format("Cleared pet data for player %s", player.Name))
 end
 
 -- Knit lifecycle
 function PetService:KnitInit()
 	Players.PlayerRemoving:Connect(OnPlayerRemoving)
+	
+	-- Create collision group for pets
+	local PhysicsService = game:GetService("PhysicsService")
+	pcall(function()
+		PhysicsService:RegisterCollisionGroup("Pets")
+		PhysicsService:CollisionGroupSetCollidable("Pets", "Default", false)
+	end)
+	
 	Log("PetService initialized")
 end
 
 function PetService:KnitStart()
+	-- Start the pet behavior loop
+	StartPetBehaviorLoop()
 	Log("PetService started")
 end
 
