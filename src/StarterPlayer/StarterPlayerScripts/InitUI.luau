@@ -17,8 +17,11 @@ local handler = {
             UnlockedWorlds = { "Main" },
         },
         Inventory = {
+            -- PetInventory stores full pet data:
+            -- { Name: string, PetType: string, Multiplier: number, FuelBonus: number, 
+            --   PickupRangeBonus: number, World: string, Level: number, Rarity: string }
             PetInventory = {},
-            EquippedPets = {},
+            EquippedPets = {}, -- Indices of equipped pets (max 3)
             Potions = {},
         },
         Meta = {

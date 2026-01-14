@@ -104,11 +104,16 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 			inventory.PetInventory = {}
 		end
 		
-		-- Add pet with name and multiplier
+		-- Add pet with all stats from config
 		local petEntry = {
 			PetType = petType,
 			Name = petConfig.Name,
 			Multiplier = petConfig.Multiplier,
+			FuelBonus = petConfig.FuelBonus or 1.1,
+			PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
+			World = petConfig.World or eggConfig.World or "Main",
+			Level = petConfig.BaseLevel or 1,
+			Rarity = petConfig.Rarity or "Standard",
 			ObtainedAt = os.time(),
 		}
 		table.insert(inventory.PetInventory, petEntry)
@@ -132,7 +137,13 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	local petInfo = {
 		Name = petConfig.Name,
 		ID = petID,
+		PetType = petType,
 		Multiplier = petConfig.Multiplier,
+		FuelBonus = petConfig.FuelBonus or 1.1,
+		PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
+		World = petConfig.World or eggConfig.World or "Main",
+		Level = petConfig.BaseLevel or 1,
+		Rarity = petConfig.Rarity or "Standard",
 	}
 	
 	-- Fire signal to client
