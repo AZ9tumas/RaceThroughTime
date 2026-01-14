@@ -58,6 +58,8 @@ local isRequestingTrack = false
 
 -- Arena state - tracks whether player is currently inside the arena
 local isInArena = false
+local lastArenaCheckTime = 0
+local ARENA_CHECK_INTERVAL = 0.1 -- Check arena status every 0.1 seconds for performance
 
 -- Gate settings from Stats
 local GATE_PROXIMITY_DISTANCE = statsM.GateProximityDistance
@@ -219,8 +221,15 @@ local function CheckPlayerInArena(): boolean
     return horizontalDistance <= arenaRadius
 end
 
--- Update arena status and return current state
+-- Update arena status with throttling for performance
+-- Only checks every ARENA_CHECK_INTERVAL seconds
 local function UpdateArenaStatus(): boolean
+    local currentTime = tick()
+    if currentTime - lastArenaCheckTime < ARENA_CHECK_INTERVAL then
+        return isInArena -- Return cached value if not enough time has passed
+    end
+    lastArenaCheckTime = currentTime
+    
     local wasInArena = isInArena
     isInArena = CheckPlayerInArena()
     
