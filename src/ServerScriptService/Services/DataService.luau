@@ -116,17 +116,10 @@ local function TryResolveSession(player: Player)
 	local profile = PlayerProfiles[player]
 	local clientReady = ClientStatus[player]
 	local sessionPromise = SessionReadyPromises[player]
-
-	-- immediately send data right away
-	if profile then
-		local data = profile.Data
-
-		-- Fire DataReady signal to client
-		DataService.Client.DataReady:Fire(player, data)
-	end
-
+	
 	if profile and clientReady and sessionPromise and sessionPromise.resolve then
 		print(player, "Session Initialized")
+		DataService.Client.DataReady:Fire(player, profile.Data)
 		sessionPromise.resolve()
 		sessionPromise.resolve = nil -- Prevent double resolution
 	end

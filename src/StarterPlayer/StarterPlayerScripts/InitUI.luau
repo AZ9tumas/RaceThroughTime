@@ -42,12 +42,16 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local PlayerGui = player:WaitForChild("PlayerGui")
 
+-- Knit for service communication
+local Knit = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Knit"))
+
+local EggService = Knit.GetService("EggService")
+local DailyRewardService = Knit.GetService("DailyRewardService")
+local DataService = Knit.GetService("DataService")
+
 -- modules
 local modules = ReplicatedStorage:WaitForChild("Modules")
 local statsM = require(modules:WaitForChild("Stats"))
-
--- Knit for service communication
-local Knit = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Knit"))
 
 -- Debounce state for track requests
 local isRequestingTrack = false
@@ -55,29 +59,6 @@ local isRequestingTrack = false
 -- Gate settings from Stats
 local GATE_PROXIMITY_DISTANCE = statsM.GateProximityDistance
 local MAX_GATE_INDEX = statsM.MaxGateIndex
-
--- Get TrackGates for the player's current world
-local function GetTrackGatesForCurrentWorld(): Folder?
-    local currentWorld = handler.data.Progression.CurrentWorld or "Main"
-    local worldFolder = Workspace:FindFirstChild(currentWorld)
-    if worldFolder then
-        local trackSystem = worldFolder:FindFirstChild("Track_System")
-        if trackSystem then
-            return trackSystem:FindFirstChild("Track_Gates")
-        end
-    end
-    
-    -- Fallback to Main world
-    local mainWorld = Workspace:FindFirstChild("Main")
-    if mainWorld then
-        local trackSystem = mainWorld:FindFirstChild("Track_System")
-        if trackSystem then
-            return trackSystem:FindFirstChild("Track_Gates")
-        end
-    end
-    
-    return nil
-end
 
 -- ui
 local mainUi: ScreenGui = PlayerGui:WaitForChild("RaceThroughTime_UI")
@@ -106,6 +87,9 @@ local shopGemsCount = shopTop:WaitForChild("Gems"):WaitForChild("Count")
 local shopEggsContainer = shopMain:WaitForChild("ScrollingFrame"):WaitForChild("Eggs"):WaitForChild("MainFrame")
 local standardEggBuy = shopEggsContainer:WaitForChild("StandardEgg"):WaitForChild("Buy")
 
+-- pets and inv
+local petsButton: TextButton = leftPanel:WaitForChild("PetsButton")
+
 -- vals
 local leaderstats = player:WaitForChild("leaderstats")
 local gemsVal = leaderstats:WaitForChild("Gems")
@@ -113,18 +97,69 @@ local cashVal = leaderstats:WaitForChild("Cash")
 local statsfolder = player:WaitForChild("Stats")
 local fuelVal = statsfolder:WaitForChild("Fuel")
 
--- Tween settings for smooth fuel bar animation
-local tweenInfo = TweenInfo.new(
-    0.3,                            -- Duration
-    Enum.EasingStyle.Quad,          -- Easing style
-    Enum.EasingDirection.Out,       -- Easing direction
-    0,                              -- Repeat count
-    false,                          -- Reverses
-    0                               -- Delay
-)
+local dailyFrameMain = dailyFrame:WaitForChild("Main")
+local dailyFrameCloseButton = dailyFrame:WaitForChild("Close")
+local cardHolderFrame = dailyFrameMain:WaitForChild("CardHolder")
+local cardHolders = {
+    DayOne = {
+        Day = 1,
+        Frame = cardHolderFrame:WaitForChild("1"),
+        RedeemButton = cardHolderFrame:WaitForChild("1"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("1"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("1"):WaitForChild("Amount"),
+    },
+    DayTwo = {
+        Day = 2,
+        Frame = cardHolderFrame:WaitForChild("2"),
+        RedeemButton = cardHolderFrame:WaitForChild("2"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("2"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("2"):WaitForChild("Amount"),
+    },
+    DayThree = {
+        Day = 3,
+        Frame = cardHolderFrame:WaitForChild("3"),
+        RedeemButton = cardHolderFrame:WaitForChild("3"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("3"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("3"):WaitForChild("Amount"),
+    },
+    DayFour = {
+        Day = 4,
+        Frame = cardHolderFrame:WaitForChild("4"),
+        RedeemButton = cardHolderFrame:WaitForChild("4"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("4"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("4"):WaitForChild("Amount"),
+    },
+    DayFive = {
+        Day = 5,
+        Frame = cardHolderFrame:WaitForChild("5"),
+        RedeemButton = cardHolderFrame:WaitForChild("5"):WaitForChild("Claim"):WaitForChild("Interact"),
+        Image = cardHolderFrame:WaitForChild("5"):WaitForChild("ImageLabel"),
+        TextLabel = cardHolderFrame:WaitForChild("5"):WaitForChild("Amount"),
+    },
+}
 
--- Track current tween to cancel if needed
-local currentFuelTween = nil
+-- Get TrackGates for the player's current world
+local function GetTrackGatesForCurrentWorld(): Folder?
+    local currentWorld = handler.data.Progression.CurrentWorld or "Main"
+    local worldFolder = Workspace:FindFirstChild(currentWorld)
+    if worldFolder then
+        local trackSystem = worldFolder:FindFirstChild("Track_System")
+        if trackSystem then
+            return trackSystem:FindFirstChild("Track_Gates")
+        end
+    end
+    
+    -- Fallback to Main world
+    local mainWorld = Workspace:FindFirstChild("Main")
+    if mainWorld then
+        local trackSystem = mainWorld:FindFirstChild("Track_System")
+        if trackSystem then
+            return trackSystem:FindFirstChild("Track_Gates")
+        end
+    end
+    
+    return nil
+end
 
 -- Helper function to truncate large numbers
 local function truncateNumber(n: number)
@@ -183,6 +218,10 @@ local function IsPlayerNearGate(): boolean
     return false
 end
 
+function handler.UpdatePetsInventory()
+
+end
+
 function handler.UpdateFuelUI(amount: number)
     -- Update fuel text
     fuelText.Text = "⭐ FUEL: " .. math.floor(amount)
@@ -220,6 +259,61 @@ function handler.UpdateDataOnClient(newData)
     handler.UpdateShopUI()
 end
 
+function handler.UpdateRewardsStatus()
+    -- Get DailyRewardService to check collected rewards
+    local collectedRewards = handler.data.Meta.CollectedRewards or {}
+    local DailyRewardsConfig = require(modules:WaitForChild("DailyRewards"))
+    
+    -- Update each card's status based on collected rewards
+    for _, cardData in pairs(cardHolders) do
+        local rewardID = DailyRewardsConfig.GetRewardIDForDay(cardData.Day)
+        if rewardID and collectedRewards[rewardID] then
+            cardData.RedeemButton.Parent.PriceLabel.Text = "REDEEMED"
+        end
+    end
+end
+
+-- Function to reset debounce when track ends (called externally)
+function handler.ResetTrackDebounce()
+    isRequestingTrack = false
+end
+
+-- Update run button visibility based on gate proximity
+local function UpdateRunButtonVisibility()
+    -- Don't show if player is on track or requesting track
+    local TrackController = Knit.GetController("TrackController")
+    if TrackController and TrackController:IsOnTrack() then
+        runButton.Visible = false
+        return
+    end
+    
+    if isRequestingTrack then
+        runButton.Visible = false
+        return
+    end
+    
+    -- Show only if near a gate
+    runButton.Visible = IsPlayerNearGate()
+end
+
+-- daily frame
+handler._connections["DailyButton"] = dailyButton.MouseButton1Click:Connect(function()
+    dailyFrame.Visible = not dailyFrame.Visible
+end)
+
+for _, cardData in pairs(cardHolders) do
+    handler._connections["Day" .. cardData.Frame.Name] = cardData.RedeemButton.MouseButton1Click:Connect(function()
+        -- Send claim request to server with the specific day number
+        local success, _ = DailyRewardService:RequestCollectReward(cardData.Day)
+        
+        handler.UpdateRewardsStatus()
+        
+        -- Close the daily frame after clicking
+        dailyFrame.Visible = false
+    end)
+end
+
+-- ui init
 handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function()
     -- Debounce: prevent spam requests while one is already in progress
     if isRequestingTrack then
@@ -271,106 +365,6 @@ handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function
     end)
 end)
 
--- Function to reset debounce when track ends (called externally)
-function handler.ResetTrackDebounce()
-    isRequestingTrack = false
-end
-
--- Update run button visibility based on gate proximity
-local function UpdateRunButtonVisibility()
-    -- Don't show if player is on track or requesting track
-    local TrackController = Knit.GetController("TrackController")
-    if TrackController and TrackController:IsOnTrack() then
-        runButton.Visible = false
-        return
-    end
-    
-    if isRequestingTrack then
-        runButton.Visible = false
-        return
-    end
-    
-    -- Show only if near a gate
-    runButton.Visible = IsPlayerNearGate()
-end
-
--- daily frame
-handler._connections["DailyButton"] = dailyButton.MouseButton1Click:Connect(function()
-    dailyFrame.Visible = not dailyFrame.Visible
-end)
-
-local dailyFrameMain = dailyFrame:WaitForChild("Main")
-local dailyFrameCloseButton = dailyFrame:WaitForChild("Close")
-local cardHolderFrame = dailyFrameMain:WaitForChild("CardHolder")
-local cardHolders = {
-    DayOne = {
-        Day = 1,
-        Frame = cardHolderFrame:WaitForChild("1"),
-        RedeemButton = cardHolderFrame:WaitForChild("1"):WaitForChild("Claim"):WaitForChild("Interact"),
-        Image = cardHolderFrame:WaitForChild("1"):WaitForChild("ImageLabel"),
-        TextLabel = cardHolderFrame:WaitForChild("1"):WaitForChild("Amount"),
-    },
-    DayTwo = {
-        Day = 2,
-        Frame = cardHolderFrame:WaitForChild("2"),
-        RedeemButton = cardHolderFrame:WaitForChild("2"):WaitForChild("Claim"):WaitForChild("Interact"),
-        Image = cardHolderFrame:WaitForChild("2"):WaitForChild("ImageLabel"),
-        TextLabel = cardHolderFrame:WaitForChild("2"):WaitForChild("Amount"),
-    },
-    DayThree = {
-        Day = 3,
-        Frame = cardHolderFrame:WaitForChild("3"),
-        RedeemButton = cardHolderFrame:WaitForChild("3"):WaitForChild("Claim"):WaitForChild("Interact"),
-        Image = cardHolderFrame:WaitForChild("3"):WaitForChild("ImageLabel"),
-        TextLabel = cardHolderFrame:WaitForChild("3"):WaitForChild("Amount"),
-    },
-    DayFour = {
-        Day = 4,
-        Frame = cardHolderFrame:WaitForChild("4"),
-        RedeemButton = cardHolderFrame:WaitForChild("4"):WaitForChild("Claim"):WaitForChild("Interact"),
-        Image = cardHolderFrame:WaitForChild("4"):WaitForChild("ImageLabel"),
-        TextLabel = cardHolderFrame:WaitForChild("4"):WaitForChild("Amount"),
-    },
-    DayFive = {
-        Day = 5,
-        Frame = cardHolderFrame:WaitForChild("5"),
-        RedeemButton = cardHolderFrame:WaitForChild("5"):WaitForChild("Claim"):WaitForChild("Interact"),
-        Image = cardHolderFrame:WaitForChild("5"):WaitForChild("ImageLabel"),
-        TextLabel = cardHolderFrame:WaitForChild("5"):WaitForChild("Amount"),
-    },
-}
-
-function handler.UpdateRewardsStatus()
-    -- Get DailyRewardService to check collected rewards
-    local collectedRewards = handler.data.Meta.CollectedRewards or {}
-    local DailyRewardsConfig = require(modules:WaitForChild("DailyRewards"))
-    
-    -- Update each card's status based on collected rewards
-    for _, cardData in pairs(cardHolders) do
-        local rewardID = DailyRewardsConfig.GetRewardIDForDay(cardData.Day)
-        if rewardID and collectedRewards[rewardID] then
-            cardData.RedeemButton.Parent.PriceLabel.Text = "REDEEMED"
-        end
-    end
-end
-
--- Connect all daily reward claim buttons to the server
--- Client only sends the request - server handles everything including notifications
-local DailyRewardService = Knit.GetService("DailyRewardService")
-local DataService = Knit.GetService("DataService")
-
-for _, cardData in pairs(cardHolders) do
-    handler._connections["Day" .. cardData.Frame.Name] = cardData.RedeemButton.MouseButton1Click:Connect(function()
-        -- Send claim request to server with the specific day number
-        local success, _ = DailyRewardService:RequestCollectReward(cardData.Day)
-        
-        handler.UpdateRewardsStatus()
-        
-        -- Close the daily frame after clicking
-        dailyFrame.Visible = false
-    end)
-end
-
 handler._connections["DailyFrameClose"] = dailyFrameCloseButton.MouseButton1Click:Connect(function()
     dailyFrame.Visible = false
 end)
@@ -378,9 +372,6 @@ end)
 handler._connections["ShopButton"] = shopButton.MouseButton1Click:Connect(function()
     shopMain.Visible = not shopMain.Visible
 end)
-
--- shop
-local EggService = Knit.GetService("EggService")
 
 handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connect(function()
     -- Purchase egg and immediately receive pet

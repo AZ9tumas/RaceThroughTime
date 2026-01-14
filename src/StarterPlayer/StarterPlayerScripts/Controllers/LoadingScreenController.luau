@@ -73,6 +73,9 @@ end
 -- Check if loading is complete and fade out if so
 local function TryCompleteLoading()
 	if IsDataReady and IsAssetsReady then
+		
+		-- we execute initui.luau here to ensure UI is ready before hiding loading screen
+		local uiInit = require(script.Parent.Parent:WaitForChild("InitUI"))
 		FadeOut(LoadingFrame)
 
 		-- Request character spawn from server
