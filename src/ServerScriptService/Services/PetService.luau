@@ -700,9 +700,9 @@ function PetService:GetPlayerPets(player: Player): { { ID: string, Name: string,
 	return pets
 end
 
--- Merge two pets of the same type and world to create a higher level pet
+-- Merge two pets to create a higher level pet
 -- Requires Gems based on the pet's current level
--- Both pets must be from the same world and at least one must be the same PetType
+-- Both pets must be from the same world
 function PetService:MergePets(player: Player, petID1: string, petID2: string): (boolean, string?, { Name: string, ID: string, Level: number }?)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
@@ -810,8 +810,8 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 	
 	-- Calculate new stats
 	local newLevel = currentLevel + 1
-	local newMultiplier = (pet1.Multiplier or 1.1) + Stats.MergeBonus.MultiplierPerLevel
-	local newFuelBonus = (pet1.FuelBonus or 1.1) + Stats.MergeBonus.FuelBonusPerLevel
+	local newMultiplier = (pet1.Multiplier or 1.0) + Stats.MergeBonus.MultiplierPerLevel
+	local newFuelBonus = (pet1.FuelBonus or 1.0) + Stats.MergeBonus.FuelBonusPerLevel
 	local newPickupRangeBonus = (pet1.PickupRangeBonus or 1.0) + Stats.MergeBonus.PickupRangeBonusPerLevel
 	
 	-- Despawn pet2 if equipped before removing from inventory
