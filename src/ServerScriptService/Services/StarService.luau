@@ -129,6 +129,32 @@ function StarService:GetStarInformation(player: Player)
 	return UniversalTracker[player.UserId]
 end
 
+-- Server-side star collection (for pets, no distance check)
+-- Returns the fuel value if successful, nil otherwise
+function StarService:CollectStarServer(player: Player, starId: string): number?
+	local userId = player.UserId
+	local starInfo, index = FindStarById(userId, starId)
+	
+	if not starInfo then
+		return nil
+	end
+	
+	local fuelValue = starInfo.FuelValue
+	
+	-- Remove star from tracker
+	local starInfoList = UniversalTracker[userId]
+	if starInfoList then
+		table.remove(starInfoList, index)
+	end
+	
+	-- Notify client to remove the star
+	self.Client.RemoveStar:Fire(player, starId)
+	
+	Log(string.format("Server collected star %s for player %s, fuel value: %d", starInfo.StarName, player.Name, fuelValue))
+	
+	return fuelValue
+end
+
 -- Find star info by ID in player's tracker
 local function FindStarById(userId: number, starId: string):
 	({ Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number }?, number?)

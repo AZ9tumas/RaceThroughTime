@@ -45,6 +45,7 @@ local PET_FOLLOW_OFFSET_SPACING = 5 -- Spacing between multiple pets
 local PET_STAR_COLLECTION_RADIUS = 5 -- Distance from star to collect it
 local ARENA_CHECK_INTERVAL = 0.1 -- How often to check arena status (seconds)
 local PET_UPDATE_INTERVAL = 0.2 -- How often to update pet behavior (seconds)
+local PetsCollisionGroupCreated = false -- Track if collision group was created
 
 -- Helper function for logging
 local function Log(message: string)
@@ -206,8 +207,12 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: { Name: 
 		bodyPosition.P = 10000
 		bodyPosition.Parent = primaryPart
 		
-		-- Make pet not collide with players
-		primaryPart.CollisionGroup = "Pets"
+		-- Make pet not collide with players (only if collision group was created)
+		if PetsCollisionGroupCreated then
+			primaryPart.CollisionGroup = "Pets"
+		else
+			primaryPart.CanCollide = false
+		end
 	end
 	
 	petModel.Parent = workspace
@@ -297,37 +302,22 @@ end
 -- Collect a star via pet (server-side collection)
 local function CollectStarViaPet(player: Player, starId: string): boolean
 	local StarService = Knit.GetService("StarService")
-	local starInfo = StarService:GetStarInformation(player)
 	
-	if not starInfo then return false end
+	-- Use StarService's server-side collection method
+	local fuelValue = StarService:CollectStarServer(player, starId)
 	
-	-- Find the star
-	local foundStar = nil
-	local foundIndex = nil
-	for index, star in ipairs(starInfo) do
-		if star.ID == starId then
-			foundStar = star
-			foundIndex = index
-			break
-		end
+	if not fuelValue then
+		return false
 	end
-	
-	if not foundStar then return false end
 	
 	-- Add fuel to player
 	local DataService = Knit.GetService("DataService")
 	DataService:Update(player, "Stats", function(stats)
-		stats.Fuel = stats.Fuel + foundStar.FuelValue
+		stats.Fuel = stats.Fuel + fuelValue
 		return stats
 	end)
 	
-	-- Remove star from tracker
-	table.remove(starInfo, foundIndex)
-	
-	-- Notify client to remove the star
-	StarService.Client.RemoveStar:Fire(player, starId)
-	
-	Log(string.format("Pet collected %s for player %s, gained %d fuel", foundStar.StarName, player.Name, foundStar.FuelValue))
+	Log(string.format("Pet collected star for player %s, gained %d fuel", player.Name, fuelValue))
 	
 	return true
 end
@@ -425,9 +415,17 @@ local function StartPetBehaviorLoop()
 	if PetBehaviorThread then return end
 	
 	local lastArenaCheck = 0
+	local lastPetUpdate = 0
 	
 	PetBehaviorThread = RunService.Heartbeat:Connect(function(deltaTime)
 		lastArenaCheck = lastArenaCheck + deltaTime
+		lastPetUpdate = lastPetUpdate + deltaTime
+		
+		-- Only update pet behavior at throttled interval for performance
+		if lastPetUpdate < PET_UPDATE_INTERVAL then
+			return
+		end
+		lastPetUpdate = 0
 		
 		for _, player in ipairs(Players:GetPlayers()) do
 			-- Update arena status periodically
@@ -435,8 +433,10 @@ local function StartPetBehaviorLoop()
 				UpdatePlayerArenaStatus(player)
 			end
 			
-			-- Update pet behavior
-			UpdatePetBehavior(player)
+			-- Update pet behavior (spawned in separate task to avoid blocking)
+			task.spawn(function()
+				UpdatePetBehavior(player)
+			end)
 		end
 		
 		if lastArenaCheck >= ARENA_CHECK_INTERVAL then
@@ -730,10 +730,17 @@ function PetService:KnitInit()
 	
 	-- Create collision group for pets
 	local PhysicsService = game:GetService("PhysicsService")
-	pcall(function()
+	local success = pcall(function()
 		PhysicsService:RegisterCollisionGroup("Pets")
 		PhysicsService:CollisionGroupSetCollidable("Pets", "Default", false)
 	end)
+	
+	PetsCollisionGroupCreated = success
+	if success then
+		Log("Created Pets collision group")
+	else
+		Log("Failed to create Pets collision group, using CanCollide=false fallback")
+	end
 	
 	Log("PetService initialized")
 end
