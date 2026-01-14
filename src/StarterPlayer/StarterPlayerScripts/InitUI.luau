@@ -89,6 +89,12 @@ local standardEggBuy = shopEggsContainer:WaitForChild("StandardEgg"):WaitForChil
 
 -- pets and inv
 local petsButton: TextButton = leftPanel:WaitForChild("PetsButton")
+local uiInventory: ScreenGui = PlayerGui:WaitForChild("UI_Inventory")
+local inventoryMainFrame: Frame = uiInventory:WaitForChild("MainFrame")
+local inventoryPetCount: TextLabel = inventoryMainFrame:WaitForChild("PetCount")
+local inventoryScrollingFrame: ScrollingFrame = inventoryMainFrame:WaitForChild("ScrollingFrame")
+local inventoryPetTemplate: Frame = inventoryScrollingFrame:WaitForChild("Template")
+local inventoryCloseButton: TextButton = inventoryMainFrame:WaitForChild("Close")
 
 -- vals
 local leaderstats = player:WaitForChild("leaderstats")
@@ -219,7 +225,42 @@ local function IsPlayerNearGate(): boolean
 end
 
 function handler.UpdatePetsInventory()
-
+    -- Clear existing pet frames (except the template)
+    for _, child in ipairs(inventoryScrollingFrame:GetChildren()) do
+        if child:IsA("Frame") and child.Name ~= "Template" then
+            child:Destroy()
+        end
+    end
+    
+    -- Get the pet inventory from handler data
+    local petInventory = handler.data.Inventory.PetInventory or {}
+    
+    -- Update pet count display
+    inventoryPetCount.Text = "Pets: " .. #petInventory
+    
+    -- Create a frame for each pet
+    for index, petData in ipairs(petInventory) do
+        local petFrame = inventoryPetTemplate:Clone()
+        petFrame.Name = "Pet_" .. index
+        petFrame.Visible = true
+        
+        -- Set the pet name (TextLabel directly under the frame)
+        local nameLabel = petFrame:FindFirstChild("TextLabel")
+        if nameLabel then
+            nameLabel.Text = petData.Name or "Unknown Pet"
+        end
+        
+        -- Set the multiplier text (TextLabel under Multiplier frame)
+        local multiplierFrame = petFrame:FindFirstChild("Multiplier")
+        if multiplierFrame then
+            local multiplierLabel = multiplierFrame:FindFirstChild("TextLabel")
+            if multiplierLabel then
+                multiplierLabel.Text = string.format("x%.1f", petData.Multiplier or 1.0)
+            end
+        end
+        
+        petFrame.Parent = inventoryScrollingFrame
+    end
 end
 
 function handler.UpdateFuelUI(amount: number)
@@ -389,6 +430,9 @@ handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connec
                 Name = petInfo.Name,
                 Multiplier = petInfo.Multiplier,
             })
+            
+            -- Update the pets inventory UI if it's visible
+            handler.UpdatePetsInventory()
         else
             print("Failed to purchase StandardEgg:", errorMsg or "Unknown error")
         end
@@ -397,6 +441,18 @@ end)
 
 handler._connections["ShopClose"] = shopMain:WaitForChild("Close").MouseButton1Click:Connect(function()
     shopMain.Visible = false
+end)
+
+-- Pets inventory UI
+handler._connections["PetsButton"] = petsButton.MouseButton1Click:Connect(function()
+    inventoryMainFrame.Visible = not inventoryMainFrame.Visible
+    if inventoryMainFrame.Visible then
+        handler.UpdatePetsInventory()
+    end
+end)
+
+handler._connections["InventoryClose"] = inventoryCloseButton.MouseButton1Click:Connect(function()
+    inventoryMainFrame.Visible = false
 end)
 
 -- Listen for DataReady signal from server to update UI
