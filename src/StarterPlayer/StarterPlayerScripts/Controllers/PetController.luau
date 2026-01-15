@@ -39,7 +39,7 @@ local CachedRoamRange = DEFAULT_ROAM_RANGE
 -- Pet targets: [petModel] = targetStarID or nil
 local PetTargets = {}
 
--- Debug trails: [petModel] = { Trail, Attachment0, Attachment1 }
+-- Debug beams: [petModel] = { Beam, Attachment0, Attachment1 }
 local DebugTrails = {}
 
 -- Connection
@@ -179,16 +179,16 @@ local function SetPetToFollowPlayer(alignPos: AlignPosition, alignOri: AlignOrie
 	end
 end
 
--- Create or update debug trail between pet and targeted star
+-- Create or update debug beam between pet and targeted star
 local function UpdateDebugTrail(petModel: Model, starPart: BasePart?)
 	local primaryPart = petModel.PrimaryPart
 	if not primaryPart then return end
 	
-	-- If no star target, remove existing trail
+	-- If no star target, remove existing beam
 	if not starPart then
 		local trailData = DebugTrails[petModel]
 		if trailData then
-			if trailData.Trail then trailData.Trail:Destroy() end
+			if trailData.Beam then trailData.Beam:Destroy() end
 			if trailData.Attachment0 then trailData.Attachment0:Destroy() end
 			if trailData.Attachment1 then trailData.Attachment1:Destroy() end
 			DebugTrails[petModel] = nil
@@ -196,35 +196,35 @@ local function UpdateDebugTrail(petModel: Model, starPart: BasePart?)
 		return
 	end
 	
-	-- Create or get trail data
+	-- Create or get beam data
 	local trailData = DebugTrails[petModel]
 	
 	if not trailData then
 		-- Create attachment on pet's primary part
 		local attachment0 = Instance.new("Attachment")
-		attachment0.Name = "DebugTrailAttachment0"
+		attachment0.Name = "DebugBeamAttachment0"
 		attachment0.Parent = primaryPart
 		
 		-- Create attachment on star
 		local attachment1 = Instance.new("Attachment")
-		attachment1.Name = "DebugTrailAttachment1"
+		attachment1.Name = "DebugBeamAttachment1"
 		attachment1.Parent = starPart
 		
-		-- Create trail between attachments
-		local trail = Instance.new("Trail")
-		trail.Name = "DebugPetTrail"
-		trail.Attachment0 = attachment0
-		trail.Attachment1 = attachment1
-		trail.Color = ColorSequence.new(Color3.fromRGB(255, 255, 0)) -- Yellow trail
-		trail.Transparency = NumberSequence.new(0.3)
-		trail.Lifetime = 0.5
-		trail.MinLength = 0.1
-		trail.WidthScale = NumberSequence.new(1)
-		trail.FaceCamera = true
-		trail.Parent = primaryPart
+		-- Create beam between attachments
+		local beam = Instance.new("Beam")
+		beam.Name = "DebugPetBeam"
+		beam.Attachment0 = attachment0
+		beam.Attachment1 = attachment1
+		beam.Color = ColorSequence.new(Color3.fromRGB(255, 255, 0)) -- Yellow beam
+		beam.Transparency = NumberSequence.new(0.3)
+		beam.Width0 = 0.5
+		beam.Width1 = 0.5
+		beam.FaceCamera = true
+		beam.Segments = 1
+		beam.Parent = primaryPart
 		
 		trailData = {
-			Trail = trail,
+			Beam = beam,
 			Attachment0 = attachment0,
 			Attachment1 = attachment1,
 			CurrentStarPart = starPart,
@@ -238,16 +238,16 @@ local function UpdateDebugTrail(petModel: Model, starPart: BasePart?)
 				trailData.Attachment1:Destroy()
 			end
 			local newAttachment1 = Instance.new("Attachment")
-			newAttachment1.Name = "DebugTrailAttachment1"
+			newAttachment1.Name = "DebugBeamAttachment1"
 			newAttachment1.Parent = starPart
 			trailData.Attachment1 = newAttachment1
-			trailData.Trail.Attachment1 = newAttachment1
+			trailData.Beam.Attachment1 = newAttachment1
 			trailData.CurrentStarPart = starPart
 		end
 	end
 end
 
--- Clear all debug trails for a pet
+-- Clear all debug beams for a pet
 local function ClearDebugTrail(petModel: Model)
 	UpdateDebugTrail(petModel, nil)
 end
