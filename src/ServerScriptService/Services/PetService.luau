@@ -73,6 +73,13 @@ local PET_UPDATE_INTERVAL = 0.2 -- How often to update pet behavior (seconds)
 local PetsCollisionGroupCreated = false -- Track if collision group was created
 -- Note: RoamRange and StarCollectionRadius are now pet-specific stats stored in pet data
 
+-- Constants for pet movers (AlignPosition/AlignOrientation)
+local PET_ALIGN_MAX_FORCE = 100000
+local PET_ALIGN_MAX_VELOCITY = 50
+local PET_ALIGN_RESPONSIVENESS = 20
+local PET_ALIGN_MAX_TORQUE = 100000
+local PET_ALIGN_MAX_ANGULAR_VELOCITY = 20
+
 -- Helper function for logging
 local function Log(message: string)
 	--print(string.format("[PetService]: %s", message))
@@ -226,14 +233,33 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: { Name: 
 		end
 	end
 	
-	-- Create a BodyPosition to make the pet float/follow
+	-- Create AlignPosition and AlignOrientation for smooth movement (replaces deprecated BodyPosition)
 	local primaryPart = petModel.PrimaryPart
 	if primaryPart then
-		local bodyPosition = Instance.new("BodyPosition")
-		bodyPosition.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-		bodyPosition.D = 1000
-		bodyPosition.P = 10000
-		bodyPosition.Parent = primaryPart
+		-- Create attachment for body movers
+		local attachment = Instance.new("Attachment")
+		attachment.Name = "PetAttachment"
+		attachment.Parent = primaryPart
+		
+		-- Create AlignPosition for smooth position movement
+		local alignPosition = Instance.new("AlignPosition")
+		alignPosition.Name = "PetAlignPosition"
+		alignPosition.Mode = Enum.PositionAlignmentMode.OneAttachment
+		alignPosition.Attachment0 = attachment
+		alignPosition.MaxForce = PET_ALIGN_MAX_FORCE
+		alignPosition.MaxVelocity = PET_ALIGN_MAX_VELOCITY
+		alignPosition.Responsiveness = PET_ALIGN_RESPONSIVENESS
+		alignPosition.Parent = primaryPart
+		
+		-- Create AlignOrientation for smooth rotation
+		local alignOrientation = Instance.new("AlignOrientation")
+		alignOrientation.Name = "PetAlignOrientation"
+		alignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
+		alignOrientation.Attachment0 = attachment
+		alignOrientation.MaxTorque = PET_ALIGN_MAX_TORQUE
+		alignOrientation.MaxAngularVelocity = PET_ALIGN_MAX_ANGULAR_VELOCITY
+		alignOrientation.Responsiveness = PET_ALIGN_RESPONSIVENESS
+		alignOrientation.Parent = primaryPart
 		
 		-- Make pet not collide with players (only if collision group was created)
 		if PetsCollisionGroupCreated then
@@ -303,8 +329,9 @@ local function UpdatePetBehavior(player: Player)
 		if not petModel or not petModel.PrimaryPart then continue end
 		
 		local primaryPart = petModel.PrimaryPart
-		local bodyPosition = primaryPart:FindFirstChild("BodyPosition")
-		if not bodyPosition then continue end
+		local alignPosition = primaryPart:FindFirstChild("PetAlignPosition")
+		local alignOrientation = primaryPart:FindFirstChild("PetAlignOrientation")
+		if not alignPosition then continue end
 		
 		-- Server-side: pets always follow the player in formation
 		local offset = Vector3.new(
@@ -312,7 +339,12 @@ local function UpdatePetBehavior(player: Player)
 			2,
 			math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
 		)
-		bodyPosition.Position = rootPart.Position + offset
+		alignPosition.Position = rootPart.Position + offset
+		
+		-- Orient pet to face the same direction as player
+		if alignOrientation then
+			alignOrientation.CFrame = rootPart.CFrame
+		end
 	end
 end
 
