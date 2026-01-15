@@ -68,11 +68,10 @@ local PetBehaviorThread = nil
 -- Constants for pet behavior
 local PET_FOLLOW_DISTANCE = 8 -- Distance behind player to follow
 local PET_FOLLOW_OFFSET_SPACING = 5 -- Spacing between multiple pets
-local PET_STAR_COLLECTION_RADIUS = 10 -- Distance from star to collect it
 local ARENA_CHECK_INTERVAL = 0.1 -- How often to check arena status (seconds)
 local PET_UPDATE_INTERVAL = 0.2 -- How often to update pet behavior (seconds)
 local PetsCollisionGroupCreated = false -- Track if collision group was created
-local PET_ROAM_RANGE = 40 -- Maximum range pets can roam from player when collecting stars in arena
+-- Note: RoamRange and StarCollectionRadius are now pet-specific stats stored in pet data
 
 -- Helper function for logging
 local function Log(message: string)
@@ -596,6 +595,8 @@ function PetService:GetPlayerPets(player: Player): { { ID: string, Name: string,
 				Multiplier = petData.Multiplier,
 				FuelBonus = petData.FuelBonus or 1.0,
 				PickupRangeBonus = petData.PickupRangeBonus or 1.0,
+				RoamRange = petData.RoamRange or 30,
+				StarCollectionRadius = petData.StarCollectionRadius or 5,
 				World = petData.World or "Main",
 				Level = petData.Level or 1,
 				TierLevel = petData.TierLevel or petData.Level or 1,
@@ -722,6 +723,8 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		Multiplier = pet1.Multiplier or 1.0,
 		FuelBonus = pet1.FuelBonus or 1.0,
 		PickupRangeBonus = pet1.PickupRangeBonus or 1.0,
+		RoamRange = pet1.RoamRange or 30,
+		StarCollectionRadius = pet1.StarCollectionRadius or 5,
 	}
 	local newStats = PetMergeStats.CalculateMergedStats(oldStats, currentTierLevel)
 	local newTier = PetMergeStats.GetTierByLevel(newTierLevel)
@@ -740,6 +743,8 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		inv.PetInventory[petIndex1].Multiplier = newStats.Multiplier
 		inv.PetInventory[petIndex1].FuelBonus = newStats.FuelBonus
 		inv.PetInventory[petIndex1].PickupRangeBonus = newStats.PickupRangeBonus
+		inv.PetInventory[petIndex1].RoamRange = newStats.RoamRange
+		inv.PetInventory[petIndex1].StarCollectionRadius = newStats.StarCollectionRadius
 		
 		-- Remove pet2 from inventory
 		table.remove(inv.PetInventory, petIndex2)
@@ -802,11 +807,14 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		Multiplier = newStats.Multiplier,
 		FuelBonus = newStats.FuelBonus,
 		PickupRangeBonus = newStats.PickupRangeBonus,
+		RoamRange = newStats.RoamRange,
+		StarCollectionRadius = newStats.StarCollectionRadius,
 	}
 end
 
 -- Validate and process pet star collection from client
 -- Validates that the star collection is within the allowed range from the player
+-- Uses the maximum RoamRange and StarCollectionRadius from the player's equipped pets
 function PetService:PetCollectStar(player: Player, starId: string, petPosition: Vector3): (boolean, string?)
 	local character = player.Character
 	if not character then
@@ -821,6 +829,28 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 	-- Check if player is in arena (pets can only collect stars in arena)
 	if not self:IsPlayerInArena(player) then
 		return false, "Not in arena"
+	end
+	
+	-- Get the maximum RoamRange and StarCollectionRadius from equipped pets
+	local DataService = Knit.GetService("DataService")
+	local inventory = DataService:Get(player, "Inventory")
+	local maxRoamRange = 30 -- Default fallback
+	local maxStarCollectionRadius = 5 -- Default fallback
+	
+	if inventory and inventory.PetInventory and inventory.EquippedPets then
+		for _, petIndex in ipairs(inventory.EquippedPets) do
+			local petData = inventory.PetInventory[petIndex]
+			if petData then
+				local roamRange = petData.RoamRange or 30
+				local collectionRadius = petData.StarCollectionRadius or 5
+				if roamRange > maxRoamRange then
+					maxRoamRange = roamRange
+				end
+				if collectionRadius > maxStarCollectionRadius then
+					maxStarCollectionRadius = collectionRadius
+				end
+			end
+		end
 	end
 	
 	-- Get star information from StarService
@@ -848,15 +878,15 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 	local playerPosition = rootPart.Position
 	local distanceFromPlayer = (targetStar.Position - playerPosition).Magnitude
 	
-	if distanceFromPlayer > PET_ROAM_RANGE then
-		Log(string.format("Pet star collection rejected: star too far from player (%.2f > %d)", distanceFromPlayer, PET_ROAM_RANGE))
+	if distanceFromPlayer > maxRoamRange then
+		Log(string.format("Pet star collection rejected: star too far from player (%.2f > %.2f)", distanceFromPlayer, maxRoamRange))
 		return false, "Star out of range"
 	end
 	
 	-- Validate that the pet position is close enough to the star
 	local distanceFromPet = (targetStar.Position - petPosition).Magnitude
-	if distanceFromPet > PET_STAR_COLLECTION_RADIUS then
-		Log(string.format("Pet star collection rejected: pet too far from star (%.2f > %d)", distanceFromPet, PET_STAR_COLLECTION_RADIUS))
+	if distanceFromPet > maxStarCollectionRadius then
+		Log(string.format("Pet star collection rejected: pet too far from star (%.2f > %.2f)", distanceFromPet, maxStarCollectionRadius))
 		return false, "Pet not close enough to star"
 	end
 	
@@ -868,7 +898,6 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 	end
 	
 	-- Add fuel to player
-	local DataService = Knit.GetService("DataService")
 	DataService:Update(player, "Stats", function(stats)
 		stats.Fuel = stats.Fuel + fuelValue
 		return stats
@@ -914,16 +943,6 @@ end
 -- This validates that the star is within the pet's roam range from the player
 function PetService.Client:RequestPetCollectStar(player: Player, starId: string, petPosition: Vector3): (boolean, string?)
 	return PetService:PetCollectStar(player, starId, petPosition)
-end
-
--- Get pet roam range constant for client
-function PetService.Client:GetPetRoamRange(player: Player): number
-	return PET_ROAM_RANGE
-end
-
--- Get pet star collection radius for client
-function PetService.Client:GetPetStarCollectionRadius(player: Player): number
-	return PET_STAR_COLLECTION_RADIUS
 end
 
 -- Clean up when player leaves

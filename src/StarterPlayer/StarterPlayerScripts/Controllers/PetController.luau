@@ -27,14 +27,13 @@ local Player = Players.LocalPlayer
 local IsInArena = false
 local PetService = nil
 local StarService = nil
+local EquippedPetStats = {} -- Cache of equipped pet stats: { RoamRange, StarCollectionRadius }
 
 -- Pet behavior state
 local PetTargets = {} -- [petModel] = { TargetStarID = string?, TargetPosition = Vector3? }
 local SpawnedStars = {} -- Cache of spawned star references from workspace
 
--- Constants (will be fetched from server)
-local PET_ROAM_RANGE = 30
-local PET_STAR_COLLECTION_RADIUS = 5
+-- Constants
 local PET_UPDATE_INTERVAL = 0.1 -- Client updates pet behavior faster for smoother movement
 local PET_FOLLOW_DISTANCE = 8
 
@@ -45,6 +44,43 @@ local PetBehaviorConnection = nil
 local function Log(message: string)
 	-- Uncomment for debugging
 	-- print(string.format("[PetController]: %s", message))
+end
+
+-- Get the maximum RoamRange and StarCollectionRadius from equipped pets
+local function GetMaxPetStats(): (number, number)
+	local maxRoamRange = 30 -- Default fallback
+	local maxStarCollectionRadius = 5 -- Default fallback
+	
+	for _, stats in pairs(EquippedPetStats) do
+		if stats.RoamRange and stats.RoamRange > maxRoamRange then
+			maxRoamRange = stats.RoamRange
+		end
+		if stats.StarCollectionRadius and stats.StarCollectionRadius > maxStarCollectionRadius then
+			maxStarCollectionRadius = stats.StarCollectionRadius
+		end
+	end
+	
+	return maxRoamRange, maxStarCollectionRadius
+end
+
+-- Refresh equipped pet stats from server
+local function RefreshEquippedPetStats()
+	if not PetService then return end
+	
+	local pets = PetService:GetPets()
+	EquippedPetStats = {}
+	
+	for _, pet in ipairs(pets) do
+		if pet.Equipped then
+			EquippedPetStats[pet.ID] = {
+				RoamRange = pet.RoamRange or 30,
+				StarCollectionRadius = pet.StarCollectionRadius or 5,
+			}
+		end
+	end
+	
+	local maxRoam, maxCollection = GetMaxPetStats()
+	Log(string.format("Refreshed pet stats: MaxRoamRange=%.2f, MaxStarCollectionRadius=%.2f", maxRoam, maxCollection))
 end
 
 -- Get the player's character root part
@@ -87,6 +123,9 @@ local function FindNearestAvailableStar(petPosition: Vector3, playerPosition: Ve
 	local nearestStarInfo = nil
 	local nearestDistance = math.huge
 	
+	-- Get the maximum roam range from equipped pets
+	local maxRoamRange, _ = GetMaxPetStats()
+	
 	-- Get already targeted stars
 	local targetedStars = {}
 	for _, petData in pairs(PetTargets) do
@@ -115,7 +154,7 @@ local function FindNearestAvailableStar(petPosition: Vector3, playerPosition: Ve
 			
 			-- Check if star is within roam range from player
 			local distanceFromPlayer = (starPosition - playerPosition).Magnitude
-			if distanceFromPlayer > PET_ROAM_RANGE then
+			if distanceFromPlayer > maxRoamRange then
 				continue
 			end
 			
@@ -152,8 +191,9 @@ end
 
 -- Check if a pet is close enough to collect a star
 local function IsPetCloseToStar(petPosition: Vector3, starPosition: Vector3): boolean
+	local _, maxStarCollectionRadius = GetMaxPetStats()
 	local distance = (petPosition - starPosition).Magnitude
-	return distance <= PET_STAR_COLLECTION_RADIUS
+	return distance <= maxStarCollectionRadius
 end
 
 -- Update behavior for a single pet
@@ -300,11 +340,16 @@ end
 -- Handle pet equipped signal
 local function OnPetEquipped(petInfo: { ID: string, Name: string })
 	Log(string.format("Pet equipped: %s", petInfo.Name))
+	-- Refresh pet stats when a pet is equipped
+	RefreshEquippedPetStats()
 end
 
 -- Handle pet unequipped signal
 local function OnPetUnequipped(petInfo: { ID: string })
 	Log(string.format("Pet unequipped: %s", petInfo.ID))
+	
+	-- Remove from cached stats
+	EquippedPetStats[petInfo.ID] = nil
 	
 	-- Clean up pet target data for unequipped pets
 	for petModel, _ in pairs(PetTargets) do
@@ -319,15 +364,6 @@ local function OnPetStarCollected(collectionInfo: { StarId: string, FuelValue: n
 	Log(string.format("Pet collected star %s for %d fuel", collectionInfo.StarId, collectionInfo.FuelValue))
 end
 
--- Initialize constants from server
-local function InitializeConstants()
-	if PetService then
-		PET_ROAM_RANGE = PetService:GetPetRoamRange() or PET_ROAM_RANGE
-		PET_STAR_COLLECTION_RADIUS = PetService:GetPetStarCollectionRadius() or PET_STAR_COLLECTION_RADIUS
-		Log(string.format("Initialized constants: RoamRange=%d, CollectionRadius=%d", PET_ROAM_RANGE, PET_STAR_COLLECTION_RADIUS))
-	end
-end
-
 -- Knit lifecycle
 function PetController:KnitInit()
 	Log("PetController initializing")
@@ -338,8 +374,8 @@ function PetController:KnitStart()
 	PetService = Knit.GetService("PetService")
 	StarService = Knit.GetService("StarService")
 	
-	-- Initialize constants from server
-	InitializeConstants()
+	-- Initialize equipped pet stats from server
+	RefreshEquippedPetStats()
 	
 	-- Get initial arena status
 	IsInArena = PetService:GetArenaStatus() or false
