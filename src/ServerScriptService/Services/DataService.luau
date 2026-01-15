@@ -121,7 +121,47 @@ local function TryResolveSession(player: Player)
 	
 	if profile and clientReady and sessionPromise and sessionPromise.resolve then
 		print(player, "Session Initialized")
-		DataService.Client.DataReady:Fire(player, profile.Data)
+		
+		-- Initialize pets BEFORE sending data to client so IDs are available
+		local PetService = Knit.GetService("PetService")
+		PetService:InitializePets(player)
+		
+		-- Create a copy of the data to avoid modifying the persistent profile
+		-- Deep copy PetInventory to inject session-only IDs, other fields are shallow copied
+		-- (safe since client can't modify server's profile.Data)
+		local dataToSend = {}
+		for key, value in pairs(profile.Data) do
+			if key == "Inventory" then
+				-- Deep copy inventory to safely inject pet IDs
+				local inventoryCopy = {}
+				for invKey, invValue in pairs(value) do
+					if invKey == "PetInventory" then
+						-- Deep copy pet inventory with IDs injected
+						local petInventoryCopy = {}
+						for index, petData in ipairs(invValue) do
+							local petCopy = {}
+							for petKey, petValue in pairs(petData) do
+								petCopy[petKey] = petValue
+							end
+							-- Inject the runtime session ID
+							local petID = PetService:GetPetIDByIndex(player, index)
+							if petID then
+								petCopy.ID = petID
+							end
+							petInventoryCopy[index] = petCopy
+						end
+						inventoryCopy[invKey] = petInventoryCopy
+					else
+						inventoryCopy[invKey] = invValue
+					end
+				end
+				dataToSend[key] = inventoryCopy
+			else
+				dataToSend[key] = value
+			end
+		end
+		
+		DataService.Client.DataReady:Fire(player, dataToSend)
 		sessionPromise.resolve()
 		sessionPromise.resolve = nil -- Prevent double resolution
 	end
