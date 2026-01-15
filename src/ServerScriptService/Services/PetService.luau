@@ -3,7 +3,15 @@
 	Handles pet inventory, equipping, spawning, and behavior.
 	Pets are obtained directly from egg purchases and stored in player's inventory.
 	Maximum 3 pets can be equipped at once.
-	Equipped pets follow the player and collect stars when in the arena.
+	
+	Server-side behavior:
+	- Pets always roam/follow the player in formation
+	- Arena status is tracked and notified to clients
+	- Star collection requests from clients are validated for range
+	
+	Client-side behavior (PetController):
+	- When in arena: pets roam around player and collect stars
+	- Collection is validated on server (star within roam range from player)
 ]]
 
 local Players = game:GetService("Players")
@@ -37,6 +45,8 @@ local PetService = Knit.CreateService({
 	Client = {
 		PetEquipped = Knit.CreateSignal(), -- Signal to notify client when a pet is equipped
 		PetUnequipped = Knit.CreateSignal(), -- Signal to notify client when a pet is unequipped
+		ArenaStatusChanged = Knit.CreateSignal(), -- Signal to notify client when arena status changes (for pet behavior)
+		PetStarCollected = Knit.CreateSignal(), -- Signal to notify client when a pet star is collected
 	},
 })
 
@@ -62,6 +72,7 @@ local PET_STAR_COLLECTION_RADIUS = 5 -- Distance from star to collect it
 local ARENA_CHECK_INTERVAL = 0.1 -- How often to check arena status (seconds)
 local PET_UPDATE_INTERVAL = 0.2 -- How often to update pet behavior (seconds)
 local PetsCollisionGroupCreated = false -- Track if collision group was created
+local PET_ROAM_RANGE = 30 -- Maximum range pets can roam from player when collecting stars in arena
 
 -- Helper function for logging
 local function Log(message: string)
@@ -132,13 +143,15 @@ local function UpdatePlayerArenaStatus(player: Player)
 	
 	PlayerArenaStatus[userId] = isInArena
 	
-	-- Log state changes for debugging
+	-- Log state changes and notify client for debugging
 	if wasInArena ~= isInArena then
 		if isInArena then
 			Log(string.format("Player %s entered arena", player.Name))
 		else
 			Log(string.format("Player %s left arena", player.Name))
 		end
+		-- Notify client of arena status change for pet behavior
+		PetService.Client.ArenaStatusChanged:Fire(player, isInArena)
 	end
 	
 	return isInArena
@@ -271,74 +284,9 @@ local function DespawnAllPets(player: Player)
 	Log(string.format("Despawned all pets for player %s", player.Name))
 end
 
--- Get all currently targeted star IDs for a player's pets
-local function GetTargetedStarIDs(userId: number): { [string]: boolean }
-	local targeted = {}
-	
-	if not SpawnedPets[userId] then return targeted end
-	
-	for _, petInfo in pairs(SpawnedPets[userId]) do
-		if petInfo.TargetStarID then
-			targeted[petInfo.TargetStarID] = true
-		end
-	end
-	
-	return targeted
-end
-
--- Find nearest available star for a pet to collect
-local function FindNearestAvailableStar(player: Player, petPosition: Vector3): ({ Position: Vector3, ID: string, StarName: string, FuelValue: number }?, number?)
-	local StarService = Knit.GetService("StarService")
-	local starInfo = StarService:GetStarInformation(player)
-	
-	if not starInfo or #starInfo == 0 then
-		return nil, nil
-	end
-	
-	local targetedStars = GetTargetedStarIDs(player.UserId)
-	local nearestStar = nil
-	local nearestDistance = math.huge
-	local nearestIndex = nil
-	
-	for index, star in ipairs(starInfo) do
-		-- Skip if already targeted by another pet
-		if not targetedStars[star.ID] then
-			local distance = (petPosition - star.Position).Magnitude
-			if distance < nearestDistance then
-				nearestDistance = distance
-				nearestStar = star
-				nearestIndex = index
-			end
-		end
-	end
-	
-	return nearestStar, nearestIndex
-end
-
--- Collect a star via pet (server-side collection)
-local function CollectStarViaPet(player: Player, starId: string): boolean
-	local StarService = Knit.GetService("StarService")
-	
-	-- Use StarService's server-side collection method
-	local fuelValue = StarService:CollectStarServer(player, starId)
-	
-	if not fuelValue then
-		return false
-	end
-	
-	-- Add fuel to player
-	local DataService = Knit.GetService("DataService")
-	DataService:Update(player, "Stats", function(stats)
-		stats.Fuel = stats.Fuel + fuelValue
-		return stats
-	end)
-	
-	Log(string.format("Pet collected star for player %s, gained %d fuel", player.Name, fuelValue))
-	
-	return true
-end
-
 -- Update pet behavior for a single player
+-- On the server, pets ALWAYS roam around the player (follow mode)
+-- Star collection in arena is handled by the client (PetController)
 local function UpdatePetBehavior(player: Player)
 	local userId = player.UserId
 	local character = player.Character
@@ -348,7 +296,6 @@ local function UpdatePetBehavior(player: Player)
 	local rootPart = character:FindFirstChild("HumanoidRootPart")
 	if not rootPart then return end
 	
-	local isInArena = PlayerArenaStatus[userId] or false
 	local petIndex = 0
 	
 	for index, petInfo in pairs(SpawnedPets[userId]) do
@@ -360,69 +307,13 @@ local function UpdatePetBehavior(player: Player)
 		local bodyPosition = primaryPart:FindFirstChild("BodyPosition")
 		if not bodyPosition then continue end
 		
-		local petPosition = primaryPart.Position
-		
-		if isInArena then
-			-- In arena: try to collect stars
-			if petInfo.TargetStarID then
-				-- Check if target star still exists
-				local StarService = Knit.GetService("StarService")
-				local starInfoList = StarService:GetStarInformation(player)
-				local targetFound = false
-				local targetStar = nil
-				
-				if starInfoList then
-					for _, star in ipairs(starInfoList) do
-						if star.ID == petInfo.TargetStarID then
-							targetFound = true
-							targetStar = star
-							break
-						end
-					end
-				end
-				
-				if targetFound and targetStar then
-					-- Move towards target star
-					bodyPosition.Position = targetStar.Position
-					
-					-- Check if close enough to collect
-					local distance = (petPosition - targetStar.Position).Magnitude
-					if distance < PET_STAR_COLLECTION_RADIUS then
-						-- Collect the star
-						if CollectStarViaPet(player, petInfo.TargetStarID) then
-							petInfo.TargetStarID = nil
-						end
-					end
-				else
-					-- Target star no longer exists, clear target
-					petInfo.TargetStarID = nil
-				end
-			else
-				-- Find a new star to target
-				local nearestStar, _ = FindNearestAvailableStar(player, petPosition)
-				if nearestStar then
-					petInfo.TargetStarID = nearestStar.ID
-				else
-					-- No stars available, follow player
-					local offset = Vector3.new(
-						math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
-						2,
-						math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
-					)
-					bodyPosition.Position = rootPart.Position + offset
-				end
-			end
-		else
-			-- Not in arena: follow the player
-			petInfo.TargetStarID = nil -- Clear any star targets
-			
-			local offset = Vector3.new(
-				math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
-				2,
-				math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
-			)
-			bodyPosition.Position = rootPart.Position + offset
-		end
+		-- Server-side: pets always follow the player in formation
+		local offset = Vector3.new(
+			math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
+			2,
+			math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
+		)
+		bodyPosition.Position = rootPart.Position + offset
 	end
 end
 
@@ -914,6 +805,86 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 	}
 end
 
+-- Validate and process pet star collection from client
+-- Validates that the star collection is within the allowed range from the player
+function PetService:PetCollectStar(player: Player, starId: string, petPosition: Vector3): (boolean, string?)
+	local character = player.Character
+	if not character then
+		return false, "No character"
+	end
+	
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then
+		return false, "No HumanoidRootPart"
+	end
+	
+	-- Check if player is in arena (pets can only collect stars in arena)
+	if not self:IsPlayerInArena(player) then
+		return false, "Not in arena"
+	end
+	
+	-- Get star information from StarService
+	local StarService = Knit.GetService("StarService")
+	local starInfoList = StarService:GetStarInformation(player)
+	
+	if not starInfoList then
+		return false, "No star information"
+	end
+	
+	-- Find the target star
+	local targetStar = nil
+	for _, star in ipairs(starInfoList) do
+		if star.ID == starId then
+			targetStar = star
+			break
+		end
+	end
+	
+	if not targetStar then
+		return false, "Star not found"
+	end
+	
+	-- Validate that the star is within the pet's roam range from the player
+	local playerPosition = rootPart.Position
+	local distanceFromPlayer = (targetStar.Position - playerPosition).Magnitude
+	
+	if distanceFromPlayer > PET_ROAM_RANGE then
+		Log(string.format("Pet star collection rejected: star too far from player (%.2f > %d)", distanceFromPlayer, PET_ROAM_RANGE))
+		return false, "Star out of range"
+	end
+	
+	-- Validate that the pet position is close enough to the star
+	local distanceFromPet = (targetStar.Position - petPosition).Magnitude
+	if distanceFromPet > PET_STAR_COLLECTION_RADIUS then
+		Log(string.format("Pet star collection rejected: pet too far from star (%.2f > %d)", distanceFromPet, PET_STAR_COLLECTION_RADIUS))
+		return false, "Pet not close enough to star"
+	end
+	
+	-- Use existing star collection logic
+	local fuelValue = StarService:CollectStarServer(player, starId)
+	
+	if not fuelValue then
+		return false, "Collection failed"
+	end
+	
+	-- Add fuel to player
+	local DataService = Knit.GetService("DataService")
+	DataService:Update(player, "Stats", function(stats)
+		stats.Fuel = stats.Fuel + fuelValue
+		return stats
+	end)
+	
+	Log(string.format("Pet collected star for player %s, gained %d fuel (client-requested)", player.Name, fuelValue))
+	
+	-- Notify client that star was collected
+	self.Client.PetStarCollected:Fire(player, {
+		StarId = starId,
+		FuelValue = fuelValue,
+	})
+	
+	return true, nil
+end
+
 -- Client request to equip a pet
 function PetService.Client:RequestEquipPet(player: Player, petID: string): (boolean, string?)
 	return PetService:EquipPet(player, petID)
@@ -932,6 +903,27 @@ end
 -- Client request to get all pets
 function PetService.Client:GetPets(player: Player)
 	return PetService:GetPlayerPets(player)
+end
+
+-- Client request to check if player is in arena
+function PetService.Client:GetArenaStatus(player: Player): boolean
+	return PetService:IsPlayerInArena(player)
+end
+
+-- Client request for pet to collect a star (with range validation)
+-- This validates that the star is within the pet's roam range from the player
+function PetService.Client:RequestPetCollectStar(player: Player, starId: string, petPosition: Vector3): (boolean, string?)
+	return PetService:PetCollectStar(player, starId, petPosition)
+end
+
+-- Get pet roam range constant for client
+function PetService.Client:GetPetRoamRange(player: Player): number
+	return PET_ROAM_RANGE
+end
+
+-- Get pet star collection radius for client
+function PetService.Client:GetPetStarCollectionRadius(player: Player): number
+	return PET_STAR_COLLECTION_RADIUS
 end
 
 -- Clean up when player leaves
