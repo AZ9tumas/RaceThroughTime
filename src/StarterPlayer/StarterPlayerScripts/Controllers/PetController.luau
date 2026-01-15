@@ -176,6 +176,10 @@ local function SetPetToFollowPlayer(alignPos: AlignPosition, alignOri: AlignOrie
 	end
 end
 
+local function MakeTrail(pet, star)
+	-- make attachments and trail
+end
+
 -- Update single pet
 local function UpdatePet(petModel: Model, petIndex: number, playerRoot: BasePart, roamRange: number)
 	local primaryPart = petModel.PrimaryPart
@@ -207,6 +211,8 @@ local function UpdatePet(petModel: Model, petIndex: number, playerRoot: BasePart
 						alignOri.CFrame = CFrame.lookAt(petPos, targetPos)
 					end
 				end
+
+				-- MakeTrails here
 				
 				-- Check if close enough to collect
 				local dist = (petPos - targetPos).Magnitude
