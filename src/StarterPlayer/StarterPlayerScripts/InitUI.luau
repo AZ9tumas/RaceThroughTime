@@ -356,6 +356,8 @@ local function OpenPetModal(petData)
     
     -- Update equip button state
     UpdatePetModalEquipButton(petData.Equipped or false)
+
+    -- when equip button is pressed, connect to server
     
     -- Show the modal
     petModalDarkOverlay.Visible = true
@@ -424,6 +426,7 @@ function handler.UpdatePetsInventory()
         -- Connect click event to open pet modal (template should be a TextButton)
         if petFrame:IsA("TextButton") then
             petFrame.MouseButton1Click:Connect(function()
+                CloseAllFrames()
                 OpenPetModal(fullPetData)
             end)
         end
