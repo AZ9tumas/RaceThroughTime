@@ -68,11 +68,11 @@ local PetBehaviorThread = nil
 -- Constants for pet behavior
 local PET_FOLLOW_DISTANCE = 8 -- Distance behind player to follow
 local PET_FOLLOW_OFFSET_SPACING = 5 -- Spacing between multiple pets
-local PET_STAR_COLLECTION_RADIUS = 5 -- Distance from star to collect it
+local PET_STAR_COLLECTION_RADIUS = 10 -- Distance from star to collect it
 local ARENA_CHECK_INTERVAL = 0.1 -- How often to check arena status (seconds)
 local PET_UPDATE_INTERVAL = 0.2 -- How often to update pet behavior (seconds)
 local PetsCollisionGroupCreated = false -- Track if collision group was created
-local PET_ROAM_RANGE = 30 -- Maximum range pets can roam from player when collecting stars in arena
+local PET_ROAM_RANGE = 40 -- Maximum range pets can roam from player when collecting stars in arena
 
 -- Helper function for logging
 local function Log(message: string)
