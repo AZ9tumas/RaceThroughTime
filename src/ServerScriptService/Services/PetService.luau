@@ -32,6 +32,7 @@ export type Pet = {
 	PickupRangeBonus: number?,
 	RoamRange: number?,
 	StarCollectionRadius: number?,
+	Velocity: number?,
 	World: string?,
 	Level: number?,
 	TierLevel: number?,
@@ -151,14 +152,17 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		attachment.Name = "PetAttachment"
 		attachment.Parent = primaryPart
 		
+		-- Get pet velocity for movement speed (defaults to 20 studs/sec)
+		local petVelocity = petData.Velocity or 20
+		
 		-- Create AlignPosition for smooth position movement (controlled by client)
 		local alignPosition = Instance.new("AlignPosition")
 		alignPosition.Name = "PetAlignPosition"
 		alignPosition.Mode = Enum.PositionAlignmentMode.OneAttachment
 		alignPosition.Attachment0 = attachment
 		alignPosition.MaxForce = math.huge
-		alignPosition.MaxVelocity = 35
-		alignPosition.Responsiveness = 20
+		alignPosition.MaxVelocity = petVelocity
+		alignPosition.Responsiveness = petVelocity
 		-- IMPORTANT: Set initial position to current pet position (not 0,0,0)
 		alignPosition.Position = spawnPart.Position
 		alignPosition.Parent = primaryPart
@@ -191,6 +195,7 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 	petModel:SetAttribute("Multiplier", petData.Multiplier or 1.0)
 	petModel:SetAttribute("RoamRange", petData.RoamRange or 30)
 	petModel:SetAttribute("StarCollectionRadius", petData.StarCollectionRadius or 5)
+	petModel:SetAttribute("Velocity", petData.Velocity or 20)
 	
 	petModel.Parent = workspace
 	
@@ -457,6 +462,7 @@ function PetService:GetPlayerPets(player: Player): { Pet }
 				PickupRangeBonus = petData.PickupRangeBonus or 1.0,
 				RoamRange = petData.RoamRange or 30,
 				StarCollectionRadius = petData.StarCollectionRadius or 5,
+				Velocity = petData.Velocity or 20,
 				World = petData.World or "Main",
 				Level = petData.Level or 1,
 				TierLevel = petData.TierLevel or petData.Level or 1,
@@ -552,6 +558,7 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		PickupRangeBonus = pet1.PickupRangeBonus or 1.0,
 		RoamRange = pet1.RoamRange or 30,
 		StarCollectionRadius = pet1.StarCollectionRadius or 5,
+		Velocity = pet1.Velocity or 20,
 	}
 	local newStats = PetMergeStats.CalculateMergedStats(oldStats, currentTierLevel)
 	local newTier = PetMergeStats.GetTierByLevel(newTierLevel)
@@ -572,6 +579,7 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		inv.PetInventory[petIndex1].PickupRangeBonus = newStats.PickupRangeBonus
 		inv.PetInventory[petIndex1].RoamRange = newStats.RoamRange
 		inv.PetInventory[petIndex1].StarCollectionRadius = newStats.StarCollectionRadius
+		inv.PetInventory[petIndex1].Velocity = newStats.Velocity
 		
 		-- Remove pet2 from inventory
 		table.remove(inv.PetInventory, petIndex2)
@@ -630,6 +638,7 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		PickupRangeBonus = newStats.PickupRangeBonus,
 		RoamRange = newStats.RoamRange,
 		StarCollectionRadius = newStats.StarCollectionRadius,
+		Velocity = newStats.Velocity,
 	}
 end
 
@@ -647,10 +656,12 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 	end
 	
 	-- Get the maximum RoamRange and StarCollectionRadius from equipped pets
+	-- Also collect equipped pet data for fuel multiplier calculation
 	local DataService = Knit.GetService("DataService")
 	local inventory = DataService:Get(player, "Inventory")
 	local maxRoamRange = 30
 	local maxStarCollectionRadius = 5
+	local equippedPets = {}
 	
 	if inventory and inventory.PetInventory and inventory.EquippedPets then
 		for _, petIndex in ipairs(inventory.EquippedPets) do
@@ -658,6 +669,7 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 			if petData then
 				maxRoamRange = math.max(maxRoamRange, petData.RoamRange or 30)
 				maxStarCollectionRadius = math.max(maxStarCollectionRadius, petData.StarCollectionRadius or 5)
+				table.insert(equippedPets, petData)
 			end
 		end
 	end
@@ -706,18 +718,22 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 		return false, "Collection failed"
 	end
 	
+	-- Calculate fuel with pet multiplier
+	local fuelMultiplier = Stats.CalculateFuelMultiplier(equippedPets)
+	local finalFuelValue = math.floor(fuelValue * fuelMultiplier)
+	
 	-- Add fuel to player
 	DataService:Update(player, "Stats", function(stats)
-		stats.Fuel = stats.Fuel + fuelValue
+		stats.Fuel = stats.Fuel + finalFuelValue
 		return stats
 	end)
 	
-	Log(string.format("Pet collected star for player %s, gained %d fuel", player.Name, fuelValue))
+	Log(string.format("Pet collected star for player %s, gained %d fuel (multiplier: %.2f)", player.Name, finalFuelValue, fuelMultiplier))
 	
 	-- Notify client that star was collected
 	self.Client.PetStarCollected:Fire(player, {
 		StarId = starId,
-		FuelValue = fuelValue,
+		FuelValue = finalFuelValue,
 	})
 	
 	return true, nil

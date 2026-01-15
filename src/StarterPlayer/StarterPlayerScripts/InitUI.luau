@@ -331,6 +331,7 @@ function handler.UpdatePetsInventory()
             PickupRangeBonus = petData.PickupRangeBonus,
             RoamRange = petData.RoamRange,
             StarCollectionRadius = petData.StarCollectionRadius,
+            Velocity = petData.Velocity,
             World = petData.World,
             Level = petData.Level,
             TierLevel = petData.TierLevel,
