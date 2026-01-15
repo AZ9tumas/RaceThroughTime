@@ -132,10 +132,8 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 	
 	-- Position near player initially
 	local world = player:GetAttribute("CurrentWorld") or "Main"
-	warn("World", world)
 	local spawnPart = workspace:FindFirstChild(world):FindFirstChild("SpawnLocation")
 	petModel:PivotTo(CFrame.new(spawnPart.Position))
-	print("Spawnpart:", spawnPart)
 
 	local character = player.Character
 	if character then
