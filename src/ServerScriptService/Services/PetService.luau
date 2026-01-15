@@ -432,6 +432,7 @@ end
 function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
+	print("request pet equip")
 	
 	-- Get pet index from ID
 	local petIndex = self:GetPetIndexByID(player, petID)
@@ -916,6 +917,7 @@ end
 
 -- Client request to equip a pet
 function PetService.Client:RequestEquipPet(player: Player, petID: string): (boolean, string?)
+	print("Here")
 	return PetService:EquipPet(player, petID)
 end
 

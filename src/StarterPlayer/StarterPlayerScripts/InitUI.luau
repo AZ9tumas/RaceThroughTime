@@ -356,7 +356,7 @@ local function OpenPetModal(petData)
     
     -- Update equip button state
     UpdatePetModalEquipButton(petData.Equipped or false)
-    
+
     -- Show the modal
     petModalDarkOverlay.Visible = true
 end
@@ -401,6 +401,8 @@ function handler.UpdatePetsInventory()
                 multiplierLabel.Text = string.format("x%.1f", petData.Multiplier or 1.0)
             end
         end
+
+        print(petData)
         
         -- Store pet data and index for later use
         local isEquipped = equippedSet[index] == true
@@ -425,6 +427,7 @@ function handler.UpdatePetsInventory()
         if petFrame:IsA("TextButton") then
             petFrame.MouseButton1Click:Connect(function()
                 CloseAllFrames()
+                print("Full pet data: ", fullPetData)
                 OpenPetModal(fullPetData)
             end)
         end
@@ -619,9 +622,8 @@ end)
 
 -- Pets inventory UI
 handler._connections["PetsButton"] = petsButton.MouseButton1Click:Connect(function()
-    local wasVisible = inventoryMainFrame.Visible
     CloseAllFrames()
-    inventoryMainFrame.Visible = not wasVisible
+    inventoryMainFrame.Visible = not inventoryMainFrame.Visible
     if inventoryMainFrame.Visible then
         handler.UpdatePetsInventory()
     end
@@ -638,11 +640,12 @@ handler._connections["PetModalClose"] = petModalCloseButton.MouseButton1Click:Co
 end)
 
 handler._connections["PetModalEquip"] = petModalEquipButton.MouseButton1Click:Connect(function()
-    if not selectedPetData or not selectedPetData.ID then
+    if not selectedPetData then
         return
     end
     
     local NotificationController = Knit.GetController("NotificationController")
+    print(selectedPetData)
     
     if selectedPetData.Equipped then
         -- Unequip the pet
