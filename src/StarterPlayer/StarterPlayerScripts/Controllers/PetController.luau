@@ -25,7 +25,7 @@ local PetController = Knit.CreateController({
 
 -- Constants
 local PET_FOLLOW_DISTANCE = 8
-local STAR_COLLECTION_DISTANCE = 5
+local STAR_COLLECTION_DISTANCE = 25
 local ARENA_CHECK_INTERVAL = 0.2
 local DEFAULT_ROAM_RANGE = 30
 
@@ -298,6 +298,7 @@ local function UpdatePet(petModel: Model, petIndex: number, playerRoot: BasePart
 				
 				-- Check if close enough to collect
 				local dist = (petPos - targetPos).Magnitude
+				print(dist, STAR_COLLECTION_DISTANCE)
 				if dist <= STAR_COLLECTION_DISTANCE then
 					CollectStar(targetId, petPos)
 					PetTargets[petModel] = nil
