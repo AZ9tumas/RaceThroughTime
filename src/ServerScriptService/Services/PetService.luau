@@ -17,6 +17,21 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 local PetMergeStats = require(ReplicatedStorage.Modules.PetMergeStats)
 
+export type Pet = {
+	Name: string,
+	PetType: string?,
+	Multiplier: number,
+	FuelBonus: number?,
+	PickupRangeBonus: number?,
+	World: string?,
+	Level: number?,
+	TierLevel: number?,
+	TierName: string?,
+	Rarity: string?,
+	ID: string?,
+	Equipped: boolean?,
+}
+
 local PetService = Knit.CreateService({
 	Name = "PetService",
 	Client = {
