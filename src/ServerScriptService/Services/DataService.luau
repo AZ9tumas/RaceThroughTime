@@ -207,12 +207,12 @@ local function OnPlayerAdded(player: Player)
 
 		print(player, "Data Loaded")
 
-		local worldName = profile.Data.Progression.CurrentWorld or "Main"
+		local worldName = profile.Data.Progression.CurrentWorld
 		local folder = workspace:FindFirstChild(worldName)
 		-- in case there is an invalid world we default to main
 		if not folder then
 			folder = workspace:FindFirstChild("Main")
-			--profile.Data.Progression.CurrentWorld = "Main"
+			profile.Data.Progression.CurrentWorld = "Main"
 		end
 		local spawnLocation = folder:FindFirstChild("SpawnLocation")
 		player.RespawnLocation = spawnLocation

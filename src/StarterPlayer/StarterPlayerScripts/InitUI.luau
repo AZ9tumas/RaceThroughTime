@@ -164,7 +164,7 @@ local cardHolders = {
 
 -- Get TrackGates for the player's current world
 local function GetTrackGatesForCurrentWorld(): Folder?
-    local currentWorld = handler.data.Progression.CurrentWorld or "Main"
+    local currentWorld = handler.data.Progression.CurrentWorld
     local worldFolder = Workspace:FindFirstChild(currentWorld)
     if worldFolder then
         local trackSystem = worldFolder:FindFirstChild("Track_System")
@@ -624,7 +624,7 @@ handler._connections["DataReady"] = DataService.DataReady:Connect(function(data)
 end)
 
 handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(function()
-    worldlabel.Text = "🌍 " .. (handler.data.Progression.CurrentWorld or "Main")
+    worldlabel.Text = "🌍 " .. (handler.data.Progression.CurrentWorld)
     handler.UpdateFuelUI(fuelVal.Value)
     handler.UpdateCashUI(cashVal.Value)
     handler.UpdateGemsUI(gemsVal.Value)

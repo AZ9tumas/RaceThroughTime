@@ -138,7 +138,7 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 			RoamRange = petConfig.RoamRange or 30,
 			StarCollectionRadius = petConfig.StarCollectionRadius or 5,
 			Velocity = petConfig.Velocity or 20,
-			World = petConfig.World or eggConfig.World or "Main",
+			World = petConfig.World or eggConfig.World,
 			Level = petConfig.BaseTierLevel or 1,
 			TierLevel = petConfig.BaseTierLevel or 1,
 			TierName = "Common", -- Starting tier name

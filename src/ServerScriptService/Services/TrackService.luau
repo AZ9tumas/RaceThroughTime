@@ -307,7 +307,7 @@ function TrackService:EndTrackRun(player: Player)
 	
 	-- Calculate rewards based on distance traveled
 	local distanceTraveled = trackData.distanceTraveled or 0
-	local worldName = trackData.worldName or "Main"
+	local worldName = trackData.worldName
 	
 	-- Calculate cash earned based on WorldCashRate (per 1000 distance)
 	local cashRate = Stats.WorldCashRates[worldName] or Stats.WorldCashRates.Main

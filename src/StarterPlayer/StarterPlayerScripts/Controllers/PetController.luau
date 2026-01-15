@@ -60,7 +60,10 @@ end
 
 -- Get current world name for a player
 local function GetCurrentWorld(player: Player): string
-	return player:GetAttribute("CurrentWorld") or "Main"
+	repeat
+		task.wait()
+	until player:GetAttribute("CurrentWorld") ~= nil
+	return player:GetAttribute("CurrentWorld")
 end
 
 -- Check if local player is inside arena
