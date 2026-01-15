@@ -106,9 +106,10 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		SpawnedPets[userId] = {}
 	end
 	
-	-- Don't spawn if already spawned
+	-- Respawn if already spawned
 	if SpawnedPets[userId][petIndex] then
-		return
+		if SpawnedPets[userId][petIndex]:IsA("Model") then SpawnedPets[userId][petIndex]:Destroy() end
+		warn("Spawning again.")
 	end
 	
 	local petType = petData.PetType or "StandardPet"
@@ -130,12 +131,18 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 	end
 	
 	-- Position near player initially
+	local world = player:GetAttribute("CurrentWorld") or "Main"
+	warn("World", world)
+	local spawnPart = workspace:FindFirstChild(world):FindFirstChild("SpawnLocation")
+	petModel:PivotTo(CFrame.new(spawnPart.Position))
+	print("Spawnpart:", spawnPart)
+
 	local character = player.Character
 	if character then
 		local rootPart = character:FindFirstChild("HumanoidRootPart")
 		if rootPart then
 			local offset = Vector3.new(3 + (petIndex - 1) * PET_FOLLOW_OFFSET_SPACING, 0, 3)
-			petModel:PivotTo(CFrame.new(rootPart.Position + offset))
+			--petModel:PivotTo(CFrame.new(rootPart.Position + offset))
 		end
 	end
 	
@@ -155,7 +162,7 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		alignPosition.MaxVelocity = 35
 		alignPosition.Responsiveness = 20
 		-- IMPORTANT: Set initial position to current pet position (not 0,0,0)
-		alignPosition.Position = primaryPart.Position
+		alignPosition.Position = spawnPart.Position
 		alignPosition.Parent = primaryPart
 		
 		-- Create AlignOrientation for smooth rotation (controlled by client)
