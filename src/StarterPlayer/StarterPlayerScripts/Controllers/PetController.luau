@@ -290,7 +290,7 @@ local function ClearDebugBeam(petModel: Model)
 end
 
 -- Set pet to follow player in formation
-local function SetPetToFollowPlayer(petModel: Model, petIndex: number, ownerRoot: BasePart)
+local function SetPetToFollowPlayer(petModel: Model, petIndex: number, ownerRoot: BasePart, isLocalPlayer: boolean)
 	local primaryPart = petModel.PrimaryPart
 	if not primaryPart then return end
 	
@@ -308,6 +308,11 @@ local function SetPetToFollowPlayer(petModel: Model, petIndex: number, ownerRoot
 	-- Face same direction as owner
 	if alignOri then
 		alignOri.CFrame = ownerRoot.CFrame
+	end
+	
+	-- Update debug beam to target player's HumanoidRootPart (only for local player's pets)
+	if isLocalPlayer then
+		UpdateDebugBeam(petModel, ownerRoot)
 	end
 end
 
@@ -334,7 +339,7 @@ local function UpdatePet(petObj: {Player: Player, PetParams: any, PetModel: Mode
 	
 	-- For non-local players: always follow owner
 	if not isLocalPlayer then
-		SetPetToFollowPlayer(petModel, petIndex, ownerRoot)
+		SetPetToFollowPlayer(petModel, petIndex, ownerRoot, false)
 		return
 	end
 	
@@ -393,16 +398,14 @@ local function UpdatePet(petObj: {Player: Player, PetParams: any, PetModel: Mode
 			if newId then
 				PetTargets[petModel] = newId
 			else
-				-- No stars available, follow player
-				SetPetToFollowPlayer(petModel, petIndex, ownerRoot)
-				ClearDebugBeam(petModel)
+				-- No stars available, follow player (beam targets player)
+				SetPetToFollowPlayer(petModel, petIndex, ownerRoot, true)
 			end
 		end
 	else
-		-- Not in arena - follow player
+		-- Not in arena - follow player (beam targets player)
 		PetTargets[petModel] = nil
-		SetPetToFollowPlayer(petModel, petIndex, ownerRoot)
-		ClearDebugBeam(petModel)
+		SetPetToFollowPlayer(petModel, petIndex, ownerRoot, true)
 	end
 end
 
