@@ -189,6 +189,16 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 	
 	petModel.Parent = workspace
 	
+	-- Set network ownership to the player so client can control pet position
+	if primaryPart then
+		local success, err = pcall(function()
+			primaryPart:SetNetworkOwner(player)
+		end)
+		if not success then
+			warn(string.format("[PetService]: Failed to set network owner: %s", tostring(err)))
+		end
+	end
+	
 	SpawnedPets[userId][petIndex] = petModel
 	
 	Log(string.format("Spawned pet %s for player %s", petData.Name, player.Name))
