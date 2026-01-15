@@ -154,6 +154,8 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		alignPosition.MaxForce = 100000
 		alignPosition.MaxVelocity = 50
 		alignPosition.Responsiveness = 20
+		-- IMPORTANT: Set initial position to current pet position (not 0,0,0)
+		alignPosition.Position = primaryPart.Position
 		alignPosition.Parent = primaryPart
 		
 		-- Create AlignOrientation for smooth rotation (controlled by client)
@@ -164,6 +166,8 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		alignOrientation.MaxTorque = 100000
 		alignOrientation.MaxAngularVelocity = 20
 		alignOrientation.Responsiveness = 20
+		-- IMPORTANT: Set initial CFrame to current pet orientation (not 0,0,0)
+		alignOrientation.CFrame = primaryPart.CFrame
 		alignOrientation.Parent = primaryPart
 		
 		-- Make pet not collide with players
