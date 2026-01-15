@@ -1,25 +1,24 @@
 --[[
 	PetService
-	Handles pet inventory, equipping, spawning, and behavior.
+	Handles pet inventory, equipping, spawning, and despawning.
 	Pets are obtained directly from egg purchases and stored in player's inventory.
 	Maximum 3 pets can be equipped at once.
 	
-	Server-side behavior:
-	- Pets always roam/follow the player in formation
-	- Arena status is tracked and notified to clients
-	- Star collection requests from clients are validated for range
+	Server-side:
+	- Only spawns and despawns pet models (no position updates)
+	- Validates star collection requests from clients
+	- Pet models are replicated to clients who control their positions
 	
-	Client-side behavior (PetController):
-	- When in arena: pets roam around player and collect stars
-	- Collection is validated on server (star within roam range from player)
+	Client-side (PetController):
+	- Handles ALL pet position updates for all players in same world
+	- Local player's pets can collect stars when in arena
+	- Other players' pets just follow their owners
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
-local PathfindingService = game:GetService("PathfindingService")
 local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
@@ -31,6 +30,8 @@ export type Pet = {
 	Multiplier: number,
 	FuelBonus: number?,
 	PickupRangeBonus: number?,
+	RoamRange: number?,
+	StarCollectionRadius: number?,
 	World: string?,
 	Level: number?,
 	TierLevel: number?,
@@ -43,9 +44,8 @@ export type Pet = {
 local PetService = Knit.CreateService({
 	Name = "PetService",
 	Client = {
-		PetEquipped = Knit.CreateSignal(), -- Signal to notify client when a pet is equipped
-		PetUnequipped = Knit.CreateSignal(), -- Signal to notify client when a pet is unequipped
-		ArenaStatusChanged = Knit.CreateSignal(), -- Signal to notify client when arena status changes (for pet behavior)
+		PetEquipped = Knit.CreateSignal(), -- Signal to notify clients when a pet is equipped
+		PetUnequipped = Knit.CreateSignal(), -- Signal to notify clients when a pet is unequipped
 		PetStarCollected = Knit.CreateSignal(), -- Signal to notify client when a pet star is collected
 	},
 })
@@ -55,30 +55,14 @@ local PetService = Knit.CreateService({
 local PlayerPetIDs = {}
 
 -- Spawned pet models for each player
--- [Player.UserId] = { [petIndex] = { Model = Model, TargetStarID = string? } }
+-- [Player.UserId] = { [petIndex] = Model }
 local SpawnedPets = {}
 
--- Arena status tracking for each player
--- [Player.UserId] = boolean
-local PlayerArenaStatus = {}
+-- Track if collision group was created
+local PetsCollisionGroupCreated = false
 
--- Pet behavior update loop thread
-local PetBehaviorThread = nil
-
--- Constants for pet behavior
-local PET_FOLLOW_DISTANCE = 8 -- Distance behind player to follow
-local PET_FOLLOW_OFFSET_SPACING = 5 -- Spacing between multiple pets
-local ARENA_CHECK_INTERVAL = 0.1 -- How often to check arena status (seconds)
-local PET_UPDATE_INTERVAL = 0.2 -- How often to update pet behavior (seconds)
-local PetsCollisionGroupCreated = false -- Track if collision group was created
--- Note: RoamRange and StarCollectionRadius are now pet-specific stats stored in pet data
-
--- Constants for pet movers (AlignPosition/AlignOrientation)
-local PET_ALIGN_MAX_FORCE = 100000
-local PET_ALIGN_MAX_VELOCITY = 50
-local PET_ALIGN_RESPONSIVENESS = 20
-local PET_ALIGN_MAX_TORQUE = 100000
-local PET_ALIGN_MAX_ANGULAR_VELOCITY = 20
+-- Constants
+local PET_FOLLOW_OFFSET_SPACING = 5 -- Spacing between multiple pets when spawning
 
 -- Helper function for logging
 local function Log(message: string)
@@ -88,84 +72,6 @@ end
 -- Generate a unique ID for pets
 local function GeneratePetID(): string
 	return HttpService:GenerateGUID(false)
-end
-
--- Get the central arena part for a player's current world
-local function GetCentralArenaForPlayer(player: Player): BasePart?
-	local DataService = Knit.GetService("DataService")
-	local worldName = DataService:GetPlayerWorld(player)
-	
-	local worldFolder = workspace:FindFirstChild(worldName)
-	if worldFolder then
-		local centralArena = worldFolder:FindFirstChild("1_Central_Arena")
-		if centralArena and centralArena:IsA("BasePart") then
-			return centralArena
-		end
-	end
-	
-	-- Fallback to Main world
-	local mainWorld = workspace:FindFirstChild("Main")
-	if mainWorld then
-		local centralArena = mainWorld:FindFirstChild("1_Central_Arena")
-		if centralArena and centralArena:IsA("BasePart") then
-			return centralArena
-		end
-	end
-	
-	return nil
-end
-
--- Check if a player is inside the arena
-local function CheckPlayerInArena(player: Player): boolean
-	local character = player.Character
-	if not character then return false end
-	
-	local rootPart = character:FindFirstChild("HumanoidRootPart")
-	if not rootPart then return false end
-	
-	local centralArena = GetCentralArenaForPlayer(player)
-	if not centralArena then return false end
-	
-	local DataService = Knit.GetService("DataService")
-	local worldName = DataService:GetPlayerWorld(player)
-	local arenaRadius = Stats.ArenaRadius[worldName] or Stats.ArenaRadius.Main or 200
-	
-	-- Calculate horizontal distance (ignoring Y axis) from arena center to player
-	local arenaCenter = centralArena.Position
-	local playerPos = rootPart.Position
-	local horizontalDistance = math.sqrt(
-		(playerPos.X - arenaCenter.X)^2 + 
-		(playerPos.Z - arenaCenter.Z)^2
-	)
-	
-	return horizontalDistance <= arenaRadius
-end
-
--- Update arena status for a player
-local function UpdatePlayerArenaStatus(player: Player)
-	local userId = player.UserId
-	local wasInArena = PlayerArenaStatus[userId] or false
-	local isInArena = CheckPlayerInArena(player)
-	
-	PlayerArenaStatus[userId] = isInArena
-	
-	-- Log state changes and notify client for debugging
-	if wasInArena ~= isInArena then
-		if isInArena then
-			Log(string.format("Player %s entered arena", player.Name))
-		else
-			Log(string.format("Player %s left arena", player.Name))
-		end
-		-- Notify client of arena status change for pet behavior
-		PetService.Client.ArenaStatusChanged:Fire(player, isInArena)
-	end
-	
-	return isInArena
-end
-
--- Check if player is in arena (public function)
-function PetService:IsPlayerInArena(player: Player): boolean
-	return PlayerArenaStatus[player.UserId] or false
 end
 
 -- Get a pet model from ServerStorage
@@ -191,8 +97,8 @@ local function GetPetModel(petType: string): Model?
 	return petModel:Clone()
 end
 
--- Spawn a pet model for a player
-local function SpawnPetModel(player: Player, petIndex: number, petData: { Name: string, PetType: string?, Multiplier: number })
+-- Spawn a pet model for a player (no position updates, just spawn)
+local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 	local userId = player.UserId
 	
 	-- Initialize spawned pets table for player if needed
@@ -223,7 +129,7 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: { Name: 
 		petModel.PrimaryPart = part
 	end
 	
-	-- Position near player
+	-- Position near player initially
 	local character = player.Character
 	if character then
 		local rootPart = character:FindFirstChild("HumanoidRootPart")
@@ -233,35 +139,34 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: { Name: 
 		end
 	end
 	
-	-- Create AlignPosition and AlignOrientation for smooth movement (replaces deprecated BodyPosition)
 	local primaryPart = petModel.PrimaryPart
 	if primaryPart then
-		-- Create attachment for body movers
+		-- Create attachment for body movers (used by client for movement)
 		local attachment = Instance.new("Attachment")
 		attachment.Name = "PetAttachment"
 		attachment.Parent = primaryPart
 		
-		-- Create AlignPosition for smooth position movement
+		-- Create AlignPosition for smooth position movement (controlled by client)
 		local alignPosition = Instance.new("AlignPosition")
 		alignPosition.Name = "PetAlignPosition"
 		alignPosition.Mode = Enum.PositionAlignmentMode.OneAttachment
 		alignPosition.Attachment0 = attachment
-		alignPosition.MaxForce = PET_ALIGN_MAX_FORCE
-		alignPosition.MaxVelocity = PET_ALIGN_MAX_VELOCITY
-		alignPosition.Responsiveness = PET_ALIGN_RESPONSIVENESS
+		alignPosition.MaxForce = 100000
+		alignPosition.MaxVelocity = 50
+		alignPosition.Responsiveness = 20
 		alignPosition.Parent = primaryPart
 		
-		-- Create AlignOrientation for smooth rotation
+		-- Create AlignOrientation for smooth rotation (controlled by client)
 		local alignOrientation = Instance.new("AlignOrientation")
 		alignOrientation.Name = "PetAlignOrientation"
 		alignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
 		alignOrientation.Attachment0 = attachment
-		alignOrientation.MaxTorque = PET_ALIGN_MAX_TORQUE
-		alignOrientation.MaxAngularVelocity = PET_ALIGN_MAX_ANGULAR_VELOCITY
-		alignOrientation.Responsiveness = PET_ALIGN_RESPONSIVENESS
+		alignOrientation.MaxTorque = 100000
+		alignOrientation.MaxAngularVelocity = 20
+		alignOrientation.Responsiveness = 20
 		alignOrientation.Parent = primaryPart
 		
-		-- Make pet not collide with players (only if collision group was created)
+		-- Make pet not collide with players
 		if PetsCollisionGroupCreated then
 			primaryPart.CollisionGroup = "Pets"
 		else
@@ -269,12 +174,18 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: { Name: 
 		end
 	end
 	
+	-- Store owner info for clients to identify
+	petModel:SetAttribute("OwnerUserId", userId)
+	petModel:SetAttribute("PetIndex", petIndex)
+	petModel:SetAttribute("PetName", petData.Name)
+	petModel:SetAttribute("PetType", petData.PetType or "StandardPet")
+	petModel:SetAttribute("Multiplier", petData.Multiplier or 1.0)
+	petModel:SetAttribute("RoamRange", petData.RoamRange or 30)
+	petModel:SetAttribute("StarCollectionRadius", petData.StarCollectionRadius or 5)
+	
 	petModel.Parent = workspace
 	
-	SpawnedPets[userId][petIndex] = {
-		Model = petModel,
-		TargetStarID = nil,
-	}
+	SpawnedPets[userId][petIndex] = petModel
 	
 	Log(string.format("Spawned pet %s for player %s", petData.Name, player.Name))
 end
@@ -285,9 +196,9 @@ local function DespawnPetModel(player: Player, petIndex: number)
 	
 	if not SpawnedPets[userId] then return end
 	
-	local petInfo = SpawnedPets[userId][petIndex]
-	if petInfo and petInfo.Model then
-		petInfo.Model:Destroy()
+	local petModel = SpawnedPets[userId][petIndex]
+	if petModel then
+		petModel:Destroy()
 		SpawnedPets[userId][petIndex] = nil
 		Log(string.format("Despawned pet at index %d for player %s", petIndex, player.Name))
 	end
@@ -299,90 +210,14 @@ local function DespawnAllPets(player: Player)
 	
 	if not SpawnedPets[userId] then return end
 	
-	for petIndex, petInfo in pairs(SpawnedPets[userId]) do
-		if petInfo.Model then
-			petInfo.Model:Destroy()
+	for _, petModel in pairs(SpawnedPets[userId]) do
+		if petModel then
+			petModel:Destroy()
 		end
 	end
 	
 	SpawnedPets[userId] = {}
 	Log(string.format("Despawned all pets for player %s", player.Name))
-end
-
--- Update pet behavior for a single player
--- On the server, pets ALWAYS roam around the player (follow mode)
--- Star collection in arena is handled by the client (PetController)
-local function UpdatePetBehavior(player: Player)
-	local userId = player.UserId
-	local character = player.Character
-	
-	if not character or not SpawnedPets[userId] then return end
-	
-	local rootPart = character:FindFirstChild("HumanoidRootPart")
-	if not rootPart then return end
-	
-	local petIndex = 0
-	
-	for index, petInfo in pairs(SpawnedPets[userId]) do
-		petIndex = petIndex + 1
-		local petModel = petInfo.Model
-		if not petModel or not petModel.PrimaryPart then continue end
-		
-		local primaryPart = petModel.PrimaryPart
-		local alignPosition = primaryPart:FindFirstChild("PetAlignPosition")
-		local alignOrientation = primaryPart:FindFirstChild("PetAlignOrientation")
-		if not alignPosition then continue end
-		
-		-- Server-side: pets always follow the player in formation
-		local offset = Vector3.new(
-			math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
-			2,
-			math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
-		)
-		alignPosition.Position = rootPart.Position + offset
-		
-		-- Orient pet to face the same direction as player
-		if alignOrientation then
-			alignOrientation.CFrame = rootPart.CFrame
-		end
-	end
-end
-
--- Main pet behavior update loop
-local function StartPetBehaviorLoop()
-	if PetBehaviorThread then return end
-	
-	local lastArenaCheck = 0
-	local lastPetUpdate = 0
-	
-	PetBehaviorThread = RunService.Heartbeat:Connect(function(deltaTime)
-		lastArenaCheck = lastArenaCheck + deltaTime
-		lastPetUpdate = lastPetUpdate + deltaTime
-		
-		-- Only update pet behavior at throttled interval for performance
-		if lastPetUpdate < PET_UPDATE_INTERVAL then
-			return
-		end
-		lastPetUpdate = 0
-		
-		for _, player in ipairs(Players:GetPlayers()) do
-			-- Update arena status periodically
-			if lastArenaCheck >= ARENA_CHECK_INTERVAL then
-				UpdatePlayerArenaStatus(player)
-			end
-			
-			-- Update pet behavior (spawned in separate task to avoid blocking)
-			task.spawn(function()
-				UpdatePetBehavior(player)
-			end)
-		end
-		
-		if lastArenaCheck >= ARENA_CHECK_INTERVAL then
-			lastArenaCheck = 0
-		end
-	end)
-	
-	Log("Pet behavior loop started")
 end
 
 -- Initialize pet IDs for a player (called after data is loaded)
@@ -396,14 +231,11 @@ function PetService:InitializePets(player: Player)
 		idToPetIndex = {},
 	}
 	
-	-- Initialize arena status
-	PlayerArenaStatus[userId] = false
-	
 	-- Get player's pet inventory from data store
 	local inventory = DataService:Get(player, "Inventory")
 	if inventory and inventory.PetInventory then
 		-- Assign IDs to existing pets
-		for index, petData in ipairs(inventory.PetInventory) do
+		for index, _ in ipairs(inventory.PetInventory) do
 			local petID = GeneratePetID()
 			PlayerPetIDs[userId].petIndexToID[index] = petID
 			PlayerPetIDs[userId].idToPetIndex[petID] = index
@@ -423,13 +255,7 @@ function PetService:InitializePets(player: Player)
 	Log(string.format("Initialized pets for player %s", player.Name))
 end
 
---[[
-	Register a pet ID mapping (called by EggService when a pet is obtained).
-	This associates a runtime session ID with a pet's inventory index.
-	@param player Player - The player who owns the pet
-	@param petIndex number - The index of the pet in the inventory
-	@param petID string - The unique runtime ID for the pet
-]]
+-- Register a pet ID mapping (called by EggService when a pet is obtained)
 function PetService:RegisterPetID(player: Player, petIndex: number, petID: string)
 	local userId = player.UserId
 	
@@ -448,7 +274,6 @@ end
 function PetService:GetPetIDByIndex(player: Player, index: number): string?
 	local petIDs = PlayerPetIDs[player.UserId]
 	if not petIDs then return nil end
-	
 	return petIDs.petIndexToID[index]
 end
 
@@ -456,7 +281,6 @@ end
 function PetService:GetPetIndexByID(player: Player, petID: string): number?
 	local petIDs = PlayerPetIDs[player.UserId]
 	if not petIDs then return nil end
-	
 	return petIDs.idToPetIndex[petID]
 end
 
@@ -464,27 +288,18 @@ end
 function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
-	print("request pet equip")
 	
 	-- Get pet index from ID
 	local petIndex = self:GetPetIndexByID(player, petID)
 	if not petIndex then
-		NotificationService:SendNotification(
-			player,
-			"Invalid pet ID.",
-			NotificationService.Category.Error
-		)
+		NotificationService:SendNotification(player, "Invalid pet ID.", NotificationService.Category.Error)
 		return false, "Invalid pet ID"
 	end
 	
 	-- Get player inventory
 	local inventory = DataService:Get(player, "Inventory")
 	if not inventory or not inventory.PetInventory or not inventory.PetInventory[petIndex] then
-		NotificationService:SendNotification(
-			player,
-			"Pet not found in inventory.",
-			NotificationService.Category.Error
-		)
+		NotificationService:SendNotification(player, "Pet not found in inventory.", NotificationService.Category.Error)
 		return false, "Pet not found"
 	end
 	
@@ -492,11 +307,7 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 	if inventory.EquippedPets then
 		for _, equippedIndex in ipairs(inventory.EquippedPets) do
 			if equippedIndex == petIndex then
-				NotificationService:SendNotification(
-					player,
-					"Pet is already equipped.",
-					NotificationService.Category.Warning
-				)
+				NotificationService:SendNotification(player, "Pet is already equipped.", NotificationService.Category.Warning)
 				return false, "Already equipped"
 			end
 		end
@@ -505,11 +316,7 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 	-- Check max equipped limit
 	local equippedCount = inventory.EquippedPets and #inventory.EquippedPets or 0
 	if equippedCount >= Stats.MaxEquippedPets then
-		NotificationService:SendNotification(
-			player,
-			string.format("Maximum %d pets can be equipped.", Stats.MaxEquippedPets),
-			NotificationService.Category.Warning
-		)
+		NotificationService:SendNotification(player, string.format("Maximum %d pets can be equipped.", Stats.MaxEquippedPets), NotificationService.Category.Warning)
 		return false, "Max equipped"
 	end
 	
@@ -528,11 +335,20 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 	-- Spawn the pet model
 	SpawnPetModel(player, petIndex, petData)
 	
-	-- Fire signal to client
-	PetService.Client.PetEquipped:Fire(player, {
-		ID = petID,
-		Name = petData.Name,
-	})
+	-- Fire signal to ALL clients (so they can start managing this pet)
+	for _, p in ipairs(Players:GetPlayers()) do
+		PetService.Client.PetEquipped:Fire(p, {
+			OwnerUserId = player.UserId,
+			OwnerName = player.Name,
+			ID = petID,
+			PetIndex = petIndex,
+			Name = petData.Name,
+			PetType = petData.PetType,
+			Multiplier = petData.Multiplier,
+			RoamRange = petData.RoamRange or 30,
+			StarCollectionRadius = petData.StarCollectionRadius or 5,
+		})
+	end
 	
 	return true, nil
 end
@@ -545,22 +361,14 @@ function PetService:UnequipPet(player: Player, petID: string): (boolean, string?
 	-- Get pet index from ID
 	local petIndex = self:GetPetIndexByID(player, petID)
 	if not petIndex then
-		NotificationService:SendNotification(
-			player,
-			"Invalid pet ID.",
-			NotificationService.Category.Error
-		)
+		NotificationService:SendNotification(player, "Invalid pet ID.", NotificationService.Category.Error)
 		return false, "Invalid pet ID"
 	end
 	
 	-- Get player inventory
 	local inventory = DataService:Get(player, "Inventory")
 	if not inventory or not inventory.EquippedPets then
-		NotificationService:SendNotification(
-			player,
-			"No pets are equipped.",
-			NotificationService.Category.Warning
-		)
+		NotificationService:SendNotification(player, "No pets are equipped.", NotificationService.Category.Warning)
 		return false, "No pets equipped"
 	end
 	
@@ -580,11 +388,7 @@ function PetService:UnequipPet(player: Player, petID: string): (boolean, string?
 	end)
 	
 	if not found then
-		NotificationService:SendNotification(
-			player,
-			"Pet is not equipped.",
-			NotificationService.Category.Warning
-		)
+		NotificationService:SendNotification(player, "Pet is not equipped.", NotificationService.Category.Warning)
 		return false, "Pet not equipped"
 	end
 	
@@ -593,16 +397,20 @@ function PetService:UnequipPet(player: Player, petID: string): (boolean, string?
 	-- Despawn the pet model
 	DespawnPetModel(player, petIndex)
 	
-	-- Fire signal to client
-	PetService.Client.PetUnequipped:Fire(player, {
-		ID = petID,
-	})
+	-- Fire signal to ALL clients
+	for _, p in ipairs(Players:GetPlayers()) do
+		PetService.Client.PetUnequipped:Fire(p, {
+			OwnerUserId = player.UserId,
+			ID = petID,
+			PetIndex = petIndex,
+		})
+	end
 	
 	return true, nil
 end
 
 -- Get all pets for a player (with runtime IDs)
-function PetService:GetPlayerPets(player: Player): { { ID: string, Name: string, Multiplier: number, Equipped: boolean } }
+function PetService:GetPlayerPets(player: Player): { Pet }
 	local DataService = Knit.GetService("DataService")
 	local pets = {}
 	
@@ -644,9 +452,6 @@ function PetService:GetPlayerPets(player: Player): { { ID: string, Name: string,
 end
 
 -- Merge two pets to create a higher tier pet
--- Requires Gems based on the pet's current tier (from PetMergeStats config)
--- Both pets must be from the same world
--- Uses formula: NewStats = OldStats × (2 + RarityBonus)
 function PetService:MergePets(player: Player, petID1: string, petID2: string): (boolean, string?, { Name: string, ID: string, Level: number }?)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
@@ -656,31 +461,19 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 	local petIndex2 = self:GetPetIndexByID(player, petID2)
 	
 	if not petIndex1 or not petIndex2 then
-		NotificationService:SendNotification(
-			player,
-			"Invalid pet ID.",
-			NotificationService.Category.Error
-		)
+		NotificationService:SendNotification(player, "Invalid pet ID.", NotificationService.Category.Error)
 		return false, "Invalid pet ID", nil
 	end
 	
 	if petIndex1 == petIndex2 then
-		NotificationService:SendNotification(
-			player,
-			"Cannot merge a pet with itself.",
-			NotificationService.Category.Error
-		)
+		NotificationService:SendNotification(player, "Cannot merge a pet with itself.", NotificationService.Category.Error)
 		return false, "Cannot merge pet with itself", nil
 	end
 	
 	-- Get player inventory
 	local inventory = DataService:Get(player, "Inventory")
 	if not inventory or not inventory.PetInventory then
-		NotificationService:SendNotification(
-			player,
-			"Inventory not found.",
-			NotificationService.Category.Error
-		)
+		NotificationService:SendNotification(player, "Inventory not found.", NotificationService.Category.Error)
 		return false, "Inventory not found", nil
 	end
 	
@@ -688,11 +481,7 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 	local pet2 = inventory.PetInventory[petIndex2]
 	
 	if not pet1 or not pet2 then
-		NotificationService:SendNotification(
-			player,
-			"Pet not found in inventory.",
-			NotificationService.Category.Error
-		)
+		NotificationService:SendNotification(player, "Pet not found in inventory.", NotificationService.Category.Error)
 		return false, "Pet not found", nil
 	end
 	
@@ -701,11 +490,7 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 	local world2 = pet2.World or "Main"
 	
 	if PetMergeStats.WorldRestrictions.RequireSameWorld and world1 ~= world2 then
-		NotificationService:SendNotification(
-			player,
-			"Pets must be from the same world to merge.",
-			NotificationService.Category.Warning
-		)
+		NotificationService:SendNotification(player, "Pets must be from the same world to merge.", NotificationService.Category.Warning)
 		return false, "Different worlds", nil
 	end
 	
@@ -713,11 +498,7 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 	local currentTierLevel = pet1.TierLevel or pet1.Level or 1
 	
 	if PetMergeStats.IsMaxTier(currentTierLevel) then
-		NotificationService:SendNotification(
-			player,
-			"Pet is already at maximum tier.",
-			NotificationService.Category.Warning
-		)
+		NotificationService:SendNotification(player, "Pet is already at maximum tier.", NotificationService.Category.Warning)
 		return false, "Max tier reached", nil
 	end
 	
@@ -726,21 +507,15 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 	local currencies = DataService:Get(player, "Currencies")
 	
 	if not currencies or (currencies.Gems or 0) < mergeCost then
-		NotificationService:SendNotification(
-			player,
-			string.format("Not enough Gems. Need %d Gems.", mergeCost),
-			NotificationService.Category.Warning
-		)
+		NotificationService:SendNotification(player, string.format("Not enough Gems. Need %d Gems.", mergeCost), NotificationService.Category.Warning)
 		return false, "Not enough Gems", nil
 	end
 	
 	-- Check if either pet is equipped
 	local equippedPets = inventory.EquippedPets or {}
-	local pet1Equipped = false
 	local pet2Equipped = false
 	
 	for _, equippedIndex in ipairs(equippedPets) do
-		if equippedIndex == petIndex1 then pet1Equipped = true end
 		if equippedIndex == petIndex2 then pet2Equipped = true end
 	end
 	
@@ -750,7 +525,7 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		return curr
 	end)
 	
-	-- Calculate new stats using PetMergeStats formula: NewStats = OldStats × (2 + RarityBonus)
+	-- Calculate new stats using PetMergeStats formula
 	local newTierLevel = currentTierLevel + 1
 	local oldStats = {
 		Multiplier = pet1.Multiplier or 1.0,
@@ -787,7 +562,6 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 			local newEquipped = {}
 			for _, equippedIndex in ipairs(inv.EquippedPets) do
 				if equippedIndex ~= petIndex2 then
-					-- Adjust index if it was after the removed pet
 					if equippedIndex > petIndex2 then
 						table.insert(newEquipped, equippedIndex - 1)
 					else
@@ -804,7 +578,6 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 	-- Update pet ID mappings (pet2 was removed, indices shifted)
 	local userId = player.UserId
 	if PlayerPetIDs[userId] then
-		-- Regenerate ID mappings
 		PlayerPetIDs[userId] = {
 			petIndexToID = {},
 			idToPetIndex = {},
@@ -825,11 +598,7 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 	
 	Log(string.format("Player %s merged pets to create %s tier %s (Level %d)", player.Name, newTier.Name, pet1.Name, newTierLevel))
 	
-	NotificationService:SendNotification(
-		player,
-		string.format("Merged! %s is now %s tier!", pet1.Name, newTier.Name),
-		NotificationService.Category.Success
-	)
+	NotificationService:SendNotification(player, string.format("Merged! %s is now %s tier!", pet1.Name, newTier.Name), NotificationService.Category.Success)
 	
 	return true, nil, {
 		Name = pet1.Name,
@@ -846,8 +615,7 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 end
 
 -- Validate and process pet star collection from client
--- Validates that the star collection is within the allowed range from the player
--- Uses the maximum RoamRange and StarCollectionRadius from the player's equipped pets
+-- Client must be the local player and pet must be within range
 function PetService:PetCollectStar(player: Player, starId: string, petPosition: Vector3): (boolean, string?)
 	local character = player.Character
 	if not character then
@@ -859,29 +627,18 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 		return false, "No HumanoidRootPart"
 	end
 	
-	-- Check if player is in arena (pets can only collect stars in arena)
-	if not self:IsPlayerInArena(player) then
-		return false, "Not in arena"
-	end
-	
 	-- Get the maximum RoamRange and StarCollectionRadius from equipped pets
 	local DataService = Knit.GetService("DataService")
 	local inventory = DataService:Get(player, "Inventory")
-	local maxRoamRange = 30 -- Default fallback
-	local maxStarCollectionRadius = 5 -- Default fallback
+	local maxRoamRange = 30
+	local maxStarCollectionRadius = 5
 	
 	if inventory and inventory.PetInventory and inventory.EquippedPets then
 		for _, petIndex in ipairs(inventory.EquippedPets) do
 			local petData = inventory.PetInventory[petIndex]
 			if petData then
-				local roamRange = petData.RoamRange or 30
-				local collectionRadius = petData.StarCollectionRadius or 5
-				if roamRange > maxRoamRange then
-					maxRoamRange = roamRange
-				end
-				if collectionRadius > maxStarCollectionRadius then
-					maxStarCollectionRadius = collectionRadius
-				end
+				maxRoamRange = math.max(maxRoamRange, petData.RoamRange or 30)
+				maxStarCollectionRadius = math.max(maxStarCollectionRadius, petData.StarCollectionRadius or 5)
 			end
 		end
 	end
@@ -936,7 +693,7 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 		return stats
 	end)
 	
-	Log(string.format("Pet collected star for player %s, gained %d fuel (client-requested)", player.Name, fuelValue))
+	Log(string.format("Pet collected star for player %s, gained %d fuel", player.Name, fuelValue))
 	
 	-- Notify client that star was collected
 	self.Client.PetStarCollected:Fire(player, {
@@ -949,7 +706,6 @@ end
 
 -- Client request to equip a pet
 function PetService.Client:RequestEquipPet(player: Player, petID: string): (boolean, string?)
-	print("Here")
 	return PetService:EquipPet(player, petID)
 end
 
@@ -968,13 +724,7 @@ function PetService.Client:GetPets(player: Player)
 	return PetService:GetPlayerPets(player)
 end
 
--- Client request to check if player is in arena
-function PetService.Client:GetArenaStatus(player: Player): boolean
-	return PetService:IsPlayerInArena(player)
-end
-
 -- Client request for pet to collect a star (with range validation)
--- This validates that the star is within the pet's roam range from the player
 function PetService.Client:RequestPetCollectStar(player: Player, starId: string, petPosition: Vector3): (boolean, string?)
 	return PetService:PetCollectStar(player, starId, petPosition)
 end
@@ -989,7 +739,6 @@ local function OnPlayerRemoving(player: Player)
 	-- Clean up data
 	PlayerPetIDs[userId] = nil
 	SpawnedPets[userId] = nil
-	PlayerArenaStatus[userId] = nil
 	
 	Log(string.format("Cleared pet data for player %s", player.Name))
 end
@@ -1016,8 +765,7 @@ function PetService:KnitInit()
 end
 
 function PetService:KnitStart()
-	-- Start the pet behavior loop
-	StartPetBehaviorLoop()
+	-- No behavior loop needed - clients handle all pet positions
 	Log("PetService started")
 end
 

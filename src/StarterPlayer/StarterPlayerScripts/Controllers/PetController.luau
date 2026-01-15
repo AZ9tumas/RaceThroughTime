@@ -1,14 +1,21 @@
 --[[
 	PetController
-	Handles client-side pet behavior for star collection.
+	Handles client-side pet position updates for ALL players in the same world.
 	
-	When player is in arena:
+	For all players in the same world as the local player:
+	- Pets follow their owner in formation
+	- Pets face the same direction as their owner
+	
+	For the local player ONLY (when in arena):
 	- Pets target nearby stars and move to collect them
 	- Each pet targets one star at a time
 	
-	When player is outside arena or no stars available:
-	- Pets return to follow the player
-	- Pets face the same direction as the player
+	Pet Object Structure:
+	petObj = {
+		Player: Player,        -- Owner player
+		PetParams: {...},      -- Pet data (ID, Name, Multiplier, RoamRange, etc.)
+		PetModel: Model,       -- The pet model in workspace
+	}
 ]]
 
 local Players = game:GetService("Players")
@@ -27,54 +34,42 @@ local PetController = Knit.CreateController({
 local PET_FOLLOW_DISTANCE = 8
 local STAR_COLLECTION_DISTANCE = 25
 local ARENA_CHECK_INTERVAL = 0.2
-local DEFAULT_ROAM_RANGE = 30
 
 -- Private state
 local Player = Players.LocalPlayer
 local PetService = nil
 local IsInArena = false
 local LastArenaCheck = 0
-local CachedRoamRange = DEFAULT_ROAM_RANGE
 
--- Pet targets: [petModel] = targetStarID or nil
+-- Pet objects: [PetModel] = petObj
+local PetObjects = {}
+
+-- Pet targets for local player's pets: [PetModel] = targetStarID or nil
 local PetTargets = {}
 
--- Debug beams: [petModel] = { Beam, Attachment0, Attachment1 }
-local DebugTrails = {}
+-- Debug beams: [PetModel] = { Beam, Attachment0, Attachment1, CurrentStarPart }
+local DebugBeams = {}
 
 -- Connection
 local UpdateConnection = nil
 
--- Refresh cached roam range from equipped pets
-local function RefreshRoamRange()
-	CachedRoamRange = DEFAULT_ROAM_RANGE
-	if PetService then
-		local pets = PetService:GetPets()
-		for _, pet in ipairs(pets) do
-			if pet.Equipped and pet.RoamRange then
-				CachedRoamRange = math.max(CachedRoamRange, pet.RoamRange)
-			end
-		end
-	end
-end
-
 -- Get player's root part
-local function GetPlayerRoot(): BasePart?
-	local char = Player.Character
+local function GetPlayerRoot(player: Player): BasePart?
+	local char = player.Character
 	return char and char:FindFirstChild("HumanoidRootPart")
 end
 
--- Get current world name based on player position
-local function GetCurrentWorld(): string
-	return Player:GetAttribute("CurrentWorld") or "Main"
+-- Get current world name for a player
+local function GetCurrentWorld(player: Player): string
+	return player:GetAttribute("CurrentWorld") or "Main"
 end
 
--- Check if player is inside arena
+-- Check if local player is inside arena
 local function CheckInArena(): boolean
-	local root = GetPlayerRoot()
+	local root = GetPlayerRoot(Player)
 	if not root then return false end
 	
-	local world = GetCurrentWorld()
+	local world = GetCurrentWorld(Player)
 	local worldFolder = Workspace:FindFirstChild(world)
 	if not worldFolder then return false end
 	
@@ -87,12 +82,17 @@ local function CheckInArena(): boolean
 	return dist <= radius
 end
 
--- Get all pet models from workspace (have PetAlignPosition)
-local function GetPetModels(): {Model}
+-- Get Stars folder
+local function GetStarsFolder(): Folder?
+	return Workspace:FindFirstChild("Stars")
+end
+
+-- Find all pet models in workspace
+local function FindAllPetModels(): {Model}
 	local pets = {}
 	for _, child in ipairs(Workspace:GetChildren()) do
 		if child:IsA("Model") and child.PrimaryPart then
-			if child.PrimaryPart:FindFirstChild("PetAlignPosition") then
+			if child.PrimaryPart:FindFirstChild("PetAlignPosition") and child:GetAttribute("OwnerUserId") then
 				table.insert(pets, child)
 			end
 		end
@@ -100,17 +100,73 @@ local function GetPetModels(): {Model}
 	return pets
 end
 
--- Get Stars folder
-local function GetStarsFolder(): Folder?
-	return Workspace:FindFirstChild("Stars")
+-- Build or update pet objects from workspace
+local function RefreshPetObjects()
+	local localWorld = GetCurrentWorld(Player)
+	local petModels = FindAllPetModels()
+	
+	-- Build set of current models
+	local currentModels = {}
+	for _, model in ipairs(petModels) do
+		currentModels[model] = true
+	end
+	
+	-- Remove pet objects for models that no longer exist
+	for model, _ in pairs(PetObjects) do
+		if not currentModels[model] or not model.Parent then
+			PetObjects[model] = nil
+			PetTargets[model] = nil
+			-- Clean up debug beam
+			if DebugBeams[model] then
+				if DebugBeams[model].Beam then DebugBeams[model].Beam:Destroy() end
+				if DebugBeams[model].Attachment0 then DebugBeams[model].Attachment0:Destroy() end
+				if DebugBeams[model].Attachment1 then DebugBeams[model].Attachment1:Destroy() end
+				DebugBeams[model] = nil
+			end
+		end
+	end
+	
+	-- Add/update pet objects for current models
+	for _, model in ipairs(petModels) do
+		local ownerUserId = model:GetAttribute("OwnerUserId")
+		local owner = Players:GetPlayerByUserId(ownerUserId)
+		
+		if owner then
+			local ownerWorld = GetCurrentWorld(owner)
+			
+			-- Only track pets from players in the same world
+			if ownerWorld == localWorld then
+				if not PetObjects[model] then
+					-- Create new pet object
+					PetObjects[model] = {
+						Player = owner,
+						PetParams = {
+							ID = model:GetAttribute("PetID") or "",
+							Name = model:GetAttribute("PetName") or "Pet",
+							PetType = model:GetAttribute("PetType") or "StandardPet",
+							Multiplier = model:GetAttribute("Multiplier") or 1.0,
+							RoamRange = model:GetAttribute("RoamRange") or 30,
+							StarCollectionRadius = model:GetAttribute("StarCollectionRadius") or 5,
+							PetIndex = model:GetAttribute("PetIndex") or 1,
+						},
+						PetModel = model,
+					}
+				end
+			else
+				-- Remove pets from different worlds
+				PetObjects[model] = nil
+				PetTargets[model] = nil
+			end
+		end
+	end
 end
 
--- Find nearest untargeted star within range
+-- Find nearest untargeted star within range for local player's pet
 local function FindNearestStar(petPos: Vector3, playerPos: Vector3, roamRange: number): (string?, Vector3?)
 	local starsFolder = GetStarsFolder()
 	if not starsFolder then return nil, nil end
 	
-	-- Get already targeted stars (PetTargets maps petModel -> targetStarId)
+	-- Get already targeted stars
 	local targeted = {}
 	for _, targetId in pairs(PetTargets) do
 		if targetId and type(targetId) == "string" then
@@ -163,43 +219,26 @@ local function CollectStar(starId: string, petPos: Vector3)
 	end
 end
 
--- Helper to make pet follow player in formation
-local function SetPetToFollowPlayer(alignPos: AlignPosition, alignOri: AlignOrientation?, petIndex: number, playerRoot: BasePart)
-	local playerPos = playerRoot.Position
-	local offset = Vector3.new(
-		math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
-		2,
-		math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
-	)
-	alignPos.Position = playerPos + offset
-	
-	-- Face same direction as player
-	if alignOri then
-		alignOri.CFrame = playerRoot.CFrame
-	end
-end
-
--- Create or update debug beam between pet and targeted star
-local function UpdateDebugTrail(petModel: Model, starPart: BasePart?)
+-- Update debug beam between pet and targeted star
+local function UpdateDebugBeam(petModel: Model, starPart: BasePart?)
 	local primaryPart = petModel.PrimaryPart
 	if not primaryPart then return end
 	
 	-- If no star target, remove existing beam
 	if not starPart then
-		local trailData = DebugTrails[petModel]
-		if trailData then
-			if trailData.Beam then trailData.Beam:Destroy() end
-			if trailData.Attachment0 then trailData.Attachment0:Destroy() end
-			if trailData.Attachment1 then trailData.Attachment1:Destroy() end
-			DebugTrails[petModel] = nil
+		local beamData = DebugBeams[petModel]
+		if beamData then
+			if beamData.Beam then beamData.Beam:Destroy() end
+			if beamData.Attachment0 then beamData.Attachment0:Destroy() end
+			if beamData.Attachment1 then beamData.Attachment1:Destroy() end
+			DebugBeams[petModel] = nil
 		end
 		return
 	end
 	
-	-- Create or get beam data
-	local trailData = DebugTrails[petModel]
+	local beamData = DebugBeams[petModel]
 	
-	if not trailData then
+	if not beamData then
 		-- Create attachment on pet's primary part
 		local attachment0 = Instance.new("Attachment")
 		attachment0.Name = "DebugBeamAttachment0"
@@ -223,37 +262,35 @@ local function UpdateDebugTrail(petModel: Model, starPart: BasePart?)
 		beam.Segments = 1
 		beam.Parent = primaryPart
 		
-		trailData = {
+		DebugBeams[petModel] = {
 			Beam = beam,
 			Attachment0 = attachment0,
 			Attachment1 = attachment1,
 			CurrentStarPart = starPart,
 		}
-		DebugTrails[petModel] = trailData
 	else
 		-- Update attachment1 if star changed
-		if trailData.CurrentStarPart ~= starPart then
-			-- Create new attachment on new star (old one gets destroyed with cleanup)
-			if trailData.Attachment1 then
-				trailData.Attachment1:Destroy()
+		if beamData.CurrentStarPart ~= starPart then
+			if beamData.Attachment1 then
+				beamData.Attachment1:Destroy()
 			end
 			local newAttachment1 = Instance.new("Attachment")
 			newAttachment1.Name = "DebugBeamAttachment1"
 			newAttachment1.Parent = starPart
-			trailData.Attachment1 = newAttachment1
-			trailData.Beam.Attachment1 = newAttachment1
-			trailData.CurrentStarPart = starPart
+			beamData.Attachment1 = newAttachment1
+			beamData.Beam.Attachment1 = newAttachment1
+			beamData.CurrentStarPart = starPart
 		end
 	end
 end
 
--- Clear all debug beams for a pet
-local function ClearDebugTrail(petModel: Model)
-	UpdateDebugTrail(petModel, nil)
+-- Clear debug beam for a pet
+local function ClearDebugBeam(petModel: Model)
+	UpdateDebugBeam(petModel, nil)
 end
 
--- Update single pet
-local function UpdatePet(petModel: Model, petIndex: number, playerRoot: BasePart, roamRange: number)
+-- Set pet to follow player in formation
+local function SetPetToFollowPlayer(petModel: Model, petIndex: number, ownerRoot: BasePart)
 	local primaryPart = petModel.PrimaryPart
 	if not primaryPart then return end
 	
@@ -261,11 +298,52 @@ local function UpdatePet(petModel: Model, petIndex: number, playerRoot: BasePart
 	local alignOri = primaryPart:FindFirstChild("PetAlignOrientation")
 	if not alignPos then return end
 	
+	local offset = Vector3.new(
+		math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
+		2,
+		math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
+	)
+	alignPos.Position = ownerRoot.Position + offset
+	
+	-- Face same direction as owner
+	if alignOri then
+		alignOri.CFrame = ownerRoot.CFrame
+	end
+end
+
+-- Update a single pet
+local function UpdatePet(petObj: {Player: Player, PetParams: any, PetModel: Model})
+	local owner = petObj.Player
+	local petModel = petObj.PetModel
+	local petParams = petObj.PetParams
+	
+	if not petModel or not petModel.PrimaryPart or not petModel.Parent then
+		return
+	end
+	
+	local ownerRoot = GetPlayerRoot(owner)
+	if not ownerRoot then return end
+	
+	local primaryPart = petModel.PrimaryPart
+	local alignPos = primaryPart:FindFirstChild("PetAlignPosition")
+	local alignOri = primaryPart:FindFirstChild("PetAlignOrientation")
+	if not alignPos then return end
+	
+	local isLocalPlayer = owner == Player
+	local petIndex = petParams.PetIndex or 1
+	
+	-- For non-local players: always follow owner
+	if not isLocalPlayer then
+		SetPetToFollowPlayer(petModel, petIndex, ownerRoot)
+		return
+	end
+	
+	-- For local player: handle star collection when in arena
 	local petPos = primaryPart.Position
-	local playerPos = playerRoot.Position
+	local playerPos = ownerRoot.Position
+	local roamRange = petParams.RoamRange or 30
 	
 	if IsInArena then
-		-- Check if we have a target
 		local targetId = PetTargets[petModel]
 		
 		if targetId then
@@ -283,31 +361,30 @@ local function UpdatePet(petModel: Model, petIndex: number, playerRoot: BasePart
 						alignOri.CFrame = CFrame.lookAt(petPos, targetPos)
 					end
 				end
-
-				-- Update debug trail to star
+				
+				-- Update debug beam
 				local starsFolder = GetStarsFolder()
 				if starsFolder then
 					local star = starsFolder:FindFirstChild(targetId)
 					if star then
 						local starPart = star:IsA("BasePart") and star or star:FindFirstChildWhichIsA("BasePart")
 						if starPart then
-							UpdateDebugTrail(petModel, starPart)
+							UpdateDebugBeam(petModel, starPart)
 						end
 					end
 				end
 				
 				-- Check if close enough to collect
 				local dist = (petPos - targetPos).Magnitude
-				print(dist, STAR_COLLECTION_DISTANCE)
 				if dist <= STAR_COLLECTION_DISTANCE then
 					CollectStar(targetId, petPos)
 					PetTargets[petModel] = nil
-					ClearDebugTrail(petModel) -- Clear trail when star collected
+					ClearDebugBeam(petModel)
 				end
 			else
 				-- Star no longer exists
 				PetTargets[petModel] = nil
-				ClearDebugTrail(petModel)
+				ClearDebugBeam(petModel)
 			end
 		else
 			-- Find a new star to target
@@ -316,21 +393,24 @@ local function UpdatePet(petModel: Model, petIndex: number, playerRoot: BasePart
 			if newId then
 				PetTargets[petModel] = newId
 			else
-				-- No stars, follow player
-				SetPetToFollowPlayer(alignPos, alignOri, petIndex, playerRoot)
-				ClearDebugTrail(petModel)
+				-- No stars available, follow player
+				SetPetToFollowPlayer(petModel, petIndex, ownerRoot)
+				ClearDebugBeam(petModel)
 			end
 		end
 	else
-		-- Not in arena - follow player and face player's direction
+		-- Not in arena - follow player
 		PetTargets[petModel] = nil
-		SetPetToFollowPlayer(alignPos, alignOri, petIndex, playerRoot)
-		ClearDebugTrail(petModel)
+		SetPetToFollowPlayer(petModel, petIndex, ownerRoot)
+		ClearDebugBeam(petModel)
 	end
 end
 
 -- Main update loop
 local function Update()
+	-- Refresh pet objects periodically
+	RefreshPetObjects()
+	
 	-- Check arena status (throttled)
 	local now = tick()
 	if now - LastArenaCheck >= ARENA_CHECK_INTERVAL then
@@ -341,16 +421,37 @@ local function Update()
 		-- Clear targets when leaving arena
 		if wasInArena and not IsInArena then
 			PetTargets = {}
+			-- Clear all debug beams
+			for petModel, _ in pairs(DebugBeams) do
+				ClearDebugBeam(petModel)
+			end
 		end
 	end
 	
-	local playerRoot = GetPlayerRoot()
-	if not playerRoot then return end
-	
-	-- Update each pet using cached roam range
-	local petModels = GetPetModels()
-	for i, petModel in ipairs(petModels) do
-		UpdatePet(petModel, i, playerRoot, CachedRoamRange)
+	-- Update all pets
+	for _, petObj in pairs(PetObjects) do
+		UpdatePet(petObj)
+	end
+end
+
+-- Handle player added (to track world changes)
+local function OnPlayerAdded(player: Player)
+	-- Listen for world changes
+	player:GetAttributeChangedSignal("CurrentWorld"):Connect(function()
+		-- Refresh pet objects when any player changes world
+		RefreshPetObjects()
+	end)
+end
+
+-- Handle player removing
+local function OnPlayerRemoving(player: Player)
+	-- Clean up pets for this player
+	for model, petObj in pairs(PetObjects) do
+		if petObj.Player == player then
+			PetObjects[model] = nil
+			PetTargets[model] = nil
+			ClearDebugBeam(model)
+		end
 	end
 end
 
@@ -362,29 +463,32 @@ end
 function PetController:KnitStart()
 	PetService = Knit.GetService("PetService")
 	
-	-- Initialize cached roam range
-	RefreshRoamRange()
+	-- Initial pet refresh
+	RefreshPetObjects()
 	
-	-- Start update loop (RenderStepped for smoother visual updates)
+	-- Start update loop (RenderStepped for smooth visual updates)
 	UpdateConnection = RunService.RenderStepped:Connect(Update)
 	
-	-- Listen for pet events
+	-- Listen for player events
+	for _, player in ipairs(Players:GetPlayers()) do
+		OnPlayerAdded(player)
+	end
+	Players.PlayerAdded:Connect(OnPlayerAdded)
+	Players.PlayerRemoving:Connect(OnPlayerRemoving)
+	
+	-- Listen for pet events (to refresh pet objects)
 	PetService.PetEquipped:Connect(function()
-		-- Clear all debug trails when pets change
-		for petModel, _ in pairs(DebugTrails) do
-			ClearDebugTrail(petModel)
-		end
+		RefreshPetObjects()
 		PetTargets = {} -- Reset targets when pets change
-		RefreshRoamRange() -- Update cached roam range
 	end)
 	
 	PetService.PetUnequipped:Connect(function()
-		-- Clear all debug trails when pets change
-		for petModel, _ in pairs(DebugTrails) do
-			ClearDebugTrail(petModel)
-		end
+		RefreshPetObjects()
 		PetTargets = {}
-		RefreshRoamRange()
+		-- Clear all debug beams
+		for petModel, _ in pairs(DebugBeams) do
+			ClearDebugBeam(petModel)
+		end
 	end)
 end
 
