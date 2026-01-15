@@ -60,11 +60,6 @@ local statsM = require(modules:WaitForChild("Stats"))
 -- Debounce state for track requests
 local isRequestingTrack = false
 
--- Arena state - tracks whether player is currently inside the arena
-local isInArena = false
-local lastArenaCheckTime = 0
-local ARENA_CHECK_INTERVAL = 0.1 -- Check arena status every 0.1 seconds for performance
-
 -- Gate settings from Stats
 local GATE_PROXIMITY_DISTANCE = statsM.GateProximityDistance
 local MAX_GATE_INDEX = statsM.MaxGateIndex
@@ -188,84 +183,6 @@ local function GetTrackGatesForCurrentWorld(): Folder?
     end
     
     return nil
-end
-
--- Get the Central Arena part for the current world
-local function GetCentralArenaForCurrentWorld(): BasePart?
-    local currentWorld = handler.data.Progression.CurrentWorld or "Main"
-    local worldFolder = Workspace:FindFirstChild(currentWorld)
-    if worldFolder then
-        local centralArena = worldFolder:FindFirstChild("1_Central_Arena")
-        if centralArena and centralArena:IsA("BasePart") then
-            return centralArena
-        end
-    end
-    
-    -- Fallback to Main world
-    local mainWorld = Workspace:FindFirstChild("Main")
-    if mainWorld then
-        local centralArena = mainWorld:FindFirstChild("1_Central_Arena")
-        if centralArena and centralArena:IsA("BasePart") then
-            return centralArena
-        end
-    end
-    
-    return nil
-end
-
--- Check if player is inside the arena based on distance from center
--- Uses the arena radius from Stats for the current world
-local function CheckPlayerInArena(): boolean
-    local character = player.Character
-    if not character then return false end
-    
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return false end
-    
-    local centralArena = GetCentralArenaForCurrentWorld()
-    if not centralArena then return false end
-    
-    local currentWorld = handler.data.Progression.CurrentWorld or "Main"
-    local arenaRadius = statsM.ArenaRadius[currentWorld] or statsM.ArenaRadius.Main or 200
-    
-    -- Calculate horizontal distance (ignoring Y axis) from arena center to player
-    local arenaCenter = centralArena.Position
-    local playerPos = rootPart.Position
-    local horizontalDistance = math.sqrt(
-        (playerPos.X - arenaCenter.X)^2 + 
-        (playerPos.Z - arenaCenter.Z)^2
-    )
-    
-    return horizontalDistance <= arenaRadius
-end
-
--- Update arena status with throttling for performance
--- Only checks every ARENA_CHECK_INTERVAL seconds
-local function UpdateArenaStatus(): boolean
-    local currentTime = tick()
-    if currentTime - lastArenaCheckTime < ARENA_CHECK_INTERVAL then
-        return isInArena -- Return cached value if not enough time has passed
-    end
-    lastArenaCheckTime = currentTime
-    
-    local wasInArena = isInArena
-    isInArena = CheckPlayerInArena()
-    
-    -- Log state change for debugging (can be removed later)
-    if wasInArena ~= isInArena then
-        if isInArena then
-            print("[InitUI]: Player entered arena")
-        else
-            print("[InitUI]: Player left arena")
-        end
-    end
-    
-    return isInArena
-end
-
--- Public function to check if player is in arena
-function handler.IsPlayerInArena(): boolean
-    return isInArena
 end
 
 -- Helper function to close all frames (shop, daily rewards, inventory, pet modal)
@@ -711,7 +628,6 @@ handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(functio
     handler.UpdateCashUI(cashVal.Value)
     handler.UpdateGemsUI(gemsVal.Value)
     UpdateRunButtonVisibility()
-    UpdateArenaStatus()
 end)
 
 return handler

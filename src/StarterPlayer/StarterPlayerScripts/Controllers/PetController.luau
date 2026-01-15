@@ -17,6 +17,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local Stats = require(ReplicatedStorage.Modules.Stats)
 
 local PetController = Knit.CreateController({
 	Name = "PetController",
@@ -28,6 +29,10 @@ local IsInArena = false
 local PetService = nil
 local StarService = nil
 local EquippedPetStats = {} -- Cache of equipped pet stats: { RoamRange, StarCollectionRadius }
+
+-- Arena checking state
+local lastArenaCheckTime = 0
+local ARENA_CHECK_INTERVAL = 0.1 -- Check arena status every 0.1 seconds for performance
 
 -- Pet behavior state
 local PetTargets = {} -- [petModel] = { TargetStarID = string?, TargetPosition = Vector3? }
@@ -44,6 +49,121 @@ local PetBehaviorConnection = nil
 local function Log(message: string)
 	-- Uncomment for debugging
 	-- print(string.format("[PetController]: %s", message))
+end
+
+-- Get the current world name by checking which world folder the player is in
+local function GetCurrentWorld(): string
+	local character = Player.Character
+	if not character then return "Main" end
+	
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return "Main" end
+	
+	-- Check which world the player is in based on proximity to world spawn/arena
+	-- For simplicity, check if Main or StoneAge arena is closest
+	local mainWorld = Workspace:FindFirstChild("Main")
+	local stoneAgeWorld = Workspace:FindFirstChild("StoneAge")
+	
+	if mainWorld and stoneAgeWorld then
+		local mainArena = mainWorld:FindFirstChild("1_Central_Arena")
+		local stoneAgeArena = stoneAgeWorld:FindFirstChild("1_Central_Arena")
+		
+		if mainArena and stoneAgeArena then
+			local playerPos = rootPart.Position
+			local distToMain = (playerPos - mainArena.Position).Magnitude
+			local distToStoneAge = (playerPos - stoneAgeArena.Position).Magnitude
+			
+			if distToStoneAge < distToMain then
+				return "StoneAge"
+			end
+		end
+	end
+	
+	return "Main"
+end
+
+-- Get the Central Arena part for the current world
+local function GetCentralArenaForCurrentWorld(): BasePart?
+	local currentWorld = GetCurrentWorld()
+	local worldFolder = Workspace:FindFirstChild(currentWorld)
+	if worldFolder then
+		local centralArena = worldFolder:FindFirstChild("1_Central_Arena")
+		if centralArena and centralArena:IsA("BasePart") then
+			return centralArena
+		end
+	end
+	
+	-- Fallback to Main world
+	local mainWorld = Workspace:FindFirstChild("Main")
+	if mainWorld then
+		local centralArena = mainWorld:FindFirstChild("1_Central_Arena")
+		if centralArena and centralArena:IsA("BasePart") then
+			return centralArena
+		end
+	end
+	
+	return nil
+end
+
+-- Check if player is inside the arena based on distance from center
+local function CheckPlayerInArena(): boolean
+	local character = Player.Character
+	if not character then return false end
+	
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return false end
+	
+	local centralArena = GetCentralArenaForCurrentWorld()
+	if not centralArena then return false end
+	
+	local currentWorld = GetCurrentWorld()
+	local arenaRadius = Stats.ArenaRadius[currentWorld] or Stats.ArenaRadius.Main or 200
+	
+	-- Calculate horizontal distance (ignoring Y axis) from arena center to player
+	local arenaCenter = centralArena.Position
+	local playerPos = rootPart.Position
+	local horizontalDistance = math.sqrt(
+		(playerPos.X - arenaCenter.X)^2 + 
+		(playerPos.Z - arenaCenter.Z)^2
+	)
+	
+	return horizontalDistance <= arenaRadius
+end
+
+-- Update arena status with throttling for performance
+local function UpdateArenaStatus()
+	local currentTime = tick()
+	if currentTime - lastArenaCheckTime < ARENA_CHECK_INTERVAL then
+		return -- Use cached value if not enough time has passed
+	end
+	lastArenaCheckTime = currentTime
+	
+	local wasInArena = IsInArena
+	IsInArena = CheckPlayerInArena()
+	
+	-- Log state change for debugging
+	if wasInArena ~= IsInArena then
+		if IsInArena then
+			Log("Player entered arena - pets will now collect stars")
+			-- Clear all pet targets when entering arena to re-evaluate
+			for _, petData in pairs(PetTargets) do
+				petData.TargetStarID = nil
+				petData.TargetPosition = nil
+			end
+		else
+			Log("Player left arena - pets will follow player")
+			-- Clear all pet targets when leaving arena
+			for _, petData in pairs(PetTargets) do
+				petData.TargetStarID = nil
+				petData.TargetPosition = nil
+			end
+		end
+	end
+end
+
+-- Public function to check if player is in arena
+function PetController:IsPlayerInArena(): boolean
+	return IsInArena
 end
 
 -- Get the maximum RoamRange and StarCollectionRadius from equipped pets
@@ -279,6 +399,9 @@ end
 
 -- Main pet behavior update loop (client-side)
 local function UpdatePetBehavior()
+	-- Update arena status first
+	UpdateArenaStatus()
+	
 	local rootPart = GetPlayerRootPart()
 	if not rootPart then return end
 	
@@ -318,22 +441,6 @@ local function StopPetBehaviorLoop()
 		PetBehaviorConnection:Disconnect()
 		PetBehaviorConnection = nil
 		Log("Pet behavior loop stopped")
-	end
-end
-
--- Handle arena status change from server
-local function OnArenaStatusChanged(inArena: boolean)
-	IsInArena = inArena
-	
-	if inArena then
-		Log("Entered arena - pets will now collect stars")
-	else
-		Log("Left arena - pets will follow player")
-		-- Clear all pet targets when leaving arena
-		for _, petData in pairs(PetTargets) do
-			petData.TargetStarID = nil
-			petData.TargetPosition = nil
-		end
 	end
 end
 
@@ -377,16 +484,16 @@ function PetController:KnitStart()
 	-- Initialize equipped pet stats from server
 	RefreshEquippedPetStats()
 	
-	-- Get initial arena status
-	IsInArena = PetService:GetArenaStatus() or false
+	-- Arena status starts as false and will be updated in the behavior loop
+	-- This avoids race conditions during initialization
+	IsInArena = false
 	
-	-- Listen for signals from server
-	PetService.ArenaStatusChanged:Connect(OnArenaStatusChanged)
+	-- Listen for signals from server (pet equip/unequip and star collection)
 	PetService.PetEquipped:Connect(OnPetEquipped)
 	PetService.PetUnequipped:Connect(OnPetUnequipped)
 	PetService.PetStarCollected:Connect(OnPetStarCollected)
 	
-	-- Start the pet behavior loop
+	-- Start the pet behavior loop (handles arena detection and pet behavior)
 	StartPetBehaviorLoop()
 	
 	Log("PetController started")
