@@ -39,6 +39,9 @@ local CachedRoamRange = DEFAULT_ROAM_RANGE
 -- Pet targets: [petModel] = targetStarID or nil
 local PetTargets = {}
 
+-- Debug trails: [petModel] = { Trail, Attachment0, Attachment1 }
+local DebugTrails = {}
+
 -- Connection
 local UpdateConnection = nil
 
@@ -176,8 +179,77 @@ local function SetPetToFollowPlayer(alignPos: AlignPosition, alignOri: AlignOrie
 	end
 end
 
-local function MakeTrail(pet, star)
-	-- make attachments and trail
+-- Create or update debug trail between pet and targeted star
+local function UpdateDebugTrail(petModel: Model, starPart: BasePart?)
+	local primaryPart = petModel.PrimaryPart
+	if not primaryPart then return end
+	
+	-- If no star target, remove existing trail
+	if not starPart then
+		local trailData = DebugTrails[petModel]
+		if trailData then
+			if trailData.Trail then trailData.Trail:Destroy() end
+			if trailData.Attachment0 then trailData.Attachment0:Destroy() end
+			if trailData.Attachment1 then trailData.Attachment1:Destroy() end
+			DebugTrails[petModel] = nil
+		end
+		return
+	end
+	
+	-- Create or get trail data
+	local trailData = DebugTrails[petModel]
+	
+	if not trailData then
+		-- Create attachment on pet's primary part
+		local attachment0 = Instance.new("Attachment")
+		attachment0.Name = "DebugTrailAttachment0"
+		attachment0.Parent = primaryPart
+		
+		-- Create attachment on star
+		local attachment1 = Instance.new("Attachment")
+		attachment1.Name = "DebugTrailAttachment1"
+		attachment1.Parent = starPart
+		
+		-- Create trail between attachments
+		local trail = Instance.new("Trail")
+		trail.Name = "DebugPetTrail"
+		trail.Attachment0 = attachment0
+		trail.Attachment1 = attachment1
+		trail.Color = ColorSequence.new(Color3.fromRGB(255, 255, 0)) -- Yellow trail
+		trail.Transparency = NumberSequence.new(0.3)
+		trail.Lifetime = 0.5
+		trail.MinLength = 0.1
+		trail.WidthScale = NumberSequence.new(1)
+		trail.FaceCamera = true
+		trail.Parent = primaryPart
+		
+		trailData = {
+			Trail = trail,
+			Attachment0 = attachment0,
+			Attachment1 = attachment1,
+			CurrentStarPart = starPart,
+		}
+		DebugTrails[petModel] = trailData
+	else
+		-- Update attachment1 if star changed
+		if trailData.CurrentStarPart ~= starPart then
+			-- Create new attachment on new star (old one gets destroyed with cleanup)
+			if trailData.Attachment1 then
+				trailData.Attachment1:Destroy()
+			end
+			local newAttachment1 = Instance.new("Attachment")
+			newAttachment1.Name = "DebugTrailAttachment1"
+			newAttachment1.Parent = starPart
+			trailData.Attachment1 = newAttachment1
+			trailData.Trail.Attachment1 = newAttachment1
+			trailData.CurrentStarPart = starPart
+		end
+	end
+end
+
+-- Clear all debug trails for a pet
+local function ClearDebugTrail(petModel: Model)
+	UpdateDebugTrail(petModel, nil)
 end
 
 -- Update single pet
@@ -212,17 +284,29 @@ local function UpdatePet(petModel: Model, petIndex: number, playerRoot: BasePart
 					end
 				end
 
-				-- MakeTrails here
+				-- Update debug trail to star
+				local starsFolder = GetStarsFolder()
+				if starsFolder then
+					local star = starsFolder:FindFirstChild(targetId)
+					if star then
+						local starPart = star:IsA("BasePart") and star or star:FindFirstChildWhichIsA("BasePart")
+						if starPart then
+							UpdateDebugTrail(petModel, starPart)
+						end
+					end
+				end
 				
 				-- Check if close enough to collect
 				local dist = (petPos - targetPos).Magnitude
 				if dist <= STAR_COLLECTION_DISTANCE then
 					CollectStar(targetId, petPos)
 					PetTargets[petModel] = nil
+					ClearDebugTrail(petModel) -- Clear trail when star collected
 				end
 			else
 				-- Star no longer exists
 				PetTargets[petModel] = nil
+				ClearDebugTrail(petModel)
 			end
 		else
 			-- Find a new star to target
@@ -233,12 +317,14 @@ local function UpdatePet(petModel: Model, petIndex: number, playerRoot: BasePart
 			else
 				-- No stars, follow player
 				SetPetToFollowPlayer(alignPos, alignOri, petIndex, playerRoot)
+				ClearDebugTrail(petModel)
 			end
 		end
 	else
 		-- Not in arena - follow player and face player's direction
 		PetTargets[petModel] = nil
 		SetPetToFollowPlayer(alignPos, alignOri, petIndex, playerRoot)
+		ClearDebugTrail(petModel)
 	end
 end
 
@@ -283,11 +369,19 @@ function PetController:KnitStart()
 	
 	-- Listen for pet events
 	PetService.PetEquipped:Connect(function()
+		-- Clear all debug trails when pets change
+		for petModel, _ in pairs(DebugTrails) do
+			ClearDebugTrail(petModel)
+		end
 		PetTargets = {} -- Reset targets when pets change
 		RefreshRoamRange() -- Update cached roam range
 	end)
 	
 	PetService.PetUnequipped:Connect(function()
+		-- Clear all debug trails when pets change
+		for petModel, _ in pairs(DebugTrails) do
+			ClearDebugTrail(petModel)
+		end
 		PetTargets = {}
 		RefreshRoamRange()
 	end)
