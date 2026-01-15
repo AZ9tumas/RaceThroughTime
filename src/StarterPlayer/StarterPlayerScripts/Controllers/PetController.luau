@@ -73,7 +73,6 @@ local function CheckInArena(): boolean
 	
 	local world = GetCurrentWorld()
 	local worldFolder = Workspace:FindFirstChild(world)
-	print(worldFolder)
 	if not worldFolder then return false end
 	
 	local arena = worldFolder:FindFirstChild("1_Central_Arena")
@@ -190,7 +189,6 @@ local function UpdatePet(petModel: Model, petIndex: number, playerRoot: BasePart
 	local playerPos = playerRoot.Position
 	
 	if IsInArena then
-		print("PLAYER IS IN ARENAAAA")
 		-- Check if we have a target
 		local targetId = PetTargets[petModel]
 		
@@ -274,8 +272,8 @@ function PetController:KnitStart()
 	-- Initialize cached roam range
 	RefreshRoamRange()
 	
-	-- Start update loop
-	UpdateConnection = RunService.Heartbeat:Connect(Update)
+	-- Start update loop (RenderStepped for smoother visual updates)
+	UpdateConnection = RunService.RenderStepped:Connect(Update)
 	
 	-- Listen for pet events
 	PetService.PetEquipped:Connect(function()

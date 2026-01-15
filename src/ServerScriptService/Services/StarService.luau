@@ -129,6 +129,24 @@ function StarService:GetStarInformation(player: Player)
 	return UniversalTracker[player.UserId]
 end
 
+-- Find star info by ID in player's tracker
+-- Note: Uses player's CurrentWorld attribute for world info if needed
+local function FindStarById(userId: number, starId: string):
+	({ Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number }?, number?)
+	local starInfoList = UniversalTracker[userId]
+	if not starInfoList then
+		return nil, nil
+	end
+
+	for index, starInfo in ipairs(starInfoList) do
+		if starInfo.ID == starId then
+			return starInfo, index
+		end
+	end
+
+	return nil, nil
+end
+
 -- Server-side star collection (for pets, no distance check)
 -- Returns the fuel value if successful, nil otherwise
 function StarService:CollectStarServer(player: Player, starId: string): number?
@@ -153,23 +171,6 @@ function StarService:CollectStarServer(player: Player, starId: string): number?
 	Log(string.format("Server collected star %s for player %s, fuel value: %d", starInfo.StarName, player.Name, fuelValue))
 	
 	return fuelValue
-end
-
--- Find star info by ID in player's tracker
-local function FindStarById(userId: number, starId: string):
-	({ Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number }?, number?)
-	local starInfoList = UniversalTracker[userId]
-	if not starInfoList then
-		return nil, nil
-	end
-
-	for index, starInfo in ipairs(starInfoList) do
-		if starInfo.ID == starId then
-			return starInfo, index
-		end
-	end
-
-	return nil, nil
 end
 
 -- Verify and process star collection
