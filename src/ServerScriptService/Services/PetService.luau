@@ -135,7 +135,7 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		local rootPart = character:FindFirstChild("HumanoidRootPart")
 		if rootPart then
 			local offset = Vector3.new(3 + (petIndex - 1) * PET_FOLLOW_OFFSET_SPACING, 0, 3)
-			petModel:SetPrimaryPartCFrame(CFrame.new(rootPart.Position + offset))
+			petModel:PivotTo(CFrame.new(rootPart.Position + offset))
 		end
 	end
 	
@@ -151,8 +151,8 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		alignPosition.Name = "PetAlignPosition"
 		alignPosition.Mode = Enum.PositionAlignmentMode.OneAttachment
 		alignPosition.Attachment0 = attachment
-		alignPosition.MaxForce = 100000
-		alignPosition.MaxVelocity = 50
+		alignPosition.MaxForce = math.huge
+		alignPosition.MaxVelocity = 35
 		alignPosition.Responsiveness = 20
 		-- IMPORTANT: Set initial position to current pet position (not 0,0,0)
 		alignPosition.Position = primaryPart.Position
@@ -163,7 +163,7 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		alignOrientation.Name = "PetAlignOrientation"
 		alignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
 		alignOrientation.Attachment0 = attachment
-		alignOrientation.MaxTorque = 100000
+		alignOrientation.MaxTorque = math.huge
 		alignOrientation.MaxAngularVelocity = 20
 		alignOrientation.Responsiveness = 20
 		-- IMPORTANT: Set initial CFrame to current pet orientation (not 0,0,0)

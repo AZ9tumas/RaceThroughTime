@@ -470,7 +470,7 @@ function PetController:KnitStart()
 	RefreshPetObjects()
 	
 	-- Start update loop (RenderStepped for smooth visual updates)
-	UpdateConnection = RunService.RenderStepped:Connect(Update)
+	RunService:BindToRenderStep("PetControllerUpdate", Enum.RenderPriority.Character.Value + 1, Update)
 	
 	-- Listen for player events
 	for _, player in ipairs(Players:GetPlayers()) do
