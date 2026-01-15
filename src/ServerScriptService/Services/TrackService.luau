@@ -31,7 +31,7 @@ local DEBOUNCE_COOLDOWN = 1 -- Minimum seconds between requests
 
 -- Helper function for logging
 local function Log(message: string)
-	print(string.format("[TrackService]: %s", message))
+	--print(string.format("[TrackService]: %s", message))
 end
 
 -- Get the world folder for a player's current world

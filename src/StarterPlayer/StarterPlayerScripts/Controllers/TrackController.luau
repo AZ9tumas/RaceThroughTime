@@ -47,7 +47,7 @@ local TrackFireEffects = {} -- Store fire/smoke effects
 
 -- Helper function for logging
 local function Log(message: string)
-	print(string.format("[TrackController]: %s", message))
+	--print(string.format("[TrackController]: %s", message))
 end
 
 -- Get the world folder from workspace

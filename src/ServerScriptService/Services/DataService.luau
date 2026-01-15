@@ -28,8 +28,11 @@ local Template = {
 		UnlockedWorlds = { "Main" },
 	},
 	Inventory = {
+		-- PetInventory stores full pet data:
+		-- { Name: string, PetType: string, Multiplier: number, FuelBonus: number, 
+		--   PickupRangeBonus: number, World: string, Level: number, Rarity: string }
 		PetInventory = {},
-		EquippedPets = {},
+		EquippedPets = {}, -- Indices of equipped pets (max 3)
 		Potions = {},
 	},
 	Meta = {
@@ -116,17 +119,10 @@ local function TryResolveSession(player: Player)
 	local profile = PlayerProfiles[player]
 	local clientReady = ClientStatus[player]
 	local sessionPromise = SessionReadyPromises[player]
-
-	-- immediately send data right away
-	if profile then
-		local data = profile.Data
-
-		-- Fire DataReady signal to client
-		DataService.Client.DataReady:Fire(player, data)
-	end
-
+	
 	if profile and clientReady and sessionPromise and sessionPromise.resolve then
 		print(player, "Session Initialized")
+		DataService.Client.DataReady:Fire(player, profile.Data)
 		sessionPromise.resolve()
 		sessionPromise.resolve = nil -- Prevent double resolution
 	end

@@ -19,7 +19,7 @@ local DoubleJumpController = Knit.CreateController({
 -- Configuration
 local TIME_BETWEEN_JUMPS = 0.2 -- Time to wait before enabling double jump
 local DOUBLE_JUMP_POWER_MULTIPLIER = 2 -- Multiplier for jump power on double jump
-local FORWARD_IMPULSE_FORCE = 500 -- Forward impulse force on double jump
+local FORWARD_IMPULSE_FORCE = 2000 -- Forward impulse force on double jump
 
 -- Private state
 local localPlayer = Players.LocalPlayer

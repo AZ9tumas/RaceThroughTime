@@ -29,6 +29,13 @@ Stats.WorldRadius = {
 	StoneAge = 205, -- Same radius as Main
 }
 
+-- Arena radius values for each world (radius of the 1_Central_Arena part)
+-- Used to determine if player is inside the arena
+Stats.ArenaRadius = {
+	Main = 200,
+	StoneAge = 200,
+}
+
 Stats.FuelConsumptionRate = {
 	Main = 150, -- Fuel consumed per second on the Main world
 	StoneAge = 200, -- Slightly higher fuel consumption in StoneAge
@@ -233,5 +240,43 @@ function Stats.PolarToCartesian(centerX: number, centerZ: number, radius: number
 	local z = centerZ + radius * math.sin(angle)
 	return x, z
 end
+
+-- Egg Configuration
+-- Egg types with their costs and the pet they produce
+Stats.Eggs = {
+	StandardEgg = {
+		Cost = 500,
+		Currency = "Cash",
+		Pet = "StandardPet",
+		World = "Main",
+	},
+}
+
+-- Pet Rarity tiers
+Stats.PetRarity = {
+	Standard = "Standard",
+	Premium = "Premium",
+	LimitedTime = "LimitedTime",
+}
+
+-- Pet Configuration
+-- Pet types with their base stats
+Stats.Pets = {
+	StandardPet = {
+		Name = "Standard Pet",
+		Multiplier = 1.1, -- 10% boost to earnings
+		FuelBonus = 1.1, -- 10% fuel collection increase
+		PickupRangeBonus = 1.0, -- No range extension (base range)
+		World = "Main", -- Associated world for merging
+		BaseTierLevel = 1, -- Starting tier level
+		Rarity = "Standard", -- Standard, Premium, or LimitedTime
+	},
+}
+
+-- Note: Merge costs, bonuses, and grind wall configuration are now in PetMergeStats.luau
+-- See ReplicatedStorage.Modules.PetMergeStats for merge system configuration
+
+-- Maximum number of pets that can be equipped at once
+Stats.MaxEquippedPets = 3
 
 return Stats
