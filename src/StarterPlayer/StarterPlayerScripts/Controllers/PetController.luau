@@ -48,7 +48,7 @@ local PetBehaviorConnection = nil
 -- Helper function for logging
 local function Log(message: string)
 	-- Uncomment for debugging
-	-- print(string.format("[PetController]: %s", message))
+	print(string.format("[PetController]: %s", message))
 end
 
 -- Get the current world name by checking which world folder the player is in

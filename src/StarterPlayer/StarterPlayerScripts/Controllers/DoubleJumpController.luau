@@ -32,7 +32,7 @@ local stateConnection = nil
 
 -- Helper function for logging
 local function Log(message: string)
-	print(string.format("[DoubleJumpController]: %s", message))
+	--print(string.format("[DoubleJumpController]: %s", message))
 end
 
 -- Check if player is on the track (disable double jump on track)

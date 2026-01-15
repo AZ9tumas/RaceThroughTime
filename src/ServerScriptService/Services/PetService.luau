@@ -75,7 +75,7 @@ local PetsCollisionGroupCreated = false -- Track if collision group was created
 
 -- Helper function for logging
 local function Log(message: string)
-	print(string.format("[PetService]: %s", message))
+	--print(string.format("[PetService]: %s", message))
 end
 
 -- Generate a unique ID for pets
