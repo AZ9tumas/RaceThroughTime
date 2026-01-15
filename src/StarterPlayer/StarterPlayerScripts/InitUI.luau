@@ -356,8 +356,6 @@ local function OpenPetModal(petData)
     
     -- Update equip button state
     UpdatePetModalEquipButton(petData.Equipped or false)
-
-    -- when equip button is pressed, connect to server
     
     -- Show the modal
     petModalDarkOverlay.Visible = true
