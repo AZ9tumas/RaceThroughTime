@@ -63,21 +63,7 @@ end
 
 -- Get current world name based on player position
 local function GetCurrentWorld(): string
-	local root = GetPlayerRoot()
-	if not root then return "Main" end
-	
-	local mainArena = Workspace:FindFirstChild("Main") and Workspace.Main:FindFirstChild("1_Central_Arena")
-	local stoneAgeArena = Workspace:FindFirstChild("StoneAge") and Workspace.StoneAge:FindFirstChild("1_Central_Arena")
-	
-	if mainArena and stoneAgeArena then
-		local distMain = (root.Position - mainArena.Position).Magnitude
-		local distStoneAge = (root.Position - stoneAgeArena.Position).Magnitude
-		if distStoneAge < distMain then
-			return "StoneAge"
-		end
-	end
-	
-	return "Main"
+	return Player:GetAttribute("CurrentWorld") or "Main"
 end
 
 -- Check if player is inside arena
@@ -87,6 +73,7 @@ local function CheckInArena(): boolean
 	
 	local world = GetCurrentWorld()
 	local worldFolder = Workspace:FindFirstChild(world)
+	print(worldFolder)
 	if not worldFolder then return false end
 	
 	local arena = worldFolder:FindFirstChild("1_Central_Arena")
@@ -203,6 +190,7 @@ local function UpdatePet(petModel: Model, petIndex: number, playerRoot: BasePart
 	local playerPos = playerRoot.Position
 	
 	if IsInArena then
+		print("PLAYER IS IN ARENAAAA")
 		-- Check if we have a target
 		local targetId = PetTargets[petModel]
 		

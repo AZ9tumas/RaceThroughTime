@@ -229,6 +229,8 @@ local function OnPlayerAdded(player: Player)
 			DataReadyPromises[player].resolve = nil
 		end
 
+		player:SetAttribute("CurrentWorld", worldName)
+
 		-- Check if session is ready to initialize
 		TryResolveSession(player)
 

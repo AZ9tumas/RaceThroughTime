@@ -110,6 +110,8 @@ function WorldService:GiveWorldToPlayer(player: Player, worldName: string): bool
 		table.insert(progression.UnlockedWorlds, worldName)
 		return progression
 	end)
+
+	player:SetAttribute("CurrentWorld", worldName)
 	
 	Log(string.format("Unlocked world '%s' for player %s", worldName, player.Name))
 	
