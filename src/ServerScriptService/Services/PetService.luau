@@ -23,6 +23,7 @@ local HttpService = game:GetService("HttpService")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 local PetMergeStats = require(ReplicatedStorage.Modules.PetMergeStats)
+local RebirthStats = require(ReplicatedStorage.Modules.RebirthStats)
 
 export type Pet = {
 	Name: string,
@@ -747,8 +748,13 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 		return false, "Collection failed"
 	end
 	
-	-- Calculate fuel with pet multiplier
-	local fuelMultiplier = Stats.CalculateFuelMultiplier(equippedPets) * Stats.CalculateMultipliers()
+	-- Get rebirth multiplier
+	local stats = DataService:Get(player, "Stats")
+	local rebirthLevel = (stats and stats.Rebirths) or 0
+	local rebirthCashMultiplier = RebirthStats.CalculateTotalCashMultiplier(rebirthLevel)
+	
+	-- Calculate fuel with pet multiplier and rebirth bonus
+	local fuelMultiplier = Stats.CalculateFuelMultiplier(equippedPets) * rebirthCashMultiplier * Stats.CalculateMultipliers()
 	local finalFuelValue = math.floor(fuelValue * fuelMultiplier)
 	
 	-- Add fuel to player
