@@ -187,11 +187,14 @@ end
 
 -- Helper function to close all frames (shop, daily rewards, inventory, pet modal)
 -- Used to avoid cluttering of frames when opening a new one
-local function CloseAllFrames()
+local function CloseAllFrames(exceptFrame: Frame?)
+    local old = exceptFrame and exceptFrame.Visible
     dailyFrame.Visible = false
     shopMain.Visible = false
     inventoryMainFrame.Visible = false
     petModalDarkOverlay.Visible = false
+
+    if exceptFrame then exceptFrame.Visible = old end
 end
 
 -- Helper function to truncate large numbers
@@ -287,8 +290,8 @@ function handler.UpdatePetsInventory()
     end
     
     -- Get the pet inventory from handler data
-    local petInventory = handler.data.Inventory.PetInventory or {}
-    local equippedPets = handler.data.Inventory.EquippedPets or {}
+    local petInventory = handler.data.Inventory.PetInventory
+    local equippedPets = handler.data.Inventory.EquippedPets
     
     -- Create a set of equipped pet indices for quick lookup
     local equippedSet = {}
@@ -323,6 +326,13 @@ function handler.UpdatePetsInventory()
         
         -- Store pet data and index for later use
         local isEquipped = equippedSet[index] == true
+
+        if isEquipped then
+            petFrame.UIStroke.Color = Color3.fromRGB(85, 255, 0)
+        else
+            petFrame.UIStroke.Color = Color3.fromRGB(49, 49, 49)
+        end
+
         local fullPetData = {
             ID = petData.ID,
             Name = petData.Name,
@@ -476,8 +486,6 @@ handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function
 
     
     TrackService:RequestTrackStart():andThen(function(success: boolean, gateName: string?)
-        print(success, gateName)
-    
         if success then
             runButton.Visible = false
         else
@@ -540,8 +548,9 @@ end)
 
 -- Pets inventory UI
 handler._connections["PetsButton"] = petsButton.MouseButton1Click:Connect(function()
-    CloseAllFrames()
+    CloseAllFrames(inventoryMainFrame)
     inventoryMainFrame.Visible = not inventoryMainFrame.Visible
+
     if inventoryMainFrame.Visible then
         handler.UpdatePetsInventory()
     end
@@ -555,6 +564,7 @@ end)
 handler._connections["PetModalClose"] = petModalCloseButton.MouseButton1Click:Connect(function()
     petModalDarkOverlay.Visible = false
     selectedPetData = nil
+    inventoryMainFrame.Visible = true
 end)
 
 handler._connections["PetModalEquip"] = petModalEquipButton.MouseButton1Click:Connect(function()

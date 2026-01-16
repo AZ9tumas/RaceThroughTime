@@ -330,8 +330,7 @@ function TrackService:EndTrackRun(player: Player)
 	local WorldService = Knit.GetService("WorldService")
 	local nextWorld = WorldService:GetNextWorld(worldName)
 	local unlockRequirement = nextWorld and Stats.WorldUnlockRequirements[nextWorld] or nil
-	-- Only show progress if next world exists in workspace
-	unlockRequirement = nextWorld and workspace:FindFirstChild(nextWorld) and unlockRequirement or nil
+	print("requirement: ", unlockRequirement)
 	
 	local percentageToNextWorld = 0
 	if unlockRequirement and unlockRequirement > 0 then

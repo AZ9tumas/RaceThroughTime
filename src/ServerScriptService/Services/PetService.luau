@@ -748,7 +748,7 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 	end
 	
 	-- Calculate fuel with pet multiplier
-	local fuelMultiplier = Stats.CalculateFuelMultiplier(equippedPets)
+	local fuelMultiplier = Stats.CalculateFuelMultiplier(equippedPets) * Stats.CalculateMultipliers()
 	local finalFuelValue = math.floor(fuelValue * fuelMultiplier)
 	
 	-- Add fuel to player

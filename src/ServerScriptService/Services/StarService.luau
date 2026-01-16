@@ -44,7 +44,7 @@ local function GetFuelMultiplierForPlayer(player: Player): number
 		end
 	end
 	
-	return Stats.CalculateFuelMultiplier(equippedPets)
+	return Stats.CalculateFuelMultiplier(equippedPets) * Stats.CalculateMultipliers()
 end
 
 -- Helper function for logging

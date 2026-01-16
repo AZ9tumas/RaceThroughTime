@@ -22,6 +22,7 @@ local distanceFrame: Frame = resultsFrame:WaitForChild("Distance")
 local distanceValueLabel: TextLabel = distanceFrame:WaitForChild("DistanceValue")
 local progressFrame: Frame = resultsFrame:WaitForChild("Progress")
 local greenFillFrame: Frame = progressFrame:WaitForChild("Frame"):WaitForChild("GreenFill")
+local closeButton: TextButton = resultsFrame:WaitForChild("TextButton")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
@@ -501,8 +502,8 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	EnablePlayerControls()
 	
 	-- Update results popup UI
-	local distanceTraveled = trackData.distanceTraveled or 0
-	local percentageToNextWorld = trackData.percentageToNextWorld or 0
+	local distanceTraveled = trackData.distanceTraveled
+	local percentageToNextWorld = trackData.percentageToNextWorld
 	
 	-- Set distance value text
 	if distanceValueLabel then
@@ -512,12 +513,14 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	-- Set green fill width based on percentage (scale X from 0 to 1)
 	if greenFillFrame then
 		local fillPercentage = math.clamp(percentageToNextWorld / 100, 0, 1)
+		print("Fill percentage: ", fillPercentage)
 		greenFillFrame.Size = UDim2.new(fillPercentage, 0, greenFillFrame.Size.Y.Scale, greenFillFrame.Size.Y.Offset)
 	end
 	
 	-- Show the results popup
 	if resultsPopupUI then
 		resultsPopupUI.Enabled = true
+		resultsFrame.Parent.Visible = true
 	end
 	
 	-- Show WhiteFrame loading screen briefly then fade out
@@ -632,6 +635,10 @@ function TrackController:KnitStart()
 	TrackService.TrackEnded:Connect(OnTrackEnded)
 	TrackService.LapCompleted:Connect(OnLapCompleted)
 	TrackService.TrackProgressUpdate:Connect(OnTrackProgressUpdate)
+
+	closeButton.MouseButton1Click:Connect(function()
+		resultsFrame.Parent.Visible = false
+	end)
 	
 	Log("TrackController started")
 end

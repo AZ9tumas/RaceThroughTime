@@ -166,6 +166,8 @@ function WorldService:TeleportPlayerToWorld(player: Player, worldName: string): 
 	
 	-- Wait a moment for loading screen to fade in
 	task.wait(0.2)
+
+	player:SetAttribute("CurrentWorld", worldName)
 	
 	-- Teleport player to spawn location
 	local spawnCFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0) -- Slightly above spawn

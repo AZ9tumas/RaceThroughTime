@@ -104,6 +104,9 @@ Stats.MaxGateIndex = 3 -- Gates are numbered 0 to MaxGateIndex (0, 1, 2, 3)
 -- Formula: Σ(M_pets + M_rebirth + M_boosts)
 -- Returns 1 for now, can be extended for actual multiplier calculations
 function Stats.CalculateMultipliers(): number
+	-- multiplier from pets is handled separately
+	-- here dev products, vip access and rebirths can be added
+
 	return 1
 end
 
