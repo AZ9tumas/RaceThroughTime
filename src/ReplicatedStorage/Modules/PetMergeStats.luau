@@ -135,9 +135,9 @@ function PetMergeStats.CalculateMergedStats(oldStats: { Multiplier: number, Fuel
 		Multiplier = oldStats.Multiplier * formula,
 		FuelBonus = oldStats.FuelBonus * formula,
 		PickupRangeBonus = oldStats.PickupRangeBonus * formula,
-		RoamRange = (oldStats.RoamRange or 30) * formula,
-		StarCollectionRadius = (oldStats.StarCollectionRadius or 5) * formula,
-		Velocity = (oldStats.Velocity or 20) * formula,
+		RoamRange = (oldStats.RoamRange) * formula,
+		StarCollectionRadius = (oldStats.StarCollectionRadius) * formula,
+		Velocity = (oldStats.Velocity) * formula,
 	}
 end
 

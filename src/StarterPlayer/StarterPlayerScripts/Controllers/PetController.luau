@@ -140,6 +140,7 @@ local function RefreshPetObjects()
 			if ownerWorld == localWorld then
 				if not PetObjects[model] then
 					-- Create new pet object
+					print(model)
 					PetObjects[model] = {
 						Player = owner,
 						PetParams = {
@@ -147,7 +148,7 @@ local function RefreshPetObjects()
 							Name = model:GetAttribute("PetName") or "Pet",
 							PetType = model:GetAttribute("PetType") or "StandardPet",
 							Multiplier = model:GetAttribute("Multiplier") or 1.0,
-							RoamRange = model:GetAttribute("RoamRange") or 30,
+							RoamRange = model:GetAttribute("RoamRange"),
 							StarCollectionRadius = model:GetAttribute("StarCollectionRadius") or 5,
 							PetIndex = model:GetAttribute("PetIndex") or 1,
 						},
@@ -348,7 +349,7 @@ local function UpdatePet(petObj: {Player: Player, PetParams: any, PetModel: Mode
 	-- For local player: handle star collection when in arena
 	local petPos = primaryPart.Position
 	local playerPos = ownerRoot.Position
-	local roamRange = petParams.RoamRange or 30
+	local roamRange = petParams.RoamRange or 150
 	
 	if IsInArena then
 		local targetId = PetTargets[petModel]

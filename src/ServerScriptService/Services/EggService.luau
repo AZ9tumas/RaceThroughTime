@@ -135,7 +135,7 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 			Multiplier = petConfig.Multiplier,
 			FuelBonus = petConfig.FuelBonus or 1.1,
 			PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
-			RoamRange = petConfig.RoamRange or 30,
+			RoamRange = petConfig.RoamRange,
 			StarCollectionRadius = petConfig.StarCollectionRadius or 5,
 			Velocity = petConfig.Velocity or 20,
 			World = petConfig.World or eggConfig.World,

@@ -370,7 +370,7 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 			Name = petData.Name,
 			PetType = petData.PetType,
 			Multiplier = petData.Multiplier,
-			RoamRange = petData.RoamRange or 30,
+			RoamRange = petData.RoamRange,
 			StarCollectionRadius = petData.StarCollectionRadius or 5,
 		})
 	end
@@ -667,8 +667,10 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 	if inventory and inventory.PetInventory and inventory.EquippedPets then
 		for _, petIndex in ipairs(inventory.EquippedPets) do
 			local petData = inventory.PetInventory[petIndex]
+			print(petData)
 			if petData then
-				maxRoamRange = math.max(maxRoamRange, petData.RoamRange or 30)
+				maxRoamRange = math.max(maxRoamRange, petData.RoamRange)
+				print("Max roam range: ", maxRoamRange)
 				maxStarCollectionRadius = math.max(maxStarCollectionRadius, petData.StarCollectionRadius or 5)
 				table.insert(equippedPets, petData)
 			end
