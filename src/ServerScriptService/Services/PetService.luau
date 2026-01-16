@@ -116,6 +116,13 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 	local petType = petData.PetType or "StandardPet"
 	local petModel = GetPetModel(petType)
 	
+	-- Get pet stats from Stats.Pets (petData may not have these values saved)
+	local petStats = Stats.Pets[petType] or Stats.Pets.StandardPet
+	local roamRange = petData.RoamRange or petStats.RoamRange or 30
+	local starCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius or 5
+	local petVelocity = petData.Velocity or petStats.Velocity or 20
+	local multiplier = petData.Multiplier or petStats.Multiplier or 1.0
+	
 	if not petModel then
 		-- Create a simple placeholder if model not found
 		petModel = Instance.new("Model")
@@ -153,9 +160,6 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		attachment.Name = "PetAttachment"
 		attachment.Parent = primaryPart
 		
-		-- Get pet velocity for movement speed (defaults to 20 studs/sec)
-		local petVelocity = petData.Velocity or 20
-		
 		-- Create AlignPosition for smooth position movement (controlled by client)
 		local alignPosition = Instance.new("AlignPosition")
 		alignPosition.Name = "PetAlignPosition"
@@ -189,14 +193,15 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 	end
 	
 	-- Store owner info for clients to identify
+	-- Use values from Stats.Pets when petData doesn't have them
 	petModel:SetAttribute("OwnerUserId", userId)
 	petModel:SetAttribute("PetIndex", petIndex)
 	petModel:SetAttribute("PetName", petData.Name)
-	petModel:SetAttribute("PetType", petData.PetType or "StandardPet")
-	petModel:SetAttribute("Multiplier", petData.Multiplier or 1.0)
-	petModel:SetAttribute("RoamRange", petData.RoamRange or 30)
-	petModel:SetAttribute("StarCollectionRadius", petData.StarCollectionRadius or 5)
-	petModel:SetAttribute("Velocity", petData.Velocity or 20)
+	petModel:SetAttribute("PetType", petType)
+	petModel:SetAttribute("Multiplier", multiplier)
+	petModel:SetAttribute("RoamRange", roamRange)
+	petModel:SetAttribute("StarCollectionRadius", starCollectionRadius)
+	petModel:SetAttribute("Velocity", petVelocity)
 	
 	petModel.Parent = workspace
 	
@@ -357,6 +362,14 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 	local petData = inventory.PetInventory[petIndex]
 	Log(string.format("Player %s equipped %s", player.Name, petData.Name))
 	
+	-- Get pet stats from Stats.Pets (petData may not have these values saved)
+	local petType = petData.PetType or "StandardPet"
+	local petStats = Stats.Pets[petType] or Stats.Pets.StandardPet
+	local roamRange = petData.RoamRange or petStats.RoamRange or 30
+	local starCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius or 5
+	local velocity = petData.Velocity or petStats.Velocity or 20
+	local multiplier = petData.Multiplier or petStats.Multiplier or 1.0
+	
 	-- Spawn the pet model
 	SpawnPetModel(player, petIndex, petData)
 	
@@ -368,10 +381,11 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 			ID = petID,
 			PetIndex = petIndex,
 			Name = petData.Name,
-			PetType = petData.PetType,
-			Multiplier = petData.Multiplier,
-			RoamRange = petData.RoamRange,
-			StarCollectionRadius = petData.StarCollectionRadius or 5,
+			PetType = petType,
+			Multiplier = multiplier,
+			RoamRange = roamRange,
+			StarCollectionRadius = starCollectionRadius,
+			Velocity = velocity,
 		})
 	end
 	
@@ -454,21 +468,25 @@ function PetService:GetPlayerPets(player: Player): { Pet }
 	for index, petData in ipairs(inventory.PetInventory) do
 		local petID = self:GetPetIDByIndex(player, index)
 		if petID then
+			-- Get pet stats from Stats.Pets (petData may not have these values saved)
+			local petType = petData.PetType or "StandardPet"
+			local petStats = Stats.Pets[petType] or Stats.Pets.StandardPet
+			
 			table.insert(pets, {
 				ID = petID,
 				Name = petData.Name,
-				PetType = petData.PetType,
-				Multiplier = petData.Multiplier,
-				FuelBonus = petData.FuelBonus or 1.0,
-				PickupRangeBonus = petData.PickupRangeBonus or 1.0,
-				RoamRange = petData.RoamRange or 30,
-				StarCollectionRadius = petData.StarCollectionRadius or 5,
-				Velocity = petData.Velocity or 20,
-				World = petData.World or "Main",
+				PetType = petType,
+				Multiplier = petData.Multiplier or petStats.Multiplier or 1.0,
+				FuelBonus = petData.FuelBonus or petStats.FuelBonus or 1.0,
+				PickupRangeBonus = petData.PickupRangeBonus or petStats.PickupRangeBonus or 1.0,
+				RoamRange = petData.RoamRange or petStats.RoamRange or 30,
+				StarCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius or 5,
+				Velocity = petData.Velocity or petStats.Velocity or 20,
+				World = petData.World or petStats.World or "Main",
 				Level = petData.Level or 1,
 				TierLevel = petData.TierLevel or petData.Level or 1,
 				TierName = petData.TierName or "Common",
-				Rarity = petData.Rarity or "Standard",
+				Rarity = petData.Rarity or petStats.Rarity or "Standard",
 				Equipped = equippedSet[index] == true,
 			})
 		end
@@ -667,12 +685,20 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 	if inventory and inventory.PetInventory and inventory.EquippedPets then
 		for _, petIndex in ipairs(inventory.EquippedPets) do
 			local petData = inventory.PetInventory[petIndex]
-			print(petData)
 			if petData then
-				maxRoamRange = math.max(maxRoamRange, petData.RoamRange)
-				print("Max roam range: ", maxRoamRange)
-				maxStarCollectionRadius = math.max(maxStarCollectionRadius, petData.StarCollectionRadius or 5)
-				table.insert(equippedPets, petData)
+				-- Get pet stats from Stats.Pets (petData may not have these values saved)
+				local petType = petData.PetType or "StandardPet"
+				local petStats = Stats.Pets[petType] or Stats.Pets.StandardPet
+				local roamRange = petData.RoamRange or petStats.RoamRange or 30
+				local starCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius or 5
+				
+				maxRoamRange = math.max(maxRoamRange, roamRange)
+				maxStarCollectionRadius = math.max(maxStarCollectionRadius, starCollectionRadius)
+				
+				-- Create pet data with proper stats for multiplier calculation
+				table.insert(equippedPets, {
+					Multiplier = petData.Multiplier or petStats.Multiplier or 1.0,
+				})
 			end
 		end
 	end
