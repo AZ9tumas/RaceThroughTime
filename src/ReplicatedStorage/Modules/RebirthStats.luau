@@ -23,7 +23,7 @@ local RebirthStats = {}
 RebirthStats.RebirthLevels = {
 	{
 		Level = 1,
-		CashRequired = 3000000000, -- 3B cash required for first rebirth
+		CashRequired = 100000, -- 100K cash required for first rebirth
 		CashMultiplierBonus = 0.1, -- +10% cash
 		SpeedBoostMultiplier = 0.05, -- +5% speed
 		PetReward = "StandardPet", -- Pet from Main world
@@ -31,7 +31,7 @@ RebirthStats.RebirthLevels = {
 	},
 	{
 		Level = 2,
-		CashRequired = 10000000000, -- 10B cash required for second rebirth
+		CashRequired = 1000000, -- 1M cash required for second rebirth
 		CashMultiplierBonus = 0.15, -- +15% cash (total +25%)
 		SpeedBoostMultiplier = 0.08, -- +8% speed (total +13%)
 		PetReward = "StandardPet", -- Pet from StoneAge world
