@@ -56,6 +56,7 @@ local PetService = Knit.GetService("PetService")
 -- modules
 local modules = ReplicatedStorage:WaitForChild("Modules")
 local statsM = require(modules:WaitForChild("Stats"))
+local rebirthStatsM = require(modules:WaitForChild("RebirthStats"))
 
 -- Debounce state for track requests
 local isRequestingTrack = false
@@ -73,6 +74,7 @@ local GemsDisplay: TextLabel = leftPanel:WaitForChild("GemsDisplay")
 local centerHUD: Frame = mainUi:WaitForChild("CenterHUD")
 local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 local fuelBar = centerHUD:WaitForChild("FuelBar")
+local multiplierLabel: TextLabel = fuelBar:WaitForChild("SpeedStat")
 local fuelText: TextLabel = fuelBar:WaitForChild("FuelText")
 local otherFrames: Frame = mainUi:WaitForChild("OtherFrames")
 local worldlabel: TextLabel = mainUi:WaitForChild("TopInfo"):WaitForChild("WorldName")
@@ -110,6 +112,16 @@ local petModalEquipEmoji: TextLabel = petModalEquipButton:WaitForChild("Emoji")
 local petModalEquipLabel: TextLabel = petModalEquipButton:WaitForChild("TextLabel")
 local petModalMergeButton: TextButton = petModalMainFrame:WaitForChild("MergeButton")
 local petModalMultiplier: TextLabel = petModalMainFrame:WaitForChild("Multiplier")
+
+-- rebirth ui
+local rebirthStatsM = require(ReplicatedStorage.Modules.RebirthStats)
+local rebirthModalButton: TextButton = leftPanel:WaitForChild("RebirthButton")
+local rebirthMenu: Frame = PlayerGui:WaitForChild("SimulatorPopups"):WaitForChild("RebirthMenu")
+local rebirthCloseButton: TextLabel = rebirthMenu:WaitForChild("Close")
+local progressBar: Frame = rebirthMenu:WaitForChild("Progress"):WaitForChild("Fill")
+local progressText: TextLabel = rebirthMenu:WaitForChild("Progress"):WaitForChild("TextLabel")
+local rebirthButton: TextButton = rebirthMenu:WaitForChild("Rebirth")
+local rebirthMainLabel: TextLabel = rebirthMenu:WaitForChild("TextLabel")
 
 -- Currently selected pet data for the modal
 local selectedPetData = nil
@@ -193,6 +205,7 @@ local function CloseAllFrames(exceptFrame: Frame?)
     shopMain.Visible = false
     inventoryMainFrame.Visible = false
     petModalDarkOverlay.Visible = false
+    rebirthMenu.Visible = false
 
     if exceptFrame then exceptFrame.Visible = old end
 end
@@ -440,9 +453,8 @@ end
 
 -- daily frame
 handler._connections["DailyButton"] = dailyButton.MouseButton1Click:Connect(function()
-    local wasVisible = dailyFrame.Visible
-    CloseAllFrames()
-    dailyFrame.Visible = not wasVisible
+    CloseAllFrames(dailyFrame)
+    dailyFrame.Visible = not dailyFrame.Visible
 end)
 
 for _, cardData in pairs(cardHolders) do
@@ -627,6 +639,65 @@ handler._connections["PetModalEquip"] = petModalEquipButton.MouseButton1Click:Co
     end
 end)
 
+-- rebirth events
+
+local function handleRebirthFrame()
+    local cash = truncateNumber(cashVal.Value)
+
+    local currentRebirthLevel = handler.data.Stats.Rebirths
+    local nextLevel = rebirthStatsM.GetNextRebirth(currentRebirthLevel)
+
+    if nextLevel then
+        local progress, remainingCash = rebirthStatsM.GetRebirthProgress(currentRebirthLevel, cashVal.Value)
+        progressBar.Size = UDim2.new(progress, 0, 1, 0)
+        progressText.Text = cash .. "/" .. truncateNumber(nextLevel.CashRequired) .. " Cash"
+        rebirthMainLabel.Text = "Rebirth to Level " .. tostring(nextLevel.Level)
+    else
+        progressBar.Size = UDim2.new(1, 0, 1, 0)
+        progressText.Text = "MAX LEVEL REACHED"
+        rebirthMainLabel.Text = "MAX LEVEL REACHED"
+    end
+end
+
+handler._connections["RebirthButton"] = rebirthButton.MouseButton1Click:Connect(function()
+    -- Request rebirth from server
+    rebirthMenu.Visible = false
+
+    local RebirthService = Knit.GetService("RebirthService")
+    RebirthService:RequestRebirth():andThen(function(success, errorMsg, resultData)
+        --[=[
+            resultData = {
+                NewRebirthLevel = newLevel,
+                CashMultiplier = newCashMultiplier,
+                SpeedMultiplier = newSpeedMultiplier,
+                CashMultiplierBonus = nextRebirth.CashMultiplierBonus,
+                SpeedBoostBonus = nextRebirth.SpeedBoostMultiplier,
+                PetReward = petInfo,
+                FuelReset = true,
+            }
+        ]=]
+
+        if success then
+            print("Rebirth successful!")
+        else
+            print("Rebirth failed:", errorMsg or "Unknown error")
+        end
+    end)
+end)
+
+handler._connections["RebirthModalButton"] = rebirthModalButton.MouseButton1Click:Connect(function()
+    CloseAllFrames(rebirthMenu)
+    rebirthMenu.Visible = not rebirthMenu.Visible
+
+    if rebirthMenu.Visible then
+        handleRebirthFrame()
+    end
+end)
+
+handler._connections["RebirthClose"] = rebirthCloseButton.MouseButton1Click:Connect(function()
+    rebirthMenu.Visible = false
+end)
+
 -- Listen for DataReady signal from server to update UI
 handler._connections["DataReady"] = DataService.DataReady:Connect(function(data)
     -- Call UpdateDataOnClient when data is ready
@@ -638,6 +709,43 @@ handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(functio
     handler.UpdateFuelUI(fuelVal.Value)
     handler.UpdateCashUI(cashVal.Value)
     handler.UpdateGemsUI(gemsVal.Value)
+    -- update multipler Label here, fetch this detail from the server, this is the final multiplier 
+    -- which includes pets, vip, dev products and rebirth multipliers
+    
+    -- Calculate Rebirth Multiplier
+    local currentRebirthLevel = handler.data.Stats.Rebirths or 0
+    local rebirthMultiplier = rebirthStatsM.CalculateTotalCashMultiplier(currentRebirthLevel)
+    
+    -- Calculate Pet Multiplier
+    local equippedPetsList = {}
+    if handler.data.Inventory and handler.data.Inventory.EquippedPets and handler.data.Inventory.PetInventory then
+        for _, petIndex in ipairs(handler.data.Inventory.EquippedPets) do
+            local pet = handler.data.Inventory.PetInventory[petIndex]
+            if pet then
+                table.insert(equippedPetsList, pet)
+            end
+        end
+    end
+    -- Note currently using CalculateFuelMultiplier as it sums pet.Multiplier (earnings boost)
+    local petMultiplier = statsM.CalculateFuelMultiplier(equippedPetsList)
+    
+    -- VIP and Dev Products (Placeholders - assume 1.0 if not implemented yet)
+    local vipMultiplier = 1.0 
+    local devProductMultiplier = 1.0
+    
+    -- Final Multiplier Calculation
+    -- Assuming multipliers stack multiplicatively between systems (Rebirth * Pets * VIP)
+    local totalMultiplier = rebirthMultiplier * petMultiplier * vipMultiplier * devProductMultiplier
+    
+    -- Format to 1 decimal place if it has decimals, or integer
+    -- Using string.format for cleaner output
+    local formattedMultiplier = string.format("%.1f", totalMultiplier)
+    if formattedMultiplier:sub(-2) == ".0" then
+        formattedMultiplier = formattedMultiplier:sub(1, -3)
+    end
+    
+    multiplierLabel.Text = "⚡ x" .. formattedMultiplier
+
     UpdateRunButtonVisibility()
 end)
 
