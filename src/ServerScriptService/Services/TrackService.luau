@@ -326,6 +326,18 @@ function TrackService:EndTrackRun(player: Player)
 		end)
 	end
 	
+	-- Calculate percentage to next world
+	local WorldService = Knit.GetService("WorldService")
+	local nextWorld = WorldService:GetNextWorld(worldName)
+	local unlockRequirement = nextWorld and Stats.WorldUnlockRequirements[nextWorld] or nil
+	-- Only show progress if next world exists in workspace
+	unlockRequirement = nextWorld and workspace:FindFirstChild(nextWorld) and unlockRequirement or nil
+	
+	local percentageToNextWorld = 0
+	if unlockRequirement and unlockRequirement > 0 then
+		percentageToNextWorld = math.clamp((distanceTraveled / unlockRequirement) * 100, 0, 100)
+	end
+	
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
 	
@@ -333,6 +345,8 @@ function TrackService:EndTrackRun(player: Player)
 	TrackService.Client.TrackEnded:Fire(player, {
 		distanceTraveled = distanceTraveled,
 		cashEarned = cashEarned,
+		percentageToNextWorld = percentageToNextWorld,
+		unlockRequirement = unlockRequirement,
 	})
 
 	-- clear all stars
