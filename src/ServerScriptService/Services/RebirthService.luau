@@ -86,7 +86,7 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 	
 	-- Reset fuel (personal stars) - keep TotalDistance for tracking
 	DataService:Update(player, "Stats", function(stats)
-		stats.Fuel = 100 -- Reset to starting fuel
+		stats.Fuel = Stats.StartingFuel -- Reset to starting fuel
 		stats.Rebirths = newLevel -- Increment rebirth level
 		-- TotalDistance is kept for future rebirth requirements
 		return stats

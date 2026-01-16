@@ -7,6 +7,9 @@ local Stats = {}
 
 Stats.BaseSpeed = 50
 
+-- Starting fuel for new players and after rebirth
+Stats.StartingFuel = 100
+
 -- Maximum track run time in seconds
 Stats.MaxTrackTime = 30
 
@@ -116,6 +119,8 @@ function Stats.CalculateMultipliers(rebirthSpeedMultiplier: number?): number
 end
 
 -- Calculate base speed from fuel using the formula:
+-- Note: This returns base speed without rebirth bonuses. Rebirth speed multipliers
+-- should be applied by the caller (e.g., TrackService) after getting track parameters.
 -- @param fuel number - The current fuel amount
 -- @param worldName string? - The world name to get efficiency for (default: "Main")
 -- @return number - The calculated base speed component from fuel
