@@ -110,6 +110,8 @@ function WorldService:GiveWorldToPlayer(player: Player, worldName: string): bool
 		table.insert(progression.UnlockedWorlds, worldName)
 		return progression
 	end)
+
+	player:SetAttribute("CurrentWorld", worldName)
 	
 	Log(string.format("Unlocked world '%s' for player %s", worldName, player.Name))
 	
@@ -164,6 +166,8 @@ function WorldService:TeleportPlayerToWorld(player: Player, worldName: string): 
 	
 	-- Wait a moment for loading screen to fade in
 	task.wait(0.2)
+
+	player:SetAttribute("CurrentWorld", worldName)
 	
 	-- Teleport player to spawn location
 	local spawnCFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0) -- Slightly above spawn

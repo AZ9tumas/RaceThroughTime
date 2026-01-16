@@ -27,6 +27,26 @@ local StarsFolder = nil
 local TotalStarsCollected = 0 -- Counter for total stars collected by all players in the server
 local StarSpawnLoops = {} -- [Player.UserId] = thread (spawn loop thread)
 
+-- Helper function to get fuel multiplier from equipped pets
+local function GetFuelMultiplierForPlayer(player: Player): number
+	local DataService = Knit.GetService("DataService")
+	local inventory = DataService:Get(player, "Inventory")
+	
+	if not inventory or not inventory.PetInventory or not inventory.EquippedPets then
+		return 1.0
+	end
+	
+	local equippedPets = {}
+	for _, petIndex in ipairs(inventory.EquippedPets) do
+		local petData = inventory.PetInventory[petIndex]
+		if petData then
+			table.insert(equippedPets, petData)
+		end
+	end
+	
+	return Stats.CalculateFuelMultiplier(equippedPets) * Stats.CalculateMultipliers()
+end
+
 -- Helper function for logging
 local function Log(message: string)
 	--print(string.format("[StarService]: %s", message))
@@ -129,6 +149,24 @@ function StarService:GetStarInformation(player: Player)
 	return UniversalTracker[player.UserId]
 end
 
+-- Find star info by ID in player's tracker
+-- Note: Uses player's CurrentWorld attribute for world info if needed
+local function FindStarById(userId: number, starId: string):
+	({ Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number }?, number?)
+	local starInfoList = UniversalTracker[userId]
+	if not starInfoList then
+		return nil, nil
+	end
+
+	for index, starInfo in ipairs(starInfoList) do
+		if starInfo.ID == starId then
+			return starInfo, index
+		end
+	end
+
+	return nil, nil
+end
+
 -- Server-side star collection (for pets, no distance check)
 -- Returns the fuel value if successful, nil otherwise
 function StarService:CollectStarServer(player: Player, starId: string): number?
@@ -153,23 +191,6 @@ function StarService:CollectStarServer(player: Player, starId: string): number?
 	Log(string.format("Server collected star %s for player %s, fuel value: %d", starInfo.StarName, player.Name, fuelValue))
 	
 	return fuelValue
-end
-
--- Find star info by ID in player's tracker
-local function FindStarById(userId: number, starId: string):
-	({ Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number }?, number?)
-	local starInfoList = UniversalTracker[userId]
-	if not starInfoList then
-		return nil, nil
-	end
-
-	for index, starInfo in ipairs(starInfoList) do
-		if starInfo.ID == starId then
-			return starInfo, index
-		end
-	end
-
-	return nil, nil
 end
 
 -- Verify and process star collection
@@ -201,15 +222,19 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 		return false
 	end
 
+	-- Calculate fuel with pet multiplier
+	local fuelMultiplier = GetFuelMultiplierForPlayer(player)
+	local finalFuelValue = math.floor(starInfo.FuelValue * fuelMultiplier)
+
 	-- Star collection verified - add fuel to player
 	local DataService = Knit.GetService("DataService")
 	DataService:Update(player, "Stats", function(stats)
-		local finalVal = starInfo.FuelValue + stats.Fuel
+		local finalVal = finalFuelValue + stats.Fuel
 		stats.Fuel = finalVal
 		return stats
 	end)
 
-	Log(string.format("Player %s collected %s, gained %d fuel", player.Name, starInfo.StarName, starInfo.FuelValue))
+	Log(string.format("Player %s collected %s, gained %d fuel (multiplier: %.2f)", player.Name, starInfo.StarName, finalFuelValue, fuelMultiplier))
 
 	-- Increment total stars collected counter
 	TotalStarsCollected = TotalStarsCollected + 1
@@ -226,7 +251,7 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 
 	-- Show notification for star collection
 	local NotificationService = Knit.GetService("NotificationService")
-	NotificationService:SendNotification(player, "Star collected! ⭐ +" .. starInfo.FuelValue .. " Fuel", {
+	NotificationService:SendNotification(player, "Star collected! ⭐ +" .. finalFuelValue .. " Fuel", {
 		icon = "⭐", sound = "CollectStar", name = "Custom"
 	}, 2)
 

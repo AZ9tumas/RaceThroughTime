@@ -22,8 +22,7 @@ local function Main()
 		DataService:OnSessionReady(player):andThen(function()
 			print(string.format("[Main]: Player %s session fully initialized", player.Name))
 
-			-- Initialize pet IDs for the player (IDs are session-only, not persisted)
-			PetService:InitializePets(player)
+			-- Pet IDs are now initialized in DataService.TryResolveSession before DataReady is fired
 
 			-- Start star automated spawning
 			StarService:Start(player)

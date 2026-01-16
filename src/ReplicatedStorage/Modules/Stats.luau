@@ -104,6 +104,9 @@ Stats.MaxGateIndex = 3 -- Gates are numbered 0 to MaxGateIndex (0, 1, 2, 3)
 -- Formula: Σ(M_pets + M_rebirth + M_boosts)
 -- Returns 1 for now, can be extended for actual multiplier calculations
 function Stats.CalculateMultipliers(): number
+	-- multiplier from pets is handled separately
+	-- here dev products, vip access and rebirths can be added
+
 	return 1
 end
 
@@ -242,13 +245,17 @@ function Stats.PolarToCartesian(centerX: number, centerZ: number, radius: number
 end
 
 -- Egg Configuration
--- Egg types with their costs and the pet they produce
+-- Egg types with their costs and the pets they can produce (with probabilities)
 Stats.Eggs = {
 	StandardEgg = {
 		Cost = 500,
 		Currency = "Cash",
-		Pet = "StandardPet",
 		World = "Main",
+		-- Pets array contains possible pets with their spawn probabilities (must sum to 1.0)
+		Pets = {
+			{ Pet = "StandardPet", Probability = 0.70 }, -- 70% chance
+			{ Pet = "StandardPet", Probability = 0.30 }, -- 30% chance (same pet, for testing)
+		},
 	},
 }
 
@@ -267,11 +274,31 @@ Stats.Pets = {
 		Multiplier = 1.1, -- 10% boost to earnings
 		FuelBonus = 1.1, -- 10% fuel collection increase
 		PickupRangeBonus = 1.0, -- No range extension (base range)
+		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
+		StarCollectionRadius = 10, -- Distance from star to collect it
+		Velocity = 20, -- Pet movement speed (studs/sec)
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
 		Rarity = "Standard", -- Standard, Premium, or LimitedTime
 	},
 }
+
+-- Calculate total fuel multiplier from all equipped pets
+-- Returns the sum of all equipped pets' multipliers (default 1.0 if no pets equipped)
+-- @param equippedPets table? - Array of equipped pet data { Multiplier: number, ... }
+-- @return number - Total fuel multiplier (sum of all pet multipliers)
+function Stats.CalculateFuelMultiplier(equippedPets: {any}?): number
+	if not equippedPets or #equippedPets == 0 then
+		return 1.0
+	end
+	
+	local totalMultiplier = 0
+	for _, pet in ipairs(equippedPets) do
+		totalMultiplier = totalMultiplier + (pet.Multiplier or 1.0)
+	end
+	
+	return totalMultiplier
+end
 
 -- Note: Merge costs, bonuses, and grind wall configuration are now in PetMergeStats.luau
 -- See ReplicatedStorage.Modules.PetMergeStats for merge system configuration

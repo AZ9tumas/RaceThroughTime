@@ -15,6 +15,15 @@ local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 local liveMainUI: ScreenGui = PlayerGui:WaitForChild("UI_LiveDistance")
 local distanceCounter: TextLabel = liveMainUI:WaitForChild("DistanceCounter")
 
+-- Results popup UI
+local resultsPopupUI: ScreenGui = PlayerGui:WaitForChild("UI_ResultsPopup")
+local resultsFrame: Frame = resultsPopupUI:WaitForChild("Frame"):WaitForChild("Frame")
+local distanceFrame: Frame = resultsFrame:WaitForChild("Distance")
+local distanceValueLabel: TextLabel = distanceFrame:WaitForChild("DistanceValue")
+local progressFrame: Frame = resultsFrame:WaitForChild("Progress")
+local greenFillFrame: Frame = progressFrame:WaitForChild("Frame"):WaitForChild("GreenFill")
+local closeButton: TextButton = resultsFrame:WaitForChild("TextButton")
+
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
 -- Reference to InitUI module for debounce reset
@@ -466,7 +475,7 @@ local function OnTrackStarted(trackData: { gateName: string, totalDistance: numb
 end
 
 -- Handle track ended signal from server
-local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: number })
+local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: number, percentageToNextWorld: number?, unlockRequirement: number? })
 	if not IsOnTrack then return end
 	
 	Log(string.format("Track ended, distance traveled: %.2f, cash earned: %.0f", trackData.distanceTraveled or 0, trackData.cashEarned or 0))
@@ -491,6 +500,28 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	
 	-- Re-enable player controls
 	EnablePlayerControls()
+	
+	-- Update results popup UI
+	local distanceTraveled = trackData.distanceTraveled
+	local percentageToNextWorld = trackData.percentageToNextWorld
+	
+	-- Set distance value text
+	if distanceValueLabel then
+		distanceValueLabel.Text = string.format("%.0f", distanceTraveled)
+	end
+	
+	-- Set green fill width based on percentage (scale X from 0 to 1)
+	if greenFillFrame then
+		local fillPercentage = math.clamp(percentageToNextWorld / 100, 0, 1)
+		print("Fill percentage: ", fillPercentage)
+		greenFillFrame.Size = UDim2.new(fillPercentage, 0, greenFillFrame.Size.Y.Scale, greenFillFrame.Size.Y.Offset)
+	end
+	
+	-- Show the results popup
+	if resultsPopupUI then
+		resultsPopupUI.Enabled = true
+		resultsFrame.Parent.Visible = true
+	end
 	
 	-- Show WhiteFrame loading screen briefly then fade out
 	local LoadingScreenController = Knit.GetController("LoadingScreenController")
@@ -604,6 +635,10 @@ function TrackController:KnitStart()
 	TrackService.TrackEnded:Connect(OnTrackEnded)
 	TrackService.LapCompleted:Connect(OnLapCompleted)
 	TrackService.TrackProgressUpdate:Connect(OnTrackProgressUpdate)
+
+	closeButton.MouseButton1Click:Connect(function()
+		resultsFrame.Parent.Visible = false
+	end)
 	
 	Log("TrackController started")
 end

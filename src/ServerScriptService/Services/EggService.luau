@@ -52,8 +52,32 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		return false, "Invalid egg type", nil
 	end
 	
-	-- Get pet type from egg
-	local petType = eggConfig.Pet
+	-- Get pet type from egg based on probability
+	local petType = nil
+	
+	-- Support both old format (single Pet) and new format (Pets array with probabilities)
+	if eggConfig.Pets and #eggConfig.Pets > 0 then
+		-- New format: select pet based on probability
+		local random = math.random()
+		local cumulativeProbability = 0
+		
+		for _, petOption in ipairs(eggConfig.Pets) do
+			cumulativeProbability = cumulativeProbability + petOption.Probability
+			if random <= cumulativeProbability then
+				petType = petOption.Pet
+				break
+			end
+		end
+		
+		-- Fallback to first pet if probabilities don't sum to 1.0
+		if not petType then
+			petType = eggConfig.Pets[1].Pet
+		end
+	else
+		-- Old format: single Pet field
+		petType = eggConfig.Pet
+	end
+	
 	local petConfig = Stats.Pets[petType]
 	if not petConfig then
 		NotificationService:SendNotification(
@@ -111,7 +135,10 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 			Multiplier = petConfig.Multiplier,
 			FuelBonus = petConfig.FuelBonus or 1.1,
 			PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
-			World = petConfig.World or eggConfig.World or "Main",
+			RoamRange = petConfig.RoamRange,
+			StarCollectionRadius = petConfig.StarCollectionRadius or 5,
+			Velocity = petConfig.Velocity or 20,
+			World = petConfig.World or eggConfig.World,
 			Level = petConfig.BaseTierLevel or 1,
 			TierLevel = petConfig.BaseTierLevel or 1,
 			TierName = "Common", -- Starting tier name
@@ -143,6 +170,9 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		Multiplier = petConfig.Multiplier,
 		FuelBonus = petConfig.FuelBonus or 1.1,
 		PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
+		RoamRange = petConfig.RoamRange or 30,
+		StarCollectionRadius = petConfig.StarCollectionRadius or 5,
+		Velocity = petConfig.Velocity or 20,
 		World = petConfig.World or eggConfig.World or "Main",
 		Level = petConfig.BaseTierLevel or 1,
 		TierLevel = petConfig.BaseTierLevel or 1,

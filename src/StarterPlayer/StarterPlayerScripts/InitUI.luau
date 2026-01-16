@@ -51,6 +51,7 @@ local Knit = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Kn
 local EggService = Knit.GetService("EggService")
 local DailyRewardService = Knit.GetService("DailyRewardService")
 local DataService = Knit.GetService("DataService")
+local PetService = Knit.GetService("PetService")
 
 -- modules
 local modules = ReplicatedStorage:WaitForChild("Modules")
@@ -58,11 +59,6 @@ local statsM = require(modules:WaitForChild("Stats"))
 
 -- Debounce state for track requests
 local isRequestingTrack = false
-
--- Arena state - tracks whether player is currently inside the arena
-local isInArena = false
-local lastArenaCheckTime = 0
-local ARENA_CHECK_INTERVAL = 0.1 -- Check arena status every 0.1 seconds for performance
 
 -- Gate settings from Stats
 local GATE_PROXIMITY_DISTANCE = statsM.GateProximityDistance
@@ -103,6 +99,20 @@ local inventoryPetCount: TextLabel = inventoryMainFrame:WaitForChild("PetCount")
 local inventoryScrollingFrame: ScrollingFrame = inventoryMainFrame:WaitForChild("ScrollingFrame")
 local inventoryPetTemplate: Frame = inventoryScrollingFrame:WaitForChild("UIGridLayout"):WaitForChild("Template")
 local inventoryCloseButton: TextButton = inventoryMainFrame:WaitForChild("CloseButton")
+
+-- Pet modal UI (for equipping/unequipping pets)
+local uiPetModal: ScreenGui = PlayerGui:WaitForChild("UI_PetModal")
+local petModalDarkOverlay: Frame = uiPetModal:WaitForChild("DarkOverlay")
+local petModalMainFrame: Frame = petModalDarkOverlay:WaitForChild("MainFrame")
+local petModalCloseButton: TextButton = petModalMainFrame:WaitForChild("CloseButton")
+local petModalEquipButton: TextButton = petModalMainFrame:WaitForChild("EquipButton")
+local petModalEquipEmoji: TextLabel = petModalEquipButton:WaitForChild("Emoji")
+local petModalEquipLabel: TextLabel = petModalEquipButton:WaitForChild("TextLabel")
+local petModalMergeButton: TextButton = petModalMainFrame:WaitForChild("MergeButton")
+local petModalMultiplier: TextLabel = petModalMainFrame:WaitForChild("Multiplier")
+
+-- Currently selected pet data for the modal
+local selectedPetData = nil
 
 -- vals
 local leaderstats = player:WaitForChild("leaderstats")
@@ -154,7 +164,7 @@ local cardHolders = {
 
 -- Get TrackGates for the player's current world
 local function GetTrackGatesForCurrentWorld(): Folder?
-    local currentWorld = handler.data.Progression.CurrentWorld or "Main"
+    local currentWorld = handler.data.Progression.CurrentWorld
     local worldFolder = Workspace:FindFirstChild(currentWorld)
     if worldFolder then
         local trackSystem = worldFolder:FindFirstChild("Track_System")
@@ -175,82 +185,16 @@ local function GetTrackGatesForCurrentWorld(): Folder?
     return nil
 end
 
--- Get the Central Arena part for the current world
-local function GetCentralArenaForCurrentWorld(): BasePart?
-    local currentWorld = handler.data.Progression.CurrentWorld or "Main"
-    local worldFolder = Workspace:FindFirstChild(currentWorld)
-    if worldFolder then
-        local centralArena = worldFolder:FindFirstChild("1_Central_Arena")
-        if centralArena and centralArena:IsA("BasePart") then
-            return centralArena
-        end
-    end
-    
-    -- Fallback to Main world
-    local mainWorld = Workspace:FindFirstChild("Main")
-    if mainWorld then
-        local centralArena = mainWorld:FindFirstChild("1_Central_Arena")
-        if centralArena and centralArena:IsA("BasePart") then
-            return centralArena
-        end
-    end
-    
-    return nil
-end
+-- Helper function to close all frames (shop, daily rewards, inventory, pet modal)
+-- Used to avoid cluttering of frames when opening a new one
+local function CloseAllFrames(exceptFrame: Frame?)
+    local old = exceptFrame and exceptFrame.Visible
+    dailyFrame.Visible = false
+    shopMain.Visible = false
+    inventoryMainFrame.Visible = false
+    petModalDarkOverlay.Visible = false
 
--- Check if player is inside the arena based on distance from center
--- Uses the arena radius from Stats for the current world
-local function CheckPlayerInArena(): boolean
-    local character = player.Character
-    if not character then return false end
-    
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return false end
-    
-    local centralArena = GetCentralArenaForCurrentWorld()
-    if not centralArena then return false end
-    
-    local currentWorld = handler.data.Progression.CurrentWorld or "Main"
-    local arenaRadius = statsM.ArenaRadius[currentWorld] or statsM.ArenaRadius.Main or 200
-    
-    -- Calculate horizontal distance (ignoring Y axis) from arena center to player
-    local arenaCenter = centralArena.Position
-    local playerPos = rootPart.Position
-    local horizontalDistance = math.sqrt(
-        (playerPos.X - arenaCenter.X)^2 + 
-        (playerPos.Z - arenaCenter.Z)^2
-    )
-    
-    return horizontalDistance <= arenaRadius
-end
-
--- Update arena status with throttling for performance
--- Only checks every ARENA_CHECK_INTERVAL seconds
-local function UpdateArenaStatus(): boolean
-    local currentTime = tick()
-    if currentTime - lastArenaCheckTime < ARENA_CHECK_INTERVAL then
-        return isInArena -- Return cached value if not enough time has passed
-    end
-    lastArenaCheckTime = currentTime
-    
-    local wasInArena = isInArena
-    isInArena = CheckPlayerInArena()
-    
-    -- Log state change for debugging (can be removed later)
-    if wasInArena ~= isInArena then
-        if isInArena then
-            print("[InitUI]: Player entered arena")
-        else
-            print("[InitUI]: Player left arena")
-        end
-    end
-    
-    return isInArena
-end
-
--- Public function to check if player is in arena
-function handler.IsPlayerInArena(): boolean
-    return isInArena
+    if exceptFrame then exceptFrame.Visible = old end
 end
 
 -- Helper function to truncate large numbers
@@ -310,16 +254,50 @@ local function IsPlayerNearGate(): boolean
     return false
 end
 
+-- Update the pet modal equip button appearance based on equipped state
+local function UpdatePetModalEquipButton(isEquipped: boolean)
+    if isEquipped then
+        petModalEquipEmoji.Text = "❌"
+        petModalEquipLabel.Text = "Unequip"
+        petModalEquipButton.BackgroundColor3 = Color3.fromRGB(200, 80, 80) -- Red color for unequip
+    else
+        petModalEquipEmoji.Text = "✅"
+        petModalEquipLabel.Text = "Equip"
+        petModalEquipButton.BackgroundColor3 = Color3.fromRGB(80, 200, 80) -- Green color for equip
+    end
+end
+
+-- Open the pet modal with the selected pet data
+local function OpenPetModal(petData)
+    selectedPetData = petData
+    
+    -- Update modal content
+    petModalMultiplier.Text = string.format("x%.1f Multiplier", petData.Multiplier or 1.0)
+    
+    -- Update equip button state
+    UpdatePetModalEquipButton(petData.Equipped or false)
+
+    -- Show the modal
+    petModalDarkOverlay.Visible = true
+end
+
 function handler.UpdatePetsInventory()
     -- Clear existing pet frames (except the template)
     for _, child in ipairs(inventoryScrollingFrame:GetChildren()) do
-        if child:IsA("Frame") and child.Name ~= "Template" then
+        if child.Name ~= "Template" and child.Name ~= "UIGridLayout" and (child:IsA("Frame") or child:IsA("TextButton")) then
             child:Destroy()
         end
     end
     
     -- Get the pet inventory from handler data
-    local petInventory = handler.data.Inventory.PetInventory or {}
+    local petInventory = handler.data.Inventory.PetInventory
+    local equippedPets = handler.data.Inventory.EquippedPets
+    
+    -- Create a set of equipped pet indices for quick lookup
+    local equippedSet = {}
+    for _, petIndex in ipairs(equippedPets) do
+        equippedSet[petIndex] = true
+    end
     
     -- Update pet count display
     inventoryPetCount.Count.Text = #petInventory .. "/3"
@@ -331,7 +309,9 @@ function handler.UpdatePetsInventory()
         petFrame.Visible = true
         
         local nameLabel = petFrame:FindFirstChild("PetName")
-        nameLabel.Text = petData.Name or "Unknown Pet"
+        if nameLabel then
+            nameLabel.Text = petData.Name or "Unknown Pet"
+        end
         
         -- Set the multiplier text (TextLabel under Multiplier frame)
         local multiplierFrame = petFrame:FindFirstChild("Multiplier")
@@ -340,6 +320,44 @@ function handler.UpdatePetsInventory()
             if multiplierLabel then
                 multiplierLabel.Text = string.format("x%.1f", petData.Multiplier or 1.0)
             end
+        end
+
+        print(petData)
+        
+        -- Store pet data and index for later use
+        local isEquipped = equippedSet[index] == true
+
+        if isEquipped then
+            petFrame.UIStroke.Color = Color3.fromRGB(85, 255, 0)
+        else
+            petFrame.UIStroke.Color = Color3.fromRGB(49, 49, 49)
+        end
+
+        local fullPetData = {
+            ID = petData.ID,
+            Name = petData.Name,
+            Multiplier = petData.Multiplier,
+            FuelBonus = petData.FuelBonus,
+            PickupRangeBonus = petData.PickupRangeBonus,
+            RoamRange = petData.RoamRange,
+            StarCollectionRadius = petData.StarCollectionRadius,
+            Velocity = petData.Velocity,
+            World = petData.World,
+            Level = petData.Level,
+            TierLevel = petData.TierLevel,
+            TierName = petData.TierName,
+            Rarity = petData.Rarity,
+            Equipped = isEquipped,
+            Index = index,
+        }
+        
+        -- Connect click event to open pet modal (template should be a TextButton)
+        if petFrame:IsA("TextButton") then
+            petFrame.MouseButton1Click:Connect(function()
+                CloseAllFrames()
+                print("Full pet data: ", fullPetData)
+                OpenPetModal(fullPetData)
+            end)
         end
         
         petFrame.Parent = inventoryScrollingFrame
@@ -422,7 +440,9 @@ end
 
 -- daily frame
 handler._connections["DailyButton"] = dailyButton.MouseButton1Click:Connect(function()
-    dailyFrame.Visible = not dailyFrame.Visible
+    local wasVisible = dailyFrame.Visible
+    CloseAllFrames()
+    dailyFrame.Visible = not wasVisible
 end)
 
 for _, cardData in pairs(cardHolders) do
@@ -466,8 +486,6 @@ handler._connections["RunButton"] = runButton.MouseButton1Click:Connect(function
 
     
     TrackService:RequestTrackStart():andThen(function(success: boolean, gateName: string?)
-        print(success, gateName)
-    
         if success then
             runButton.Visible = false
         else
@@ -494,7 +512,9 @@ handler._connections["DailyFrameClose"] = dailyFrameCloseButton.MouseButton1Clic
 end)
 
 handler._connections["ShopButton"] = shopButton.MouseButton1Click:Connect(function()
-    shopMain.Visible = not shopMain.Visible
+    local wasVisible = shopMain.Visible
+    CloseAllFrames()
+    shopMain.Visible = not wasVisible
 end)
 
 handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connect(function()
@@ -528,7 +548,9 @@ end)
 
 -- Pets inventory UI
 handler._connections["PetsButton"] = petsButton.MouseButton1Click:Connect(function()
+    CloseAllFrames(inventoryMainFrame)
     inventoryMainFrame.Visible = not inventoryMainFrame.Visible
+
     if inventoryMainFrame.Visible then
         handler.UpdatePetsInventory()
     end
@@ -538,6 +560,73 @@ handler._connections["InventoryClose"] = inventoryCloseButton.MouseButton1Click:
     inventoryMainFrame.Visible = false
 end)
 
+-- Pet Modal UI handlers
+handler._connections["PetModalClose"] = petModalCloseButton.MouseButton1Click:Connect(function()
+    petModalDarkOverlay.Visible = false
+    selectedPetData = nil
+    inventoryMainFrame.Visible = true
+end)
+
+handler._connections["PetModalEquip"] = petModalEquipButton.MouseButton1Click:Connect(function()
+    if not selectedPetData then
+        return
+    end
+    
+    local NotificationController = Knit.GetController("NotificationController")
+    print(selectedPetData)
+    
+    if selectedPetData.Equipped then
+        -- Unequip the pet
+        PetService:RequestUnequipPet(selectedPetData.ID):andThen(function(success, errorMsg)
+            if success then
+                selectedPetData.Equipped = false
+                UpdatePetModalEquipButton(false)
+                
+                -- Update local data
+                local equippedPets = handler.data.Inventory.EquippedPets or {}
+                for i, petIndex in ipairs(equippedPets) do
+                    if petIndex == selectedPetData.Index then
+                        table.remove(handler.data.Inventory.EquippedPets, i)
+                        break
+                    end
+                end
+                
+                -- Refresh pet inventory
+                handler.UpdatePetsInventory()
+            else
+                NotificationController:ShowNotification(
+                    "Failed to unequip pet: " .. (errorMsg or "Unknown error"),
+                    NotificationController.Category.Error,
+                    3
+                )
+            end
+        end)
+    else
+        -- Equip the pet
+        PetService:RequestEquipPet(selectedPetData.ID):andThen(function(success, errorMsg)
+            if success then
+                selectedPetData.Equipped = true
+                UpdatePetModalEquipButton(true)
+                
+                -- Update local data
+                if not handler.data.Inventory.EquippedPets then
+                    handler.data.Inventory.EquippedPets = {}
+                end
+                table.insert(handler.data.Inventory.EquippedPets, selectedPetData.Index)
+                
+                -- Refresh pet inventory
+                handler.UpdatePetsInventory()
+            else
+                NotificationController:ShowNotification(
+                    "Failed to equip pet: " .. (errorMsg or "Unknown error"),
+                    NotificationController.Category.Error,
+                    3
+                )
+            end
+        end)
+    end
+end)
+
 -- Listen for DataReady signal from server to update UI
 handler._connections["DataReady"] = DataService.DataReady:Connect(function(data)
     -- Call UpdateDataOnClient when data is ready
@@ -545,12 +634,11 @@ handler._connections["DataReady"] = DataService.DataReady:Connect(function(data)
 end)
 
 handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(function()
-    worldlabel.Text = "🌍 " .. (handler.data.Progression.CurrentWorld or "Main")
+    worldlabel.Text = "🌍 " .. (handler.data.Progression.CurrentWorld)
     handler.UpdateFuelUI(fuelVal.Value)
     handler.UpdateCashUI(cashVal.Value)
     handler.UpdateGemsUI(gemsVal.Value)
     UpdateRunButtonVisibility()
-    UpdateArenaStatus()
 end)
 
 return handler
