@@ -37,38 +37,6 @@ RebirthStats.RebirthLevels = {
 		PetReward = "StandardPet", -- Pet from StoneAge world
 		World = "StoneAge",
 	},
-	{
-		Level = 3,
-		DistanceRequired = 350000, -- 350k total distance
-		CashMultiplierBonus = 0.20, -- +20% cash (total +45%)
-		SpeedBoostMultiplier = 0.10, -- +10% speed (total +23%)
-		PetReward = "StandardPet", -- Pet from AncientEgypt world
-		World = "AncientEgypt",
-	},
-	{
-		Level = 4,
-		DistanceRequired = 750000, -- 750k total distance
-		CashMultiplierBonus = 0.25, -- +25% cash (total +70%)
-		SpeedBoostMultiplier = 0.12, -- +12% speed (total +35%)
-		PetReward = "StandardPet", -- Pet from Medieval world
-		World = "Medieval",
-	},
-	{
-		Level = 5,
-		DistanceRequired = 1500000, -- 1.5M total distance
-		CashMultiplierBonus = 0.30, -- +30% cash (total +100%)
-		SpeedBoostMultiplier = 0.15, -- +15% speed (total +50%)
-		PetReward = "StandardPet", -- Pet from Industrial world
-		World = "Industrial",
-	},
-	{
-		Level = 6,
-		DistanceRequired = 3000000, -- 3M total distance
-		CashMultiplierBonus = 0.50, -- +50% cash (total +150%)
-		SpeedBoostMultiplier = 0.20, -- +20% speed (total +70%)
-		PetReward = "StandardPet", -- Pet from Neon world
-		World = "Neon",
-	},
 }
 
 -- Get maximum rebirth level available
