@@ -3,10 +3,11 @@
 	Handles the rebirth system for long-term progression.
 	
 	Trigger:
-	- Players can perform a Rebirth after reaching high milestones (distance/points)
+	- Players can perform a Rebirth after accumulating enough Cash
 	
 	Effect:
 	- Resets personal stars (fuel currency)
+	- Spends the required cash
 	- Keeps acquired pets
 	- Grants permanent bonuses (cash multiplier, pet, speed boost multiplier)
 ]]
@@ -47,14 +48,15 @@ function RebirthService:CanPlayerRebirth(player: Player): (boolean, any?)
 	local DataService = Knit.GetService("DataService")
 	
 	local stats = DataService:Get(player, "Stats")
-	if not stats then
+	local currencies = DataService:Get(player, "Currencies")
+	if not stats or not currencies then
 		return false, nil
 	end
 	
 	local currentRebirthLevel = stats.Rebirths or 0
-	local totalDistance = stats.TotalDistance or 0
+	local currentCash = currencies.Cash or 0
 	
-	return RebirthStats.CanRebirth(currentRebirthLevel, totalDistance)
+	return RebirthStats.CanRebirth(currentRebirthLevel, currentCash)
 end
 
 --[[
@@ -73,7 +75,7 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 	if not canRebirth or not nextRebirth then
 		NotificationService:SendNotification(
 			player,
-			"You haven't reached the required milestone to rebirth!",
+			"You don't have enough Cash to rebirth!",
 			NotificationService.Category.Warning
 		)
 		return false, "Cannot rebirth yet", nil
@@ -84,11 +86,16 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 	local previousLevel = currentStats.Rebirths or 0
 	local newLevel = nextRebirth.Level
 	
-	-- Reset fuel (personal stars) - keep TotalDistance for tracking
+	-- Spend cash required for rebirth
+	DataService:Update(player, "Currencies", function(currencies)
+		currencies.Cash = (currencies.Cash or 0) - nextRebirth.CashRequired
+		return currencies
+	end)
+	
+	-- Reset fuel (personal stars)
 	DataService:Update(player, "Stats", function(stats)
 		stats.Fuel = Stats.StartingFuel -- Reset to starting fuel
 		stats.Rebirths = newLevel -- Increment rebirth level
-		-- TotalDistance is kept for future rebirth requirements
 		return stats
 	end)
 	
@@ -192,10 +199,11 @@ function RebirthService:GetRebirthInfo(player: Player)
 	local DataService = Knit.GetService("DataService")
 	
 	local stats = DataService:Get(player, "Stats")
-	if not stats then
+	local currencies = DataService:Get(player, "Currencies")
+	if not stats or not currencies then
 		return {
 			CurrentLevel = 0,
-			TotalDistance = 0,
+			CurrentCash = 0,
 			CanRebirth = false,
 			NextRebirth = RebirthStats.GetRebirthByLevel(1),
 			Progress = 0,
@@ -206,13 +214,13 @@ function RebirthService:GetRebirthInfo(player: Player)
 	end
 	
 	local currentLevel = stats.Rebirths or 0
-	local totalDistance = stats.TotalDistance or 0
-	local canRebirth, nextRebirth = RebirthStats.CanRebirth(currentLevel, totalDistance)
-	local progress, remaining = RebirthStats.GetRebirthProgress(currentLevel, totalDistance)
+	local currentCash = currencies.Cash or 0
+	local canRebirth, nextRebirth = RebirthStats.CanRebirth(currentLevel, currentCash)
+	local progress, remaining = RebirthStats.GetRebirthProgress(currentLevel, currentCash)
 	
 	return {
 		CurrentLevel = currentLevel,
-		TotalDistance = totalDistance,
+		CurrentCash = currentCash,
 		CanRebirth = canRebirth,
 		NextRebirth = nextRebirth or RebirthStats.GetNextRebirth(currentLevel),
 		Progress = progress,

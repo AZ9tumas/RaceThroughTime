@@ -333,20 +333,13 @@ function TrackService:EndTrackRun(player: Player)
 	
 	Log(string.format("Player %s ended track run in %s, distance traveled: %.2f, cash earned: %d (rebirth multiplier: %.2fx)", player.Name, worldName, distanceTraveled, cashEarned, rebirthCashMultiplier))
 	
-	-- Update player data: add cash and track total distance
-	-- Add cash earned
+	-- Update player data: add cash
 	if cashEarned > 0 then
 		DataService:Update(player, "Currencies", function(currencies)
 			currencies.Cash = (currencies.Cash or 0) + cashEarned
 			return currencies
 		end)
 	end
-	
-	-- Update total distance for rebirth tracking
-	DataService:Update(player, "Stats", function(stats)
-		stats.TotalDistance = (stats.TotalDistance or 0) + distanceTraveled
-		return stats
-	end)
 	
 	-- Calculate percentage to next world
 	local WorldService = Knit.GetService("WorldService")

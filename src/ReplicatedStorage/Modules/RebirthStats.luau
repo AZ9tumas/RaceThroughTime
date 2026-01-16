@@ -5,7 +5,7 @@
 	The Rebirth system grants permanent bonuses after players reach significant milestones.
 	
 	Trigger:
-	- Players can perform a Rebirth after reaching high milestones (distance/points)
+	- Players can perform a Rebirth after accumulating enough Cash
 	
 	Effect:
 	- Resets personal stars (fuel currency)
@@ -16,14 +16,14 @@
 local RebirthStats = {}
 
 -- Rebirth levels configuration
--- DistanceRequired: Total distance needed to unlock this rebirth level
+-- CashRequired: Total cash needed to unlock this rebirth level (cash is spent on rebirth)
 -- CashMultiplierBonus: Permanent increase to cash earned per star collected
 -- SpeedBoostMultiplier: Permanent increase to running speed multiplier
 -- PetReward: Pet type to grant (consistent with world progression)
 RebirthStats.RebirthLevels = {
 	{
 		Level = 1,
-		DistanceRequired = 50000, -- 50k total distance
+		CashRequired = 3000000000, -- 3B cash required for first rebirth
 		CashMultiplierBonus = 0.1, -- +10% cash
 		SpeedBoostMultiplier = 0.05, -- +5% speed
 		PetReward = "StandardPet", -- Pet from Main world
@@ -31,7 +31,7 @@ RebirthStats.RebirthLevels = {
 	},
 	{
 		Level = 2,
-		DistanceRequired = 150000, -- 150k total distance
+		CashRequired = 10000000000, -- 10B cash required for second rebirth
 		CashMultiplierBonus = 0.15, -- +15% cash (total +25%)
 		SpeedBoostMultiplier = 0.08, -- +8% speed (total +13%)
 		PetReward = "StandardPet", -- Pet from StoneAge world
@@ -62,18 +62,18 @@ function RebirthStats.GetNextRebirth(currentRebirthLevel: number)
 	return RebirthStats.GetRebirthByLevel(nextLevel)
 end
 
--- Check if player can rebirth based on current rebirth level and distance
+-- Check if player can rebirth based on current rebirth level and cash
 -- @param currentRebirthLevel number - Current rebirth level
--- @param totalDistance number - Total distance traveled
+-- @param currentCash number - Current cash amount
 -- @return boolean, table? - Can rebirth, next rebirth config if can
-function RebirthStats.CanRebirth(currentRebirthLevel: number, totalDistance: number): (boolean, any?)
+function RebirthStats.CanRebirth(currentRebirthLevel: number, currentCash: number): (boolean, any?)
 	local nextRebirth = RebirthStats.GetNextRebirth(currentRebirthLevel)
 	
 	if not nextRebirth then
 		return false, nil -- Already at max level
 	end
 	
-	if totalDistance >= nextRebirth.DistanceRequired then
+	if currentCash >= nextRebirth.CashRequired then
 		return true, nextRebirth
 	end
 	
@@ -112,17 +112,17 @@ end
 
 -- Get progress toward next rebirth
 -- @param currentRebirthLevel number - Current rebirth level
--- @param totalDistance number - Total distance traveled
--- @return number, number - Progress percentage (0-100), distance remaining
-function RebirthStats.GetRebirthProgress(currentRebirthLevel: number, totalDistance: number): (number, number)
+-- @param currentCash number - Current cash amount
+-- @return number, number - Progress percentage (0-100), cash remaining
+function RebirthStats.GetRebirthProgress(currentRebirthLevel: number, currentCash: number): (number, number)
 	local nextRebirth = RebirthStats.GetNextRebirth(currentRebirthLevel)
 	
 	if not nextRebirth then
 		return 100, 0 -- At max level
 	end
 	
-	local progress = math.clamp((totalDistance / nextRebirth.DistanceRequired) * 100, 0, 100)
-	local remaining = math.max(0, nextRebirth.DistanceRequired - totalDistance)
+	local progress = math.clamp((currentCash / nextRebirth.CashRequired) * 100, 0, 100)
+	local remaining = math.max(0, nextRebirth.CashRequired - currentCash)
 	
 	return progress, remaining
 end
