@@ -576,9 +576,16 @@ function TrackService.Client:RequestTrackEnd(player: Player, distanceTraveled: n
 		return false, "Not currently on track"
 	end
 	
-	-- Validate distance is a number
+	-- Validate distance is a number and log suspicious requests
 	if type(distanceTraveled) ~= "number" then
+		warn(string.format("[TrackService]: Player %s sent invalid distance type: %s", player.Name, type(distanceTraveled)))
 		distanceTraveled = 0
+	elseif distanceTraveled < 0 then
+		warn(string.format("[TrackService]: Player %s sent negative distance: %.2f", player.Name, distanceTraveled))
+		distanceTraveled = 0
+	elseif distanceTraveled > trackData.totalDistance * 1.1 then
+		-- Allow small tolerance (10%) but log if significantly over
+		warn(string.format("[TrackService]: Player %s sent suspicious distance: %.2f (max expected: %.2f)", player.Name, distanceTraveled, trackData.totalDistance))
 	end
 	
 	Log(string.format("Player %s requested track end with distance: %.2f, worldUnlocked: %s", player.Name, distanceTraveled, tostring(worldUnlocked)))

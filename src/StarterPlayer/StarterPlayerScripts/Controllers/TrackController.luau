@@ -47,6 +47,11 @@ local RAYCAST_DISTANCE = 100
 -- RenderStep binding name
 local RENDER_STEP_BINDING = "TrackController_Movement"
 
+-- Movement calculation constants
+local TIME_EPSILON = 0.001 -- Epsilon for floating point time comparison
+local SPEED_FACTOR_DIVISOR = 10 -- Divisor for speed factor calculation
+local MAX_SPEED_FACTOR = 20 -- Maximum speed factor for responsiveness
+
 local TrackController = Knit.CreateController({
 	Name = "TrackController",
 })
@@ -612,7 +617,7 @@ local function OnTrackStarted(trackData: {
 		end
 		
 		-- Check if track run should end (time limit or distance reached)
-		if ElapsedTime >= (TrackData.totalTime - 0.001) or DistanceTraveled >= TrackData.totalDistance then
+		if ElapsedTime >= (TrackData.totalTime - TIME_EPSILON) or DistanceTraveled >= TrackData.totalDistance then
 			-- Unbind immediately to prevent further updates
 			RunService:UnbindFromRenderStep(RENDER_STEP_BINDING)
 			
@@ -628,8 +633,8 @@ local function OnTrackStarted(trackData: {
 		
 		-- Dynamically adjust body mover responsiveness based on physical speed
 		local baseResponsiveness = 50
-		local speedFactor = math.clamp(physicalSpeed / 10, 1, 20)
-		local dynamicResponsiveness = baseResponsiveness + (speedFactor * 10)
+		local speedFactor = math.clamp(physicalSpeed / SPEED_FACTOR_DIVISOR, 1, MAX_SPEED_FACTOR)
+		local dynamicResponsiveness = baseResponsiveness + (speedFactor * SPEED_FACTOR_DIVISOR)
 		local dynamicMaxVelocity = math.max(500, physicalSpeed * 2)
 		
 		alignPosition.Responsiveness = dynamicResponsiveness
