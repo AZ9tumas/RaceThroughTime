@@ -16,6 +16,10 @@
 	
 	-- Check if player has access to a world
 	local hasAccess = WorldService:PlayerHasWorld(player, "StoneAge")
+	
+	-- From client:
+	local WorldService = Knit.GetService("WorldService")
+	WorldService:RequestTeleportToWorld("StoneAge")
 ]]
 
 local Players = game:GetService("Players")
@@ -29,6 +33,7 @@ local WorldService = Knit.CreateService({
 	Name = "WorldService",
 	Client = {
 		WorldChanged = Knit.CreateSignal(), -- Signal to notify client when world changes
+		DataUpdated = Knit.CreateSignal(), -- Signal to send updated data after world change
 	},
 })
 
@@ -120,72 +125,98 @@ end
 
 --[[
 	Teleport a player to a specific world.
-	Shows loading screen during teleport.
+	Shows loading screen during teleport, despawns/respawns pets and stars.
 	
 	@param player Player - The player to teleport
 	@param worldName string - The world name to teleport to
-	@return boolean, string? - Success status and optional error message
+	@return boolean, string?, table? - Success status, optional error message, updated data
 ]]
-function WorldService:TeleportPlayerToWorld(player: Player, worldName: string): (boolean, string?)
+function WorldService:TeleportPlayerToWorld(player: Player, worldName: string): (boolean, string?, any?)
 	if not player or not player:IsDescendantOf(Players) then
 		warn("[WorldService]: Invalid player provided")
-		return false, "Invalid player"
+		return false, "Invalid player", nil
 	end
 	
-	-- Check if player has access to this world
+	-- 1. Check if player owns/has unlocked the world
 	if not self:PlayerHasWorld(player, worldName) then
-		return false, "World not unlocked"
+		return false, "World not unlocked", nil
 	end
 	
 	-- Get the world folder
 	local worldFolder = GetWorldFolder(worldName)
 	if not worldFolder then
-		return false, "World does not exist"
+		return false, "World does not exist", nil
 	end
 	
 	-- Get spawn location for the world
 	local spawnLocation = GetSpawnLocationForWorld(worldName)
 	if not spawnLocation then
-		return false, "No spawn location in world"
+		return false, "No spawn location in world", nil
 	end
 	
 	-- Get player's character
 	local character = player.Character
 	if not character then
-		return false, "No character"
+		return false, "No character", nil
 	end
 	
 	local rootPart = character:FindFirstChild("HumanoidRootPart")
 	if not rootPart then
-		return false, "No HumanoidRootPart"
+		return false, "No HumanoidRootPart", nil
 	end
 	
-	-- Show loading screen
+	-- 2. Show loading screen (white frame)
 	local LoadingScreenService = Knit.GetService("LoadingScreenService")
-	LoadingScreenService:ShowLoadingScreen(player, 0.5) -- Show for 0.5 seconds
+	LoadingScreenService:ShowLoadingScreen(player, 2) -- Show for 2 seconds (long enough for operations)
 	
 	-- Wait a moment for loading screen to fade in
-	task.wait(0.2)
-
-	player:SetAttribute("CurrentWorld", worldName)
+	task.wait(0.3)
 	
-	-- Teleport player to spawn location
-	local spawnCFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0) -- Slightly above spawn
-	rootPart.CFrame = spawnCFrame
-	
-	-- Update player's current world in data
+	-- 3. Update the data stores, set current world
 	local DataService = Knit.GetService("DataService")
 	DataService:Update(player, "Progression", function(progression)
 		progression.CurrentWorld = worldName
 		return progression
 	end)
 	
+	-- 4. Update player attribute CurrentWorld (for world params initialization)
+	player:SetAttribute("CurrentWorld", worldName)
+	
+	-- 5. Despawn pets
+	local PetService = Knit.GetService("PetService")
+	PetService:DespawnAllPetsForPlayer(player)
+	
+	-- 6. Despawn stars
+	local StarService = Knit.GetService("StarService")
+	StarService:RemoveAllStarsForPlayer(player)
+	
+	-- 7. Teleport player to spawn location
+	local spawnCFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0) -- Slightly above spawn
+	rootPart.CFrame = spawnCFrame
+	
+	-- Set respawn location for this world
+	player.RespawnLocation = spawnLocation
+	
+	-- 8. Respawn pets for the new world
+	PetService:RespawnEquippedPets(player)
+	
+	-- 9. Respawn stars for the new world
+	StarService:Start(player)
+	
 	Log(string.format("Teleported player %s to world %s", player.Name, worldName))
 	
-	-- Fire signal to client
-	self.Client.WorldChanged:Fire(player, worldName)
+	-- 10. Get updated data to send back to client (deep copy like InitUI expects)
+	local updatedData = DataService:GetPlayerData(player)
 	
-	return true, nil
+	-- 11. Fire signal to client with new world and data
+	self.Client.WorldChanged:Fire(player, worldName)
+	self.Client.DataUpdated:Fire(player, updatedData)
+	
+	-- 12. Hide loading screen
+	task.wait(0.5) -- Wait a moment for things to settle
+	LoadingScreenService:HideLoadingScreen(player)
+	
+	return true, nil, updatedData
 end
 
 --[[
@@ -214,6 +245,18 @@ end
 ]]
 function WorldService:GetWorldUnlockRequirement(worldName: string): number?
 	return Stats.WorldUnlockRequirements[worldName]
+end
+
+--[[
+	Client request to teleport to a world.
+	Validates that the player owns the world before teleporting.
+	
+	@param player Player - The player requesting teleport
+	@param worldName string - The world name to teleport to
+	@return boolean, string?, table? - Success status, optional error message, updated data
+]]
+function WorldService.Client:RequestTeleportToWorld(player: Player, worldName: string): (boolean, string?, any?)
+	return WorldService:TeleportPlayerToWorld(player, worldName)
 end
 
 -- Knit lifecycle

@@ -799,6 +799,38 @@ function PetService.Client:RequestPetCollectStar(player: Player, starId: string,
 	return PetService:PetCollectStar(player, starId, petPosition)
 end
 
+--[[
+	Despawn all pets for a player (public method for world switching).
+	Call this before teleporting to a new world.
+	
+	@param player Player - The player whose pets to despawn
+]]
+function PetService:DespawnAllPetsForPlayer(player: Player)
+	DespawnAllPets(player)
+end
+
+--[[
+	Respawn all equipped pets for a player (public method for world switching).
+	Call this after teleporting to a new world.
+	
+	@param player Player - The player whose pets to respawn
+]]
+function PetService:RespawnEquippedPets(player: Player)
+	local DataService = Knit.GetService("DataService")
+	local inventory = DataService:Get(player, "Inventory")
+	
+	if inventory and inventory.PetInventory and inventory.EquippedPets then
+		for _, petIndex in ipairs(inventory.EquippedPets) do
+			local petData = inventory.PetInventory[petIndex]
+			if petData then
+				SpawnPetModel(player, petIndex, petData)
+			end
+		end
+	end
+	
+	Log(string.format("Respawned equipped pets for player %s", player.Name))
+end
+
 -- Clean up when player leaves
 local function OnPlayerRemoving(player: Player)
 	local userId = player.UserId
