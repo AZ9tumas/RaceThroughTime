@@ -350,18 +350,14 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 	local nextWorld = WorldService:GetNextWorld(worldName)
 	local unlockRequirement = nextWorld and Stats.WorldUnlockRequirements[nextWorld] or nil
 	
-	-- Only consider unlock if world exists in workspace
-	if nextWorld and not Workspace:FindFirstChild(nextWorld) then
-		unlockRequirement = nil
-	end
-	
 	local percentageToNextWorld = 0
 	if unlockRequirement and unlockRequirement > 0 then
 		percentageToNextWorld = math.clamp((distanceTraveled / unlockRequirement) * 100, 0, 100)
 	end
 	
-	-- Check if player reached world unlock threshold
-	local shouldUnlockWorld = worldUnlocked and unlockRequirement and distanceTraveled >= unlockRequirement
+	-- Check if player reached world unlock threshold (only if world exists in workspace)
+	local worldExistsInWorkspace = nextWorld and Workspace:FindFirstChild(nextWorld)
+	local shouldUnlockWorld = worldUnlocked and unlockRequirement and distanceTraveled >= unlockRequirement and worldExistsInWorkspace
 	
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
@@ -503,10 +499,7 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	-- Get next world unlock requirement to send to client
 	local WorldService = Knit.GetService("WorldService")
 	local nextWorld = WorldService:GetNextWorld(worldName)
-	local unlockRequirement = nil
-	if nextWorld and Workspace:FindFirstChild(nextWorld) then
-		unlockRequirement = Stats.WorldUnlockRequirements[nextWorld]
-	end
+	local unlockRequirement = nextWorld and Stats.WorldUnlockRequirements[nextWorld] or nil
 	
 	-- Fire signal to client that track has started (client will handle movement and effects)
 	TrackService.Client.TrackStarted:Fire(player, {
