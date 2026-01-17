@@ -1,3 +1,5 @@
+--!strict
+
 --[[
 	WorldService
 	Handles world switching and player teleportation between worlds.
@@ -57,6 +59,22 @@ local function GetSpawnLocationForWorld(worldName: string): SpawnLocation?
 end
 
 --[[
+	Get player's current world
+	
+	@param player Player - The player to check
+]]
+function WorldService:GetPlayerCurrentWorld(player: Player): string
+	local DataService = Knit.GetService("DataService")
+	local progression = DataService:Get(player, "Progression")
+	
+	if progression and progression.CurrentWorld then
+		return progression.CurrentWorld
+	end
+	
+	return "Main" -- Default world
+end
+
+--[[
 	Check if a player has unlocked/owns a specific world.
 	
 	@param player Player - The player to check
@@ -72,6 +90,8 @@ function WorldService:PlayerHasWorld(player: Player, worldName: string): boolean
 	end
 	
 	local unlockedWorlds = progression.UnlockedWorlds or { "Main" }
+
+	print("Unlocked worlds for player " .. player.Name .. ": " .. table.concat(unlockedWorlds, ", "))
 	
 	for _, world in ipairs(unlockedWorlds) do
 		if world == worldName then
@@ -164,6 +184,10 @@ function WorldService:TeleportPlayerToWorld(player: Player, worldName: string): 
 	if not rootPart then
 		return false, "No HumanoidRootPart", nil
 	end
+
+	if worldName == self:GetPlayerCurrentWorld(player) then
+		return true, "You are already in that world", nil -- Already in the world
+	end
 	
 	-- 2. Show loading screen (white frame)
 	local LoadingScreenService = Knit.GetService("LoadingScreenService")
@@ -216,7 +240,7 @@ function WorldService:TeleportPlayerToWorld(player: Player, worldName: string): 
 	task.wait(0.5) -- Wait a moment for things to settle
 	LoadingScreenService:HideLoadingScreen(player)
 	
-	return true, nil, updatedData
+	return true, "Teleported to world: " .. worldName, updatedData
 end
 
 --[[
