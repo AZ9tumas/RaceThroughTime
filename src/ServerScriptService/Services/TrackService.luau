@@ -12,6 +12,7 @@ local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
+local RebirthStats = require(ReplicatedStorage.Modules.RebirthStats)
 
 local TrackService = Knit.CreateService({
 	Name = "TrackService",
@@ -156,7 +157,17 @@ local function CalculateTrackParameters(player: Player, worldName: string):
 	end
 	
 	local fuel = playerData.Fuel or 0
-	return Stats.CalculateTrackParameters(fuel, worldName)
+	local trackParams = Stats.CalculateTrackParameters(fuel, worldName)
+	
+	-- Apply rebirth speed multiplier
+	local rebirthLevel = playerData.Rebirths or 0
+	local rebirthSpeedMultiplier = RebirthStats.CalculateTotalSpeedMultiplier(rebirthLevel)
+	
+	-- Scale speed values by rebirth multiplier
+	trackParams.initialSpeed = trackParams.initialSpeed * rebirthSpeedMultiplier
+	trackParams.maxSpeed = trackParams.maxSpeed * rebirthSpeedMultiplier
+	
+	return trackParams
 end
 
 -- Raycast parameters for ground detection
@@ -309,16 +320,20 @@ function TrackService:EndTrackRun(player: Player)
 	local distanceTraveled = trackData.distanceTraveled or 0
 	local worldName = trackData.worldName
 	
-	-- Calculate cash earned based on WorldCashRate (per 1000 distance)
-	local cashRate = Stats.WorldCashRates[worldName] or Stats.WorldCashRates.Main
-	local cashEarned = math.floor((distanceTraveled / 1000) * cashRate)
-	
-	Log(string.format("Player %s ended track run in %s, distance traveled: %.2f, cash earned: %d", player.Name, worldName, distanceTraveled, cashEarned))
-	
-	-- Update player data: DO NOT reset fuel, only add cash
+	-- Get rebirth cash multiplier
 	local DataService = Knit.GetService("DataService")
+	local playerStats = DataService:Get(player, "Stats")
+	local rebirthLevel = (playerStats and playerStats.Rebirths) or 0
+	local rebirthCashMultiplier = RebirthStats.CalculateTotalCashMultiplier(rebirthLevel)
 	
-	-- Add cash earned
+	-- Calculate cash earned based on WorldCashRate (per 1000 distance) with rebirth multiplier
+	local cashRate = Stats.WorldCashRates[worldName] or Stats.WorldCashRates.Main
+	local baseCashEarned = (distanceTraveled / 1000) * cashRate
+	local cashEarned = math.floor(baseCashEarned * rebirthCashMultiplier)
+	
+	Log(string.format("Player %s ended track run in %s, distance traveled: %.2f, cash earned: %d (rebirth multiplier: %.2fx)", player.Name, worldName, distanceTraveled, cashEarned, rebirthCashMultiplier))
+	
+	-- Update player data: add cash
 	if cashEarned > 0 then
 		DataService:Update(player, "Currencies", function(currencies)
 			currencies.Cash = (currencies.Cash or 0) + cashEarned
@@ -463,25 +478,17 @@ local function OnHeartbeat(dt: number)
 				-- End the track run first (this cleans up body movers, etc.)
 				TrackService:EndTrackRun(player)
 				
-				-- Unlock the new world for the player
+				-- Unlock the new world for the player (this also teleports and updates client data)
 				WorldService:GiveWorldToPlayer(player, nextWorld)
 				
-				-- Teleport player to the new world
-				task.spawn(function()
-					local success, err = WorldService:TeleportPlayerToWorld(player, nextWorld)
-					if success then
-						-- Send notification about world unlock
-						local NotificationService = Knit.GetService("NotificationService")
-						NotificationService:SendNotification(
-							player,
-							string.format("🌟 Congratulations! You unlocked %s! 🌟", nextWorld),
-							NotificationService.Category.Success,
-							5
-						)
-					else
-						warn(string.format("[TrackService]: Failed to teleport player %s to %s: %s", player.Name, nextWorld, err or "unknown error"))
-					end
-				end)
+				-- Send notification about world unlock
+				local NotificationService = Knit.GetService("NotificationService")
+				NotificationService:SendNotification(
+					player,
+					string.format("🌟 Congratulations! You unlocked %s! 🌟", nextWorld),
+					NotificationService.Category.Success,
+					5
+				)
 				
 				continue
 			end

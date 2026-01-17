@@ -23,6 +23,7 @@ local HttpService = game:GetService("HttpService")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 local PetMergeStats = require(ReplicatedStorage.Modules.PetMergeStats)
+local RebirthStats = require(ReplicatedStorage.Modules.RebirthStats)
 
 export type Pet = {
 	Name: string,
@@ -747,8 +748,13 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 		return false, "Collection failed"
 	end
 	
-	-- Calculate fuel with pet multiplier
-	local fuelMultiplier = Stats.CalculateFuelMultiplier(equippedPets) * Stats.CalculateMultipliers()
+	-- Get rebirth multiplier
+	local stats = DataService:Get(player, "Stats")
+	local rebirthLevel = (stats and stats.Rebirths) or 0
+	local rebirthCashMultiplier = RebirthStats.CalculateTotalCashMultiplier(rebirthLevel)
+	
+	-- Calculate fuel with pet multiplier and rebirth bonus
+	local fuelMultiplier = Stats.CalculateFuelMultiplier(equippedPets) * rebirthCashMultiplier * Stats.CalculateMultipliers()
 	local finalFuelValue = math.floor(fuelValue * fuelMultiplier)
 	
 	-- Add fuel to player
@@ -791,6 +797,38 @@ end
 -- Client request for pet to collect a star (with range validation)
 function PetService.Client:RequestPetCollectStar(player: Player, starId: string, petPosition: Vector3): (boolean, string?)
 	return PetService:PetCollectStar(player, starId, petPosition)
+end
+
+--[[
+	Despawn all pets for a player (public method for world switching).
+	Call this before teleporting to a new world.
+	
+	@param player Player - The player whose pets to despawn
+]]
+function PetService:DespawnAllPetsForPlayer(player: Player)
+	DespawnAllPets(player)
+end
+
+--[[
+	Respawn all equipped pets for a player (public method for world switching).
+	Call this after teleporting to a new world.
+	
+	@param player Player - The player whose pets to respawn
+]]
+function PetService:RespawnEquippedPets(player: Player)
+	local DataService = Knit.GetService("DataService")
+	local inventory = DataService:Get(player, "Inventory")
+	
+	if inventory and inventory.PetInventory and inventory.EquippedPets then
+		for _, petIndex in ipairs(inventory.EquippedPets) do
+			local petData = inventory.PetInventory[petIndex]
+			if petData then
+				SpawnPetModel(player, petIndex, petData)
+			end
+		end
+	end
+	
+	Log(string.format("Respawned equipped pets for player %s", player.Name))
 end
 
 -- Clean up when player leaves

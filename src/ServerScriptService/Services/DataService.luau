@@ -374,6 +374,51 @@ function DataService:GetPlayerWorld(player: Player): string
 	return "Main"
 end
 
+-- Deep copy helper function for creating read-only data copies
+local function DeepCopy(original)
+	if type(original) ~= "table" then
+		return original
+	end
+	
+	local copy = {}
+	for key, value in pairs(original) do
+		if type(value) == "table" then
+			copy[key] = DeepCopy(value)
+		else
+			copy[key] = value
+		end
+	end
+	return copy
+end
+
+--[[
+	Get a deep copy of the player's data (for sending to client or world switching).
+	This includes pet IDs injected for the client.
+	
+	@param player Player - The player to get data for
+	@return table? - A deep copy of the player's data, or nil if no profile
+]]
+function DataService:GetPlayerData(player: Player): any?
+	local profile = PlayerProfiles[player]
+	if not profile then
+		return nil
+	end
+	
+	-- Use setupPets to create the data copy with pet IDs injected
+	return setupPets(player, profile.Data)
+end
+
+--[[
+	Client request to fetch their own data (read-only deep copy).
+	Clients can only fetch their own data.
+	
+	@param player Player - The player requesting their data
+	@return table? - A deep copy of the player's data, or nil if not loaded
+]]
+function DataService.Client:FetchData(player: Player): any?
+	return DataService:GetPlayerData(player)
+end
+
 -- Knit lifecycle
 function DataService:KnitInit()
 

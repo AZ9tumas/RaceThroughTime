@@ -11,6 +11,8 @@ local HttpService = game:GetService("HttpService")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 
+local RebirthStats = require(ReplicatedStorage.Modules.RebirthStats)
+
 local StarService = Knit.CreateService({
 	Name = "StarService",
 	Client = {
@@ -31,20 +33,25 @@ local StarSpawnLoops = {} -- [Player.UserId] = thread (spawn loop thread)
 local function GetFuelMultiplierForPlayer(player: Player): number
 	local DataService = Knit.GetService("DataService")
 	local inventory = DataService:Get(player, "Inventory")
+	local stats = DataService:Get(player, "Stats")
 	
-	if not inventory or not inventory.PetInventory or not inventory.EquippedPets then
-		return 1.0
-	end
-	
-	local equippedPets = {}
-	for _, petIndex in ipairs(inventory.EquippedPets) do
-		local petData = inventory.PetInventory[petIndex]
-		if petData then
-			table.insert(equippedPets, petData)
+	local petMultiplier = 1.0
+	if inventory and inventory.PetInventory and inventory.EquippedPets then
+		local equippedPets = {}
+		for _, petIndex in ipairs(inventory.EquippedPets) do
+			local petData = inventory.PetInventory[petIndex]
+			if petData then
+				table.insert(equippedPets, petData)
+			end
 		end
+		petMultiplier = Stats.CalculateFuelMultiplier(equippedPets)
 	end
 	
-	return Stats.CalculateFuelMultiplier(equippedPets) * Stats.CalculateMultipliers()
+	-- Get rebirth cash multiplier
+	local rebirthLevel = (stats and stats.Rebirths) or 0
+	local rebirthCashMultiplier = RebirthStats.CalculateTotalCashMultiplier(rebirthLevel)
+	
+	return petMultiplier * rebirthCashMultiplier * Stats.CalculateMultipliers()
 end
 
 -- Helper function for logging

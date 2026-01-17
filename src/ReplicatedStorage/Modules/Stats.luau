@@ -7,6 +7,9 @@ local Stats = {}
 
 Stats.BaseSpeed = 50
 
+-- Starting fuel for new players and after rebirth
+Stats.StartingFuel = 100
+
 -- Maximum track run time in seconds
 Stats.MaxTrackTime = 30
 
@@ -102,15 +105,22 @@ Stats.MaxGateIndex = 3 -- Gates are numbered 0 to MaxGateIndex (0, 1, 2, 3)
 
 -- Calculate multipliers from pets, rebirths, and boosts
 -- Formula: Σ(M_pets + M_rebirth + M_boosts)
--- Returns 1 for now, can be extended for actual multiplier calculations
-function Stats.CalculateMultipliers(): number
+-- @param rebirthSpeedMultiplier number? - Speed multiplier from rebirth bonuses (default: 1.0)
+-- @return number - Total multiplier
+-- Note: Rebirth multipliers should be fetched from RebirthService on the server
+-- and passed to this function for accurate calculations.
+function Stats.CalculateMultipliers(rebirthSpeedMultiplier: number?): number
 	-- multiplier from pets is handled separately
 	-- here dev products, vip access and rebirths can be added
-
-	return 1
+	local baseMultiplier = 1.0
+	local rebirthMultiplier = rebirthSpeedMultiplier or 1.0
+	
+	return baseMultiplier * rebirthMultiplier
 end
 
 -- Calculate base speed from fuel using the formula:
+-- Note: This returns base speed without rebirth bonuses. Rebirth speed multipliers
+-- should be applied by the caller (e.g., TrackService) after getting track parameters.
 -- @param fuel number - The current fuel amount
 -- @param worldName string? - The world name to get efficiency for (default: "Main")
 -- @return number - The calculated base speed component from fuel
