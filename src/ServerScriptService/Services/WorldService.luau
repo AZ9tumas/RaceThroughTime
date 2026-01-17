@@ -103,7 +103,7 @@ function WorldService:PlayerHasWorld(player: Player, worldName: string): boolean
 end
 
 --[[
-	Give/unlock a world for a player without teleporting them.
+	Give/unlock a world for a player, update client data, and teleport them to the new world.
 	
 	@param player Player - The player to give the world to
 	@param worldName string - The world name to unlock
@@ -135,10 +135,20 @@ function WorldService:GiveWorldToPlayer(player: Player, worldName: string): bool
 		table.insert(progression.UnlockedWorlds, worldName)
 		return progression
 	end)
-
-	player:SetAttribute("CurrentWorld", worldName)
 	
 	Log(string.format("Unlocked world '%s' for player %s", worldName, player.Name))
+	
+	-- Update client data
+	local updatedData = DataService:GetPlayerData(player)
+	self.Client.DataUpdated:Fire(player, updatedData)
+	
+	-- Teleport player to the new world
+	task.spawn(function()
+		local success, err = self:TeleportPlayerToWorld(player, worldName)
+		if not success then
+			warn(string.format("[WorldService]: Failed to teleport player %s to %s: %s", player.Name, worldName, err or "unknown error"))
+		end
+	end)
 	
 	return true
 end

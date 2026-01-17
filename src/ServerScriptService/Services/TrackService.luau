@@ -478,25 +478,17 @@ local function OnHeartbeat(dt: number)
 				-- End the track run first (this cleans up body movers, etc.)
 				TrackService:EndTrackRun(player)
 				
-				-- Unlock the new world for the player
+				-- Unlock the new world for the player (this also teleports and updates client data)
 				WorldService:GiveWorldToPlayer(player, nextWorld)
 				
-				-- Teleport player to the new world
-				task.spawn(function()
-					local success, err = WorldService:TeleportPlayerToWorld(player, nextWorld)
-					if success then
-						-- Send notification about world unlock
-						local NotificationService = Knit.GetService("NotificationService")
-						NotificationService:SendNotification(
-							player,
-							string.format("🌟 Congratulations! You unlocked %s! 🌟", nextWorld),
-							NotificationService.Category.Success,
-							5
-						)
-					else
-						warn(string.format("[TrackService]: Failed to teleport player %s to %s: %s", player.Name, nextWorld, err or "unknown error"))
-					end
-				end)
+				-- Send notification about world unlock
+				local NotificationService = Knit.GetService("NotificationService")
+				NotificationService:SendNotification(
+					player,
+					string.format("🌟 Congratulations! You unlocked %s! 🌟", nextWorld),
+					NotificationService.Category.Success,
+					5
+				)
 				
 				continue
 			end
