@@ -62,17 +62,32 @@ end
 local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number })
 	local starsFolder = GetStarsFolder()
 	if not starsFolder then
+		-- Still track the star for collection even without visual
+		SpawnedStars[starInfo.ID] = {
+			Instance = nil,
+			Position = starInfo.Position,
+		}
 		return
 	end
 
 	local starAssets = GetStarAssets()
 	if not starAssets then
+		-- Still track the star for collection even without visual
+		SpawnedStars[starInfo.ID] = {
+			Instance = nil,
+			Position = starInfo.Position,
+		}
 		return
 	end
 
 	local starTemplate = starAssets:FindFirstChild(starInfo.StarName)
 	if not starTemplate then
 		warn(string.format("[StarController]: Star template '%s' not found", starInfo.StarName))
+		-- Still track the star for collection even without visual
+		SpawnedStars[starInfo.ID] = {
+			Instance = nil,
+			Position = starInfo.Position,
+		}
 		return
 	end
 
@@ -119,9 +134,11 @@ end
 local function OnRemoveStar(starId: string)
 	local starData = SpawnedStars[starId]
 	if starData then
-		-- Stop animations before destroying
-		StarAnimations.StopAnimations(starData.Instance)
-		starData.Instance:Destroy()
+		-- Stop animations and destroy if instance exists
+		if starData.Instance then
+			StarAnimations.StopAnimations(starData.Instance)
+			starData.Instance:Destroy()
+		end
 		SpawnedStars[starId] = nil
 		CollectionDebounce[starId] = nil
 		Log(string.format("Removed star %s", starId))
