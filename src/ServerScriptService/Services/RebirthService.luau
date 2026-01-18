@@ -99,6 +99,46 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 		return stats
 	end)
 	
+	-- Handle KeepPets setting - if false, clear pet inventory
+	local keptPets = nextRebirth.KeepPets
+	if not keptPets then
+		DataService:Update(player, "Inventory", function(inventory)
+			inventory.PetInventory = {}
+			inventory.EquippedPets = {}
+			return inventory
+		end)
+		Log(string.format("Player %s lost all pets on rebirth (KeepPets = false)", player.Name))
+	end
+	
+	-- Grant Bonus rewards (Gems, Cash, World)
+	local bonus = nextRebirth.Bonus
+	if bonus then
+		-- Grant bonus gems
+		if bonus.Gems and bonus.Gems > 0 then
+			DataService:Update(player, "Currencies", function(currencies)
+				currencies.Gems = (currencies.Gems or 0) + bonus.Gems
+				return currencies
+			end)
+			Log(string.format("Player %s received %d bonus gems on rebirth", player.Name, bonus.Gems))
+		end
+		
+		-- Grant bonus cash
+		if bonus.Cash and bonus.Cash > 0 then
+			DataService:Update(player, "Currencies", function(currencies)
+				currencies.Cash = (currencies.Cash or 0) + bonus.Cash
+				return currencies
+			end)
+			Log(string.format("Player %s received %d bonus cash on rebirth", player.Name, bonus.Cash))
+		end
+		
+		-- Grant bonus world unlock
+		if bonus.World then
+			local WorldService = Knit.GetService("WorldService")
+			WorldService:GiveWorldToPlayer(player, bonus.World)
+			Log(string.format("Player %s unlocked bonus world %s on rebirth", player.Name, bonus.World))
+		end
+	end
+	
 	-- Grant pet reward
 	local petRewardGranted = false
 	local petInfo = nil
@@ -155,13 +195,16 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 	-- Calculate new total multipliers
 	local newCashMultiplier = RebirthStats.CalculateTotalCashMultiplier(newLevel)
 	local newSpeedMultiplier = RebirthStats.CalculateTotalSpeedMultiplier(newLevel)
+	local newMultiplier = RebirthStats.CalculateTotalMultiplier(newLevel)
 	
 	Log(string.format(
-		"Player %s rebirthed to level %d (Cash: %.2fx, Speed: %.2fx)",
+		"Player %s rebirthed to level %d (Cash: %.2fx, Speed: %.2fx, Multiplier: %.2fx, KeepPets: %s)",
 		player.Name,
 		newLevel,
 		newCashMultiplier,
-		newSpeedMultiplier
+		newSpeedMultiplier,
+		newMultiplier,
+		tostring(keptPets)
 	))
 	
 	-- Send success notification
@@ -177,10 +220,14 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 		NewRebirthLevel = newLevel,
 		CashMultiplier = newCashMultiplier,
 		SpeedMultiplier = newSpeedMultiplier,
+		Multiplier = newMultiplier,
 		CashMultiplierBonus = nextRebirth.CashMultiplierBonus,
 		SpeedBoostBonus = nextRebirth.SpeedBoostMultiplier,
+		MultiplierBonus = nextRebirth.Multiplier,
 		PetReward = petInfo,
 		FuelReset = true,
+		KeepPets = keptPets,
+		Bonus = bonus,
 	}
 	
 	-- Fire signal to client
@@ -210,6 +257,7 @@ function RebirthService:GetRebirthInfo(player: Player)
 			Remaining = 0,
 			CashMultiplier = 1.0,
 			SpeedMultiplier = 1.0,
+			Multiplier = 1.0,
 		}
 	end
 	
@@ -227,6 +275,7 @@ function RebirthService:GetRebirthInfo(player: Player)
 		Remaining = remaining,
 		CashMultiplier = RebirthStats.CalculateTotalCashMultiplier(currentLevel),
 		SpeedMultiplier = RebirthStats.CalculateTotalSpeedMultiplier(currentLevel),
+		Multiplier = RebirthStats.CalculateTotalMultiplier(currentLevel),
 	}
 end
 

@@ -5,6 +5,9 @@
 
 local Stats = {}
 
+-- Player star collection radius (studs) - player can collect stars within this distance
+Stats.StarCollectionPlayerRadius = 20
+
 Stats.BaseSpeed = 50
 
 -- Starting fuel for new players and after rebirth

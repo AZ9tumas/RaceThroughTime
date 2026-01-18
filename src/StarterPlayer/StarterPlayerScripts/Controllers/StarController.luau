@@ -1,17 +1,21 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local StarAnimations = require(ReplicatedStorage.Modules.StarAnimations)
+local Stats = require(ReplicatedStorage.Modules.Stats)
 
 local StarController = Knit.CreateController({
 	Name = "StarController",
 })
 
 -- Private state
-local SpawnedStars = {} -- [starId] = StarInstance
+local SpawnedStars = {} -- [starId] = { Instance: StarInstance, Position: Vector3 }
 local StarAssets = nil
 local PlayerStarsFolder = nil
+local ProximityCheckConnection = nil -- RenderStep connection for proximity checking
+local CollectionDebounce = {} -- [starId] = true (prevents double collection)
 
 -- Helper function for logging
 local function Log(message: string)
@@ -90,44 +94,14 @@ local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: st
 
 	starClone.Parent = starsFolder
 
-	-- Store reference
-	SpawnedStars[starInfo.ID] = starClone
+	-- Store reference with position for proximity checking
+	SpawnedStars[starInfo.ID] = {
+		Instance = starClone,
+		Position = starInfo.Position,
+	}
 	
 	-- Start star animations (pulsing and jumping)
 	StarAnimations.StartAnimations(starClone)
-
-	-- Set up touch detection
-	local touchParts = {}
-	if starClone:IsA("BasePart") then
-		table.insert(touchParts, starClone)
-	else
-		for _, child in starClone:GetDescendants() do
-			if child:IsA("BasePart") then
-				table.insert(touchParts, child)
-			end
-		end
-	end
-
-	local debounce = false
-	for _, part in touchParts do
-		part.Touched:Connect(function(hit)
-			if debounce then return end
-
-			local character = Knit.Player.Character
-			if not character then return end
-
-			-- Check if the hit part belongs to the player's character
-			if hit:IsDescendantOf(character) then
-				debounce = true
-
-				-- Request collection from server
-				local StarService = Knit.GetService("StarService")
-				local success = StarService:CollectStar(starInfo.ID)
-
-				if not success then debounce = false end
-			end
-		end)
-	end
 end
 
 -- Handle star spawn signal from server
@@ -143,12 +117,13 @@ end
 
 -- Handle star removal signal from server
 local function OnRemoveStar(starId: string)
-	local star = SpawnedStars[starId]
-	if star then
+	local starData = SpawnedStars[starId]
+	if starData then
 		-- Stop animations before destroying
-		StarAnimations.StopAnimations(star)
-		star:Destroy()
+		StarAnimations.StopAnimations(starData.Instance)
+		starData.Instance:Destroy()
 		SpawnedStars[starId] = nil
+		CollectionDebounce[starId] = nil
 		Log(string.format("Removed star %s", starId))
 	end
 end
@@ -160,6 +135,40 @@ local function OnRemoveAllStars()
 		OnRemoveStar(starId)
 	end
 	table.clear(SpawnedStars)
+	table.clear(CollectionDebounce)
+end
+
+-- Check proximity to stars and collect if within range
+local function CheckProximityCollection()
+	local character = Knit.Player.Character
+	if not character then return end
+	
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+	
+	local playerPosition = rootPart.Position
+	local collectionRadius = Stats.StarCollectionPlayerRadius
+	
+	-- Check each star for proximity
+	for starId, starData in pairs(SpawnedStars) do
+		if CollectionDebounce[starId] then continue end
+		
+		local distance = (playerPosition - starData.Position).Magnitude
+		if distance <= collectionRadius then
+			-- Mark as being collected to prevent double collection
+			CollectionDebounce[starId] = true
+			
+			-- Request collection from server
+			task.spawn(function()
+				local StarService = Knit.GetService("StarService")
+				local success = StarService:CollectStar(starId)
+				
+				if not success then
+					CollectionDebounce[starId] = nil
+				end
+			end)
+		end
+	end
 end
 
 -- Knit lifecycle
@@ -175,6 +184,9 @@ function StarController:KnitStart()
 	StarService.SpawnStars:Connect(OnSpawnStars)
 	StarService.RemoveStar:Connect(OnRemoveStar)
 	StarService.RemoveAllStars:Connect(OnRemoveAllStars)
+
+	-- Start proximity checking loop using Heartbeat (runs every frame)
+	ProximityCheckConnection = RunService.Heartbeat:Connect(CheckProximityCollection)
 
 	Log("StarController started")
 end

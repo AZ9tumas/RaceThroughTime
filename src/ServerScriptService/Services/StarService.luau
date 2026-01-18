@@ -47,11 +47,11 @@ local function GetFuelMultiplierForPlayer(player: Player): number
 		petMultiplier = Stats.CalculateFuelMultiplier(equippedPets)
 	end
 	
-	-- Get rebirth cash multiplier
+	-- Get rebirth Multiplier (used for star collection, different from speed multiplier)
 	local rebirthLevel = (stats and stats.Rebirths) or 0
-	local rebirthCashMultiplier = RebirthStats.CalculateTotalCashMultiplier(rebirthLevel)
+	local rebirthMultiplier = RebirthStats.CalculateTotalMultiplier(rebirthLevel)
 	
-	return petMultiplier * rebirthCashMultiplier * Stats.CalculateMultipliers()
+	return petMultiplier * rebirthMultiplier * Stats.CalculateMultipliers()
 end
 
 -- Helper function for logging
@@ -223,9 +223,10 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 		return false
 	end
 
+	-- Use StarCollectionPlayerRadius for player collection distance check
 	local distance = (rootPart.Position - starInfo.Position).Magnitude
-	if distance > Stats.StarConfig.CollectionRadius then
-		warn(string.format("[StarService]: Player %s is too far from star (distance: %.2f)", player.Name, distance))
+	if distance > Stats.StarCollectionPlayerRadius then
+		warn(string.format("[StarService]: Player %s is too far from star (distance: %.2f, max: %.2f)", player.Name, distance, Stats.StarCollectionPlayerRadius))
 		return false
 	end
 

@@ -19,9 +19,10 @@ export type RebirthLevel = {
 	Level: number,
 	CashRequired: number,
 	CashMultiplierBonus: number,
-	SpeedBoostMultiplier: number,
+	Multiplier: number, -- Main multiplier for star/fuel collection
+	SpeedBoostMultiplier: number, -- Speed boost for track runs (increases distance)
 	PetReward: string,
-	KeepPets: boolean,
+	KeepPets: boolean, -- Whether to keep pets on rebirth
 	Bonus: {
 		Gems: number,
 		World: string?,
@@ -126,6 +127,22 @@ function RebirthStats.CalculateTotalSpeedMultiplier(rebirthLevel: number): numbe
 	for _, rebirth in ipairs(RebirthStats.RebirthLevels) do
 		if rebirth.Level <= rebirthLevel then
 			totalMultiplier = totalMultiplier + rebirth.SpeedBoostMultiplier
+		end
+	end
+	
+	return totalMultiplier
+end
+
+-- Calculate total Multiplier from all rebirth levels
+-- This is used for star/fuel collection bonuses (NOT speed)
+-- @param rebirthLevel number - Current rebirth level
+-- @return number - Total multiplier (1.0 base + accumulated bonuses)
+function RebirthStats.CalculateTotalMultiplier(rebirthLevel: number): number
+	local totalMultiplier = 1.0
+	
+	for _, rebirth in ipairs(RebirthStats.RebirthLevels) do
+		if rebirth.Level <= rebirthLevel then
+			totalMultiplier = totalMultiplier + (rebirth.Multiplier or 0)
 		end
 	end
 	
