@@ -57,6 +57,7 @@ local PetService = Knit.GetService("PetService")
 local modules = ReplicatedStorage:WaitForChild("Modules")
 local statsM = require(modules:WaitForChild("Stats"))
 local rebirthStatsM = require(modules:WaitForChild("RebirthStats"))
+local petMergeStatsM = require(modules:WaitForChild("PetMergeStats"))
 
 -- Debounce state for track requests
 local isRequestingTrack = false
@@ -112,6 +113,25 @@ local petModalEquipEmoji: TextLabel = petModalEquipButton:WaitForChild("Emoji")
 local petModalEquipLabel: TextLabel = petModalEquipButton:WaitForChild("TextLabel")
 local petModalMergeButton: TextButton = petModalMainFrame:WaitForChild("MergeButton")
 local petModalMultiplier: TextLabel = petModalMainFrame:WaitForChild("Multiplier")
+
+-- Merge UI
+local uiMerge: ScreenGui = PlayerGui:WaitForChild("UI_Merge")
+local mergeMainFrame: Frame = uiMerge:WaitForChild("MainFrame")
+local mergePetGrid: Frame = mergeMainFrame:WaitForChild("PetGrid")
+local mergePetTemplate: TextButton = mergePetGrid:WaitForChild("UIGridLayout"):WaitForChild("Template")
+local mergeRightPanel: Frame = mergeMainFrame:WaitForChild("RightPanel")
+local mergeCountLabel: TextLabel = mergeRightPanel:WaitForChild("MergeCount")
+local mergeButton: TextButton = mergeRightPanel:WaitForChild("Merge")
+local selectAllButton: TextButton = mergeMainFrame:WaitForChild("SelectAll")
+local mergeCloseButton: TextButton = mergeMainFrame:WaitForChild("Close")
+
+-- Merge UI state
+local mergeSelectedPetID: string? = nil -- The pet ID that is being merged into
+local mergeSelectedPets: { [number]: boolean } = {} -- Map of pet indices to selection state
+local mergeSelectedCount: number = 0
+local mergeRequiredCopies: number = 0
+local mergePetName: string? = nil -- Name of pet type being merged
+local mergePetConnections: { RBXScriptConnection } = {} -- Track pet button connections for cleanup
 
 -- rebirth ui
 local rebirthStatsM = require(ReplicatedStorage.Modules.RebirthStats)
@@ -482,6 +502,223 @@ function handler.UpdatePetsInventory()
     end
 end
 
+-- Helper function to update merge count label
+local function UpdateMergeCountLabel()
+    mergeCountLabel.Text = mergeSelectedCount .. "/" .. mergeRequiredCopies
+end
+
+-- Helper function to toggle pet selection in merge UI
+local function ToggleMergePetSelection(petIndex: number, petFrame: TextButton)
+    if mergeSelectedPets[petIndex] then
+        -- Deselect
+        mergeSelectedPets[petIndex] = nil
+        mergeSelectedCount = mergeSelectedCount - 1
+        petFrame.UIStroke.Color = Color3.fromRGB(49, 49, 49) -- Default color
+    else
+        -- Select (only if we haven't reached the required count)
+        if mergeSelectedCount < mergeRequiredCopies then
+            mergeSelectedPets[petIndex] = true
+            mergeSelectedCount = mergeSelectedCount + 1
+            petFrame.UIStroke.Color = Color3.fromRGB(0, 255, 0) -- Green for selected
+        end
+    end
+    UpdateMergeCountLabel()
+end
+
+-- UpdateMergedUI function - displays the merge UI for a specific pet name
+-- @param petName: string - The name of the pet type to show copies of (e.g., "Standard Pet")
+function handler.UpdateMergedUI(petName: string)
+    -- Clean up previous connections
+    for _, connection in ipairs(mergePetConnections) do
+        connection:Disconnect()
+    end
+    mergePetConnections = {}
+    
+    -- Clear existing pet frames from PetGrid (except template and layout)
+    for _, child in ipairs(mergePetGrid:GetChildren()) do
+        if child.Name ~= "Template" and child.Name ~= "UIGridLayout" and (child:IsA("Frame") or child:IsA("TextButton")) then
+            child:Destroy()
+        end
+    end
+    
+    -- Reset selection state
+    mergeSelectedPets = {}
+    mergeSelectedCount = 0
+    mergePetName = petName
+    mergeSelectedPetID = nil
+    
+    -- Get the pet inventory from handler data
+    local petInventory = handler.data.Inventory.PetInventory
+    
+    -- Find all copies of the specified pet (by name)
+    local matchingPets = {} -- { index, petData }
+    local firstPet = nil
+    
+    for index, petData in ipairs(petInventory) do
+        if petData.Name == petName then
+            table.insert(matchingPets, { index = index, petData = petData })
+            if not firstPet then
+                firstPet = petData
+                mergeSelectedPetID = petData.ID -- Use first matching pet as the target
+            end
+        end
+    end
+    
+    -- Get required copies for this tier level
+    if firstPet then
+        local tierLevel = firstPet.TierLevel or firstPet.Level or 1
+        mergeRequiredCopies = petMergeStatsM.GetCopiesRequired(tierLevel)
+        
+        -- Update merge button with gem cost
+        local gemCost = petMergeStatsM.GetMergeCost(tierLevel)
+        mergeButton.Text = "MERGE\n(" .. gemCost .. " GEMS)"
+    else
+        mergeRequiredCopies = 3 -- Default
+        mergeButton.Text = "MERGE"
+    end
+    
+    -- Update count label
+    UpdateMergeCountLabel()
+    
+    -- Create a frame for each matching pet
+    for _, petInfo in ipairs(matchingPets) do
+        local petFrame = mergePetTemplate:Clone()
+        petFrame.Name = "MergePet_" .. petInfo.index
+        petFrame.Visible = true
+        
+        -- Set the pet name in the template
+        local nameLabel = petFrame:FindFirstChild("Name")
+        if nameLabel then
+            nameLabel.Text = petInfo.petData.Name or "Unknown Pet"
+        end
+        
+        -- Reset UIStroke to default color
+        local uiStroke = petFrame:FindFirstChild("UIStroke")
+        if uiStroke then
+            uiStroke.Color = Color3.fromRGB(49, 49, 49)
+        end
+        
+        -- Store reference to petInfo for selection
+        local petIndex = petInfo.index
+        
+        -- Connect click event to toggle selection
+        if petFrame:IsA("TextButton") then
+            local connection = petFrame.MouseButton1Click:Connect(function()
+                ToggleMergePetSelection(petIndex, petFrame)
+            end)
+            table.insert(mergePetConnections, connection)
+        end
+        
+        petFrame.Parent = mergePetGrid
+    end
+    
+    -- Show the merge UI
+    uiMerge.Enabled = true
+    mergeMainFrame.Visible = true
+end
+
+-- SelectAll button handler - selects up to the required number of copies
+local function SelectAllMergePets()
+    -- First, clear all selections
+    for _, child in ipairs(mergePetGrid:GetChildren()) do
+        if child.Name ~= "Template" and child.Name ~= "UIGridLayout" and child:IsA("TextButton") then
+            local uiStroke = child:FindFirstChild("UIStroke")
+            if uiStroke then
+                uiStroke.Color = Color3.fromRGB(49, 49, 49)
+            end
+        end
+    end
+    mergeSelectedPets = {}
+    mergeSelectedCount = 0
+    
+    -- Select pets up to the required amount
+    local selectedSoFar = 0
+    for _, child in ipairs(mergePetGrid:GetChildren()) do
+        if child.Name ~= "Template" and child.Name ~= "UIGridLayout" and child:IsA("TextButton") then
+            if selectedSoFar < mergeRequiredCopies then
+                -- Extract pet index from frame name (MergePet_X)
+                local petIndex = tonumber(child.Name:match("MergePet_(%d+)"))
+                if petIndex then
+                    mergeSelectedPets[petIndex] = true
+                    mergeSelectedCount = mergeSelectedCount + 1
+                    selectedSoFar = selectedSoFar + 1
+                    
+                    local uiStroke = child:FindFirstChild("UIStroke")
+                    if uiStroke then
+                        uiStroke.Color = Color3.fromRGB(0, 255, 0) -- Green for selected
+                    end
+                end
+            end
+        end
+    end
+    
+    UpdateMergeCountLabel()
+end
+
+-- Connect SelectAll button
+handler._connections["MergeSelectAll"] = selectAllButton.MouseButton1Click:Connect(function()
+    SelectAllMergePets()
+end)
+
+-- Connect Merge button to send request to server
+handler._connections["MergeButton"] = mergeButton.MouseButton1Click:Connect(function()
+    if not mergeSelectedPetID then
+        print("No pet selected for merge")
+        return
+    end
+    
+    if mergeSelectedCount < mergeRequiredCopies then
+        local NotificationController = Knit.GetController("NotificationController")
+        if NotificationController then
+            NotificationController:ShowNotification(
+                string.format("Need %d copies to merge, selected %d", mergeRequiredCopies, mergeSelectedCount),
+                NotificationController.Category.Warning,
+                3
+            )
+        end
+        return
+    end
+    
+    -- Send merge request to server with pet ID and copy count
+    PetService:RequestMergePets(mergeSelectedPetID, mergeSelectedCount):andThen(function(success, errorMsg, resultData)
+        if success then
+            -- Close merge UI
+            uiMerge.Enabled = false
+            mergeMainFrame.Visible = false
+            
+            -- Close pet modal
+            petModalDarkOverlay.Visible = false
+            
+            local NotificationController = Knit.GetController("NotificationController")
+            if NotificationController then
+                NotificationController:ShowNotification(
+                    "Merge successful! Pet upgraded to " .. (resultData and resultData.TierName or "higher tier"),
+                    NotificationController.Category.Success,
+                    3
+                )
+            end
+            
+            -- Refresh pet inventory
+            handler.UpdatePetsInventory()
+        else
+            local NotificationController = Knit.GetController("NotificationController")
+            if NotificationController then
+                NotificationController:ShowNotification(
+                    "Merge failed: " .. (errorMsg or "Unknown error"),
+                    NotificationController.Category.Error,
+                    3
+                )
+            end
+        end
+    end)
+end)
+
+-- Connect Close button for merge UI
+handler._connections["MergeClose"] = mergeCloseButton.MouseButton1Click:Connect(function()
+    uiMerge.Enabled = false
+    mergeMainFrame.Visible = false
+end)
+
 function handler.UpdateFuelUI(amount: number)
     -- Update fuel text
     fuelText.Text = "⭐ FUEL: " .. math.floor(amount)
@@ -754,6 +991,19 @@ handler._connections["PetModalEquip"] = petModalEquipButton.MouseButton1Click:Co
             end
         end)
     end
+end)
+
+-- Pet Modal Merge Button - opens the merge UI for the selected pet
+handler._connections["PetModalMerge"] = petModalMergeButton.MouseButton1Click:Connect(function()
+    if not selectedPetData then
+        return
+    end
+    
+    -- Open merge UI with the selected pet's name
+    handler.UpdateMergedUI(selectedPetData.Name)
+    
+    -- Hide the pet modal (keep inventory open so user can return)
+    petModalDarkOverlay.Visible = false
 end)
 
 -- rebirth events
