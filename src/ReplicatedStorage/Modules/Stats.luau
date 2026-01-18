@@ -112,6 +112,7 @@ Stats.MaxGateIndex = 3 -- Gates are numbered 0 to MaxGateIndex (0, 1, 2, 3)
 function Stats.CalculateMultipliers(rebirthSpeedMultiplier: number?): number
 	-- multiplier from pets is handled separately
 	-- here dev products, vip access and rebirths can be added
+	-- also rebirth speed multiplier is used to increase speed in track run, thereby increasing distance covered
 	local baseMultiplier = 1.0
 	local rebirthMultiplier = rebirthSpeedMultiplier or 1.0
 	

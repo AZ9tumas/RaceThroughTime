@@ -116,6 +116,7 @@ local petModalMultiplier: TextLabel = petModalMainFrame:WaitForChild("Multiplier
 -- rebirth ui
 local rebirthStatsM = require(ReplicatedStorage.Modules.RebirthStats)
 local rebirthModalButton: TextButton = leftPanel:WaitForChild("RebirthButton")
+local buttonPressed: boolean = false
 local rebirthMenu: Frame = PlayerGui:WaitForChild("SimulatorPopups"):WaitForChild("RebirthMenu")
 local rebirthCloseButton: TextLabel = rebirthMenu:WaitForChild("Close")
 local progressBar: Frame = rebirthMenu:WaitForChild("Progress"):WaitForChild("Fill")
@@ -564,7 +565,7 @@ local function UpdateWorldMenuVisibility()
 end
 
 local function UpdateRebirthMenuVisibility()
-    rebirthMenu.Visible = isPlayerNearRebirthArea()
+    rebirthMenu.Visible = buttonPressed or isPlayerNearRebirthArea()
 end
 
 -- daily frame
@@ -760,17 +761,39 @@ local function handleRebirthFrame()
     local cash = truncateNumber(cashVal.Value)
 
     local currentRebirthLevel = handler.data.Stats.Rebirths
-    local nextLevel = rebirthStatsM.GetNextRebirth(currentRebirthLevel)
+    local nextLevel: rebirthStatsM.RebirthLevel = rebirthStatsM.GetNextRebirth(currentRebirthLevel)
+
+    local frames : {string: Frame} = {
+        access = rebirthMenu.Frame.Access,
+        bonus = rebirthMenu.Frame.Bonus,
+        multiplier = rebirthMenu.Frame.Multiplier,
+        status = rebirthMenu.Frame.Status,
+    }
+
+    local vals = {
+        access = nextLevel.Bonus.WorldAccess or " --- ",
+        bonus = "+" .. nextLevel.Bonus.Gems .. " Gems",
+        multiplier = "+" .. (nextLevel.CashMultiplierBonus * 100) .. "% Cash",
+        status = nextLevel.KeepPets and "Keep Pets" or "Lose Pets",
+    }
 
     if nextLevel then
         local progress, remainingCash = rebirthStatsM.GetRebirthProgress(currentRebirthLevel, cashVal.Value)
         progressBar.Size = UDim2.new(progress, 0, 1, 0)
         progressText.Text = cash .. "/" .. truncateNumber(nextLevel.CashRequired) .. " Cash"
         rebirthMainLabel.Text = "Rebirth to Level " .. tostring(nextLevel.Level)
+
+        for key, v in pairs(frames) do
+            v.Label.Text = vals[key]
+        end
     else
         progressBar.Size = UDim2.new(1, 0, 1, 0)
         progressText.Text = "MAX LEVEL REACHED"
         rebirthMainLabel.Text = "MAX LEVEL REACHED"
+
+        for _, v in pairs(frames) do
+            v.Label.Text = " --- "
+        end
     end
 end
 
@@ -802,7 +825,8 @@ end)
 
 handler._connections["RebirthModalButton"] = rebirthModalButton.MouseButton1Click:Connect(function()
     CloseAllFrames(rebirthMenu)
-    rebirthMenu.Visible = not rebirthMenu.Visible
+    buttonPressed = not buttonPressed
+    rebirthMenu.Visible = buttonPressed
 
     if rebirthMenu.Visible then
         handleRebirthFrame()
