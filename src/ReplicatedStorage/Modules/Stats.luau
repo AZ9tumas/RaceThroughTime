@@ -78,11 +78,13 @@ Stats.WorldOrder = {
 -- Blue (Uncommon): Moderate spawn rate, medium fuel bonus
 -- Purple (Rare): Low spawn rate, high fuel bonus
 -- White (Legendary): Extremely rare, very high fuel bonus
+-- Gems: Rare, gives gems instead of fuel
 Stats.StarProbabilities = {
-	YellowStar = 0.65,   -- 60% chance (Common)
-	BlueStar = 0.30,     -- 25% chance (Uncommon)
-	PurpleStar = 0.03,   -- 5% chance (Rare)
-	WhiteStar = 0.02,    -- 1% chance (Legendary)
+	YellowStar = 0.60,   -- 60% chance (Common)
+	BlueStar = 0.28,     -- 28% chance (Uncommon)
+	PurpleStar = 0.06,   -- 6% chance (Rare)
+	WhiteStar = 0.02,    -- 2% chance (Legendary)
+	Gems = 0.04,         -- 4% chance (Rare gem)
 }
 
 -- Fuel bonuses for each star type
@@ -91,6 +93,12 @@ Stats.StarFuelValues = {
 	BlueStar = 100,       -- Medium fuel bonus
 	PurpleStar = 250,     -- High fuel bonus
 	WhiteStar = 1000,     -- Very high fuel bonus
+	Gems = 0,             -- Gems don't give fuel
+}
+
+-- Gem values for gem-type stars
+Stats.StarGemValues = {
+	Gems = 5,             -- Base gem value for collecting a Gems star
 }
 
 -- Star spawn configuration

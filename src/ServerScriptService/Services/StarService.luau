@@ -230,19 +230,47 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 		return false
 	end
 
-	-- Calculate fuel with pet multiplier
-	local fuelMultiplier = GetFuelMultiplierForPlayer(player)
-	local finalFuelValue = math.floor(starInfo.FuelValue * fuelMultiplier)
-
-	-- Star collection verified - add fuel to player
 	local DataService = Knit.GetService("DataService")
-	DataService:Update(player, "Stats", function(stats)
-		local finalVal = finalFuelValue + stats.Fuel
-		stats.Fuel = finalVal
-		return stats
-	end)
+	local NotificationService = Knit.GetService("NotificationService")
+	
+	-- Check if this is a Gems star
+	if starInfo.StarName == "Gems" then
+		-- Calculate gems with multiplier
+		local fuelMultiplier = GetFuelMultiplierForPlayer(player)
+		local baseGemValue = Stats.StarGemValues.Gems or 5
+		local finalGemValue = math.floor(baseGemValue * fuelMultiplier)
+		
+		-- Add gems to player
+		DataService:Update(player, "Currencies", function(currencies)
+			currencies.Gems = (currencies.Gems or 0) + finalGemValue
+			return currencies
+		end)
+		
+		Log(string.format("Player %s collected Gems, gained %d gems (multiplier: %.2f)", player.Name, finalGemValue, fuelMultiplier))
+		
+		-- Show notification for gem collection
+		NotificationService:SendNotification(player, "Gems collected! 💎 +" .. finalGemValue .. " Gems", {
+			icon = "💎", sound = "CollectStar", name = "Custom"
+		}, 2)
+	else
+		-- Regular star - calculate fuel with pet multiplier
+		local fuelMultiplier = GetFuelMultiplierForPlayer(player)
+		local finalFuelValue = math.floor(starInfo.FuelValue * fuelMultiplier)
 
-	Log(string.format("Player %s collected %s, gained %d fuel (multiplier: %.2f)", player.Name, starInfo.StarName, finalFuelValue, fuelMultiplier))
+		-- Star collection verified - add fuel to player
+		DataService:Update(player, "Stats", function(stats)
+			local finalVal = finalFuelValue + stats.Fuel
+			stats.Fuel = finalVal
+			return stats
+		end)
+
+		Log(string.format("Player %s collected %s, gained %d fuel (multiplier: %.2f)", player.Name, starInfo.StarName, finalFuelValue, fuelMultiplier))
+		
+		-- Show notification for star collection
+		NotificationService:SendNotification(player, "Star collected! ⭐ +" .. finalFuelValue .. " Fuel", {
+			icon = "⭐", sound = "CollectStar", name = "Custom"
+		}, 2)
+	end
 
 	-- Increment total stars collected counter
 	TotalStarsCollected = TotalStarsCollected + 1
@@ -256,12 +284,6 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 
 	-- Notify client to remove the star
 	StarService.Client.RemoveStar:Fire(player, starId)
-
-	-- Show notification for star collection
-	local NotificationService = Knit.GetService("NotificationService")
-	NotificationService:SendNotification(player, "Star collected! ⭐ +" .. finalFuelValue .. " Fuel", {
-		icon = "⭐", sound = "CollectStar", name = "Custom"
-	}, 2)
 
 	return true
 end
