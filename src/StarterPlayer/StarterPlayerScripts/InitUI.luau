@@ -130,6 +130,10 @@ local worldClose: TextButton = worldMenu:WaitForChild("Close")
 local worldScrollFrame: ScrollingFrame = worldMenu:WaitForChild("ScrollingFrame")
 local worldButtonTemplate: TextButton = worldScrollFrame:WaitForChild("UIListLayout"):WaitForChild("Template")
 
+-- track run
+local trackCancel = PlayerGui:WaitForChild("UI_CancelTrackButton")
+local trackCancelButton: TextButton = trackCancel:WaitForChild("Track_Cancel")
+
 -- Currently selected pet data for the modal
 local selectedPetData = nil
 
