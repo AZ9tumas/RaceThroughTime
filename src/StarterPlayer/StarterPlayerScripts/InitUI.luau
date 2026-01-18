@@ -773,7 +773,7 @@ local function handleRebirthFrame()
     local vals = {
         access = nextLevel.Bonus.WorldAccess or " --- ",
         bonus = "+" .. nextLevel.Bonus.Gems .. " Gems",
-        multiplier = "+" .. (nextLevel.CashMultiplierBonus * 100) .. "% Cash",
+        multiplier = "+" .. ((nextLevel.Multiplier or 0) * 100) .. "% Multiplier",
         status = nextLevel.KeepPets and "Keep Pets" or "Lose Pets",
     }
 
@@ -808,15 +808,43 @@ handler._connections["RebirthButton"] = rebirthButton.MouseButton1Click:Connect(
                 NewRebirthLevel = newLevel,
                 CashMultiplier = newCashMultiplier,
                 SpeedMultiplier = newSpeedMultiplier,
+                Multiplier = newMultiplier,
                 CashMultiplierBonus = nextRebirth.CashMultiplierBonus,
                 SpeedBoostBonus = nextRebirth.SpeedBoostMultiplier,
+                MultiplierBonus = nextRebirth.Multiplier,
                 PetReward = petInfo,
                 FuelReset = true,
+                KeepPets = keptPets,
+                Bonus = bonus,
             }
         ]=]
 
-        if success then
+        if success and resultData then
             print("Rebirth successful!")
+            
+            -- Update local rebirth level for immediate UI update
+            handler.data.Stats.Rebirths = resultData.NewRebirthLevel
+            
+            -- Update fuel if it was reset
+            if resultData.FuelReset then
+                handler.data.Stats.Fuel = statsM.StartingFuel
+            end
+            
+            -- Clear pet inventory if pets weren't kept
+            if resultData.KeepPets == false then
+                handler.data.Inventory.PetInventory = {}
+                handler.data.Inventory.EquippedPets = {}
+            end
+            
+            -- Add pet reward if granted
+            if resultData.PetReward then
+                table.insert(handler.data.Inventory.PetInventory, resultData.PetReward)
+            end
+            
+            -- Refresh pets UI if visible
+            if inventoryMainFrame.Visible then
+                handler.UpdatePetsInventory()
+            end
         else
             print("Rebirth failed:", errorMsg or "Unknown error")
         end
@@ -854,9 +882,9 @@ handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(functio
     handler.UpdateCashUI(cashVal.Value)
     handler.UpdateGemsUI(gemsVal.Value)
     
-    -- Calculate Rebirth Multiplier
+    -- Calculate Rebirth Multiplier (using Multiplier for star collection, not CashMultiplier)
     local currentRebirthLevel = handler.data.Stats.Rebirths or 0
-    local rebirthMultiplier = rebirthStatsM.CalculateTotalCashMultiplier(currentRebirthLevel)
+    local rebirthMultiplier = rebirthStatsM.CalculateTotalMultiplier(currentRebirthLevel)
     
     -- Calculate Pet Multiplier
     local equippedPetsList = {}
