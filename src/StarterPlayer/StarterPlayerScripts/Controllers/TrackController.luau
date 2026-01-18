@@ -16,6 +16,10 @@ local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 local liveMainUI: ScreenGui = PlayerGui:WaitForChild("UI_LiveDistance")
 local distanceCounter: TextLabel = liveMainUI:WaitForChild("DistanceCounter")
 
+-- Track cancel button UI
+local trackCancelUI: ScreenGui = PlayerGui:WaitForChild("UI_CancelTrackButton")
+local trackCancelButton: TextButton = trackCancelUI:WaitForChild("Track_Cancel")
+
 -- Results popup UI
 local resultsPopupUI: ScreenGui = PlayerGui:WaitForChild("UI_ResultsPopup")
 local resultsFrame: Frame = resultsPopupUI:WaitForChild("Frame"):WaitForChild("Frame")
@@ -514,6 +518,9 @@ local function OnTrackStarted(trackData: {
 	-- Disable player controls
 	DisablePlayerControls()
 	
+	-- Show cancel button during track run
+	trackCancelButton.Visible = true
+	
 	-- Show notification
 	local NotificationController = Knit.GetController("NotificationController")
 	if NotificationController then
@@ -682,6 +689,9 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	-- Re-enable player controls
 	EnablePlayerControls()
 	
+	-- Hide cancel button when track ends
+	trackCancelButton.Visible = false
+	
 	-- Update results popup UI
 	local distanceTraveled = trackData.distanceTraveled
 	local percentageToNextWorld = trackData.percentageToNextWorld
@@ -778,6 +788,9 @@ function TrackController:StopTrack()
 	-- Re-enable player controls
 	EnablePlayerControls()
 	
+	-- Hide cancel button
+	trackCancelButton.Visible = false
+	
 	Log("Track stopped")
 end
 
@@ -803,6 +816,23 @@ function TrackController:KnitStart()
 	closeButton.MouseButton1Click:Connect(function()
 		resultsFrame.Parent.Visible = false
 	end)
+	
+	-- Connect cancel button to cancel track run
+	trackCancelButton.MouseButton1Click:Connect(function()
+		if not IsOnTrack then return end
+		
+		-- Request cancel from server
+		TrackService:CancelTrackRun():andThen(function(success, errorMsg)
+			if success then
+				Log("Track run cancelled successfully")
+			else
+				warn(string.format("[TrackController]: Failed to cancel track run - %s", errorMsg or "Unknown error"))
+			end
+		end)
+	end)
+	
+	-- Ensure cancel button is hidden initially
+	trackCancelButton.Visible = false
 	
 	Log("TrackController started")
 end
