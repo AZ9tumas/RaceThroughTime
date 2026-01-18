@@ -263,6 +263,7 @@ end
 Stats.Eggs = {
 	StandardEgg = {
 		Cost = 500,
+		Tier = "Basic",
 		Currency = "Cash",
 		World = "Main",
 		-- Pets array contains possible pets with their spawn probabilities (must sum to 1.0)
@@ -273,18 +274,12 @@ Stats.Eggs = {
 	},
 }
 
--- Pet Rarity tiers
-Stats.PetRarity = {
-	Standard = "Standard",
-	Premium = "Premium",
-	LimitedTime = "LimitedTime",
-}
-
 -- Pet Configuration
 -- Pet types with their base stats
 Stats.Pets = {
 	StandardPet = {
 		Name = "Standard Pet",
+		TierLevel = 1, -- Required especially during merging pets
 		Multiplier = 1.1, -- 10% boost to earnings
 		FuelBonus = 1.1, -- 10% fuel collection increase
 		PickupRangeBonus = 1.0, -- No range extension (base range)
