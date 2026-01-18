@@ -496,23 +496,26 @@ function PetService:GetPlayerPets(player: Player): { Pet }
 	return pets
 end
 
--- Merge two pets to create a higher tier pet
-function PetService:MergePets(player: Player, petID1: string, petID2: string): (boolean, string?, { Name: string, ID: string, Level: number }?)
+-- Merge pets of the same tier level to create a higher tier pet
+-- @param player Player - The player performing the merge
+-- @param targetPetID string - The ID of the pet to merge into (will be upgraded)
+-- @param copyCount number - The number of copies to use for merging (including the target pet)
+function PetService:MergePets(player: Player, targetPetID: string, copyCount: number): (boolean, string?, { Name: string, ID: string, Level: number }?)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
 	
-	-- Get pet indices from IDs
-	local petIndex1 = self:GetPetIndexByID(player, petID1)
-	local petIndex2 = self:GetPetIndexByID(player, petID2)
-	
-	if not petIndex1 or not petIndex2 then
-		NotificationService:SendNotification(player, "Invalid pet ID.", NotificationService.Category.Error)
-		return false, "Invalid pet ID", nil
+	-- Validate copyCount is a valid number
+	if type(copyCount) ~= "number" or copyCount < 2 then
+		NotificationService:SendNotification(player, "Invalid copy count.", NotificationService.Category.Error)
+		return false, "Invalid copy count", nil
 	end
 	
-	if petIndex1 == petIndex2 then
-		NotificationService:SendNotification(player, "Cannot merge a pet with itself.", NotificationService.Category.Error)
-		return false, "Cannot merge pet with itself", nil
+	-- Get target pet index from ID
+	local targetPetIndex = self:GetPetIndexByID(player, targetPetID)
+	
+	if not targetPetIndex then
+		NotificationService:SendNotification(player, "Invalid pet ID.", NotificationService.Category.Error)
+		return false, "Invalid pet ID", nil
 	end
 	
 	-- Get player inventory
@@ -522,29 +525,50 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		return false, "Inventory not found", nil
 	end
 	
-	local pet1 = inventory.PetInventory[petIndex1]
-	local pet2 = inventory.PetInventory[petIndex2]
+	local targetPet = inventory.PetInventory[targetPetIndex]
 	
-	if not pet1 or not pet2 then
+	if not targetPet then
 		NotificationService:SendNotification(player, "Pet not found in inventory.", NotificationService.Category.Error)
 		return false, "Pet not found", nil
 	end
 	
-	-- Check if pets are from the same world (required for merging)
-	local world1 = pet1.World or "Main"
-	local world2 = pet2.World or "Main"
-	
-	if PetMergeStats.WorldRestrictions.RequireSameWorld and world1 ~= world2 then
-		NotificationService:SendNotification(player, "Pets must be from the same world to merge.", NotificationService.Category.Warning)
-		return false, "Different worlds", nil
-	end
-	
 	-- Get current tier level and check if at max
-	local currentTierLevel = pet1.TierLevel or pet1.Level or 1
+	local currentTierLevel = targetPet.TierLevel or targetPet.Level or 1
+	local petType = targetPet.PetType or "StandardPet"
+	local world = targetPet.World or "Main"
 	
 	if PetMergeStats.IsMaxTier(currentTierLevel) then
 		NotificationService:SendNotification(player, "Pet is already at maximum tier.", NotificationService.Category.Warning)
 		return false, "Max tier reached", nil
+	end
+	
+	-- Get the number of copies required for this tier level
+	local copiesRequired = PetMergeStats.GetCopiesRequired(currentTierLevel)
+	
+	if copyCount < copiesRequired then
+		NotificationService:SendNotification(player, string.format("Need %d copies to merge at tier %d.", copiesRequired, currentTierLevel), NotificationService.Category.Warning)
+		return false, "Not enough copies provided", nil
+	end
+	
+	-- Find all pets with the same tier level and pet type (for merging)
+	local matchingPets = {} -- { index, petData }
+	for index, petData in ipairs(inventory.PetInventory) do
+		local petTierLevel = petData.TierLevel or petData.Level or 1
+		local petPetType = petData.PetType or "StandardPet"
+		local petWorld = petData.World or "Main"
+		
+		-- Must be same tier level, same pet type, and same world (if world restrictions enabled)
+		if petTierLevel == currentTierLevel and petPetType == petType then
+			if not PetMergeStats.WorldRestrictions.RequireSameWorld or petWorld == world then
+				table.insert(matchingPets, { index = index, petData = petData })
+			end
+		end
+	end
+	
+	-- Check if player has enough copies
+	if #matchingPets < copiesRequired then
+		NotificationService:SendNotification(player, string.format("Not enough copies. Have %d, need %d.", #matchingPets, copiesRequired), NotificationService.Category.Warning)
+		return false, "Not enough copies in inventory", nil
 	end
 	
 	-- Get merge cost from PetMergeStats config
@@ -556,12 +580,32 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		return false, "Not enough Gems", nil
 	end
 	
-	-- Check if either pet is equipped
+	-- Identify which copies to consume (exclude the target pet, use first copiesRequired-1 matches)
+	local indicesToRemove = {}
+	local copiesUsed = 1 -- Target pet counts as 1
+	
+	for _, matchingPet in ipairs(matchingPets) do
+		if matchingPet.index ~= targetPetIndex and copiesUsed < copiesRequired then
+			table.insert(indicesToRemove, matchingPet.index)
+			copiesUsed = copiesUsed + 1
+		end
+	end
+	
+	if copiesUsed < copiesRequired then
+		NotificationService:SendNotification(player, string.format("Not enough matching copies. Have %d, need %d.", copiesUsed, copiesRequired), NotificationService.Category.Warning)
+		return false, "Not enough matching copies", nil
+	end
+	
+	-- Check if any of the pets to remove are equipped
 	local equippedPets = inventory.EquippedPets or {}
-	local pet2Equipped = false
+	local petsToUnequip = {}
 	
 	for _, equippedIndex in ipairs(equippedPets) do
-		if equippedIndex == petIndex2 then pet2Equipped = true end
+		for _, indexToRemove in ipairs(indicesToRemove) do
+			if equippedIndex == indexToRemove then
+				table.insert(petsToUnequip, indexToRemove)
+			end
+		end
 	end
 	
 	-- Deduct Gems
@@ -570,50 +614,84 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		return curr
 	end)
 	
+	-- Despawn pets that are equipped and will be removed
+	for _, petIndexToRemove in ipairs(petsToUnequip) do
+		DespawnPetModel(player, petIndexToRemove)
+	end
+	
 	-- Calculate new stats using PetMergeStats formula
 	local newTierLevel = currentTierLevel + 1
 	local oldStats = {
-		Multiplier = pet1.Multiplier or 1.0,
-		FuelBonus = pet1.FuelBonus or 1.0,
-		PickupRangeBonus = pet1.PickupRangeBonus or 1.0,
-		RoamRange = pet1.RoamRange or 30,
-		StarCollectionRadius = pet1.StarCollectionRadius or 5,
-		Velocity = pet1.Velocity or 20,
+		Multiplier = targetPet.Multiplier or 1.0,
+		FuelBonus = targetPet.FuelBonus or 1.0,
+		PickupRangeBonus = targetPet.PickupRangeBonus or 1.0,
+		RoamRange = targetPet.RoamRange or 30,
+		StarCollectionRadius = targetPet.StarCollectionRadius or 5,
+		Velocity = targetPet.Velocity or 20,
 	}
 	local newStats = PetMergeStats.CalculateMergedStats(oldStats, currentTierLevel)
 	local newTier = PetMergeStats.GetTierByLevel(newTierLevel)
 	
-	-- Despawn pet2 if equipped before removing from inventory
-	if pet2Equipped then
-		DespawnPetModel(player, petIndex2)
-	end
+	-- Sort indices to remove in descending order (to preserve indices when removing)
+	table.sort(indicesToRemove, function(a, b) return a > b end)
 	
-	-- Update inventory: upgrade pet1 and remove pet2
+	-- Update inventory: upgrade target pet and remove consumed copies
 	DataService:Update(player, "Inventory", function(inv)
-		-- Upgrade pet1 with new tier and stats
-		inv.PetInventory[petIndex1].Level = newTierLevel
-		inv.PetInventory[petIndex1].TierLevel = newTierLevel
-		inv.PetInventory[petIndex1].TierName = newTier.Name
-		inv.PetInventory[petIndex1].Multiplier = newStats.Multiplier
-		inv.PetInventory[petIndex1].FuelBonus = newStats.FuelBonus
-		inv.PetInventory[petIndex1].PickupRangeBonus = newStats.PickupRangeBonus
-		inv.PetInventory[petIndex1].RoamRange = newStats.RoamRange
-		inv.PetInventory[petIndex1].StarCollectionRadius = newStats.StarCollectionRadius
-		inv.PetInventory[petIndex1].Velocity = newStats.Velocity
+		-- Get the adjusted target index (may change if indices were removed before it)
+		local adjustedTargetIndex = targetPetIndex
+		for _, removedIndex in ipairs(indicesToRemove) do
+			if removedIndex < targetPetIndex then
+				adjustedTargetIndex = adjustedTargetIndex -- Will be adjusted after removal
+			end
+		end
 		
-		-- Remove pet2 from inventory
-		table.remove(inv.PetInventory, petIndex2)
+		-- Remove consumed copies (in descending order to preserve indices)
+		for _, indexToRemove in ipairs(indicesToRemove) do
+			table.remove(inv.PetInventory, indexToRemove)
+		end
 		
-		-- Update equipped pets indices (since pet2 was removed)
+		-- Recalculate target index after removals
+		local newTargetIndex = targetPetIndex
+		for _, removedIndex in ipairs(indicesToRemove) do
+			if removedIndex < targetPetIndex then
+				newTargetIndex = newTargetIndex - 1
+			end
+		end
+		
+		-- Upgrade target pet with new tier and stats
+		if inv.PetInventory[newTargetIndex] then
+			inv.PetInventory[newTargetIndex].Level = newTierLevel
+			inv.PetInventory[newTargetIndex].TierLevel = newTierLevel
+			inv.PetInventory[newTargetIndex].TierName = newTier.Name
+			inv.PetInventory[newTargetIndex].Multiplier = newStats.Multiplier
+			inv.PetInventory[newTargetIndex].FuelBonus = newStats.FuelBonus
+			inv.PetInventory[newTargetIndex].PickupRangeBonus = newStats.PickupRangeBonus
+			inv.PetInventory[newTargetIndex].RoamRange = newStats.RoamRange
+			inv.PetInventory[newTargetIndex].StarCollectionRadius = newStats.StarCollectionRadius
+			inv.PetInventory[newTargetIndex].Velocity = newStats.Velocity
+		end
+		
+		-- Update equipped pets indices (since pets were removed)
 		if inv.EquippedPets then
 			local newEquipped = {}
 			for _, equippedIndex in ipairs(inv.EquippedPets) do
-				if equippedIndex ~= petIndex2 then
-					if equippedIndex > petIndex2 then
-						table.insert(newEquipped, equippedIndex - 1)
-					else
-						table.insert(newEquipped, equippedIndex)
+				local isRemoved = false
+				for _, removedIndex in ipairs(indicesToRemove) do
+					if equippedIndex == removedIndex then
+						isRemoved = true
+						break
 					end
+				end
+				
+				if not isRemoved then
+					-- Adjust index for removals
+					local adjustedIndex = equippedIndex
+					for _, removedIndex in ipairs(indicesToRemove) do
+						if removedIndex < equippedIndex then
+							adjustedIndex = adjustedIndex - 1
+						end
+					end
+					table.insert(newEquipped, adjustedIndex)
 				end
 			end
 			inv.EquippedPets = newEquipped
@@ -622,7 +700,7 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		return inv
 	end)
 	
-	-- Update pet ID mappings (pet2 was removed, indices shifted)
+	-- Update pet ID mappings (pets were removed, indices shifted)
 	local userId = player.UserId
 	if PlayerPetIDs[userId] then
 		PlayerPetIDs[userId] = {
@@ -640,16 +718,30 @@ function PetService:MergePets(player: Player, petID1: string, petID2: string): (
 		end
 	end
 	
+	-- Calculate new target index after removals
+	local finalTargetIndex = targetPetIndex
+	for _, removedIndex in ipairs(indicesToRemove) do
+		if removedIndex < targetPetIndex then
+			finalTargetIndex = finalTargetIndex - 1
+		end
+	end
+	
 	-- Get the new ID for the merged pet
-	local newPetID = self:GetPetIDByIndex(player, petIndex1 > petIndex2 and petIndex1 - 1 or petIndex1)
+	local newPetID = self:GetPetIDByIndex(player, finalTargetIndex)
 	
-	Log(string.format("Player %s merged pets to create %s tier %s (Level %d)", player.Name, newTier.Name, pet1.Name, newTierLevel))
+	Log(string.format("Player %s merged %d copies to create %s tier %s (Level %d)", player.Name, copiesRequired, newTier.Name, targetPet.Name, newTierLevel))
 	
-	NotificationService:SendNotification(player, string.format("Merged! %s is now %s tier!", pet1.Name, newTier.Name), NotificationService.Category.Success)
+	NotificationService:SendNotification(player, string.format("Merged! %s is now %s tier!", targetPet.Name, newTier.Name), NotificationService.Category.Success)
+	
+	-- Fire DataReady event to update client UI with new data
+	local dataToSend = DataService:GetPlayerData(player)
+	if dataToSend then
+		DataService.Client.DataReady:Fire(player, dataToSend)
+	end
 	
 	return true, nil, {
-		Name = pet1.Name,
-		ID = newPetID or petID1,
+		Name = targetPet.Name,
+		ID = newPetID or targetPetID,
 		Level = newTierLevel,
 		TierLevel = newTierLevel,
 		TierName = newTier.Name,
@@ -784,9 +876,12 @@ function PetService.Client:RequestUnequipPet(player: Player, petID: string): (bo
 	return PetService:UnequipPet(player, petID)
 end
 
--- Client request to merge two pets
-function PetService.Client:RequestMergePets(player: Player, petID1: string, petID2: string)
-	return PetService:MergePets(player, petID1, petID2)
+-- Client request to merge pets of the same tier level
+-- @param player Player - The player performing the merge
+-- @param targetPetID string - The ID of the pet to merge into (will be upgraded)
+-- @param copyCount number - The number of copies to use for merging (including the target pet)
+function PetService.Client:RequestMergePets(player: Player, targetPetID: string, copyCount: number)
+	return PetService:MergePets(player, targetPetID, copyCount)
 end
 
 -- Client request to get all pets
