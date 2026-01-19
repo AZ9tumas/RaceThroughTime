@@ -1,10 +1,19 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local StarAnimations = require(ReplicatedStorage.Modules.StarAnimations)
 local Stats = require(ReplicatedStorage.Modules.Stats)
+
+-- Collection effect constants
+local COLLECTION_EFFECT_DURATION = 0.25 -- seconds for star to fly to player
+local COLLECTION_EFFECT_TWEEN_INFO = TweenInfo.new(
+	COLLECTION_EFFECT_DURATION,
+	Enum.EasingStyle.Quad,
+	Enum.EasingDirection.In
+)
 
 local StarController = Knit.CreateController({
 	Name = "StarController",
@@ -119,6 +128,57 @@ local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: st
 	StarAnimations.StartAnimations(starClone)
 end
 
+-- Play collection effect: star flies towards player
+-- This is fail-proof - if instance doesn't exist or player moves, it still works
+local function PlayCollectionEffect(starId: string)
+	local starData = SpawnedStars[starId]
+	if not starData or not starData.Instance then
+		return -- No visual to animate
+	end
+	
+	local character = Knit.Player.Character
+	if not character then return end
+	
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+	
+	local starInstance = starData.Instance
+	
+	-- Stop the normal animations so they don't interfere
+	StarAnimations.StopAnimations(starInstance)
+	
+	-- Get target position (slightly in front of player chest)
+	local targetPosition = rootPart.Position + Vector3.new(0, 1, 0)
+	
+	-- Create the tween based on instance type
+	local tween
+	if starInstance:IsA("BasePart") then
+		-- Scale down and move to player
+		tween = TweenService:Create(starInstance, COLLECTION_EFFECT_TWEEN_INFO, {
+			Position = targetPosition,
+			Size = starInstance.Size * 0.3, -- Shrink as it approaches
+			Transparency = 0.5
+		})
+	elseif starInstance:IsA("Model") then
+		-- For models, we need to move the primary part or use PivotTo in a loop
+		local primaryPart = starInstance.PrimaryPart or starInstance:FindFirstChildWhichIsA("BasePart")
+		if primaryPart then
+			tween = TweenService:Create(primaryPart, COLLECTION_EFFECT_TWEEN_INFO, {
+				Position = targetPosition,
+				Size = primaryPart.Size * 0.3,
+				Transparency = 0.5
+			})
+		end
+	end
+	
+	if tween then
+		-- Play tween in protected call to handle if instance gets destroyed mid-tween
+		pcall(function()
+			tween:Play()
+		end)
+	end
+end
+
 -- Handle star spawn signal from server
 local function OnSpawnStars(starInfoList: { { Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number } })
 	Log(string.format("Received %d stars to spawn", #starInfoList))
@@ -174,6 +234,9 @@ local function CheckProximityCollection()
 		if distance <= collectionRadius then
 			-- Mark as being collected to prevent double collection
 			CollectionDebounce[starId] = true
+			
+			-- Play collection effect immediately (star flies to player)
+			PlayCollectionEffect(starId)
 			
 			-- Request collection from server
 			task.spawn(function()
