@@ -525,9 +525,9 @@ local function ToggleMergePetSelection(petIndex: number, petFrame: TextButton)
     UpdateMergeCountLabel()
 end
 
--- UpdateMergedUI function - displays the merge UI for a specific pet name
--- @param petName: string - The name of the pet type to show copies of (e.g., "Standard Pet")
-function handler.UpdateMergedUI(petName: string)
+-- UpdateMergedUI function - displays the merge UI for a specific pet ID
+-- @param petID: string - The unique ID of the target pet to merge into
+function handler.UpdateMergedUI(petID: string)
     -- Clean up previous connections
     for _, connection in ipairs(mergePetConnections) do
         connection:Disconnect()
@@ -544,38 +544,44 @@ function handler.UpdateMergedUI(petName: string)
     -- Reset selection state
     mergeSelectedPets = {}
     mergeSelectedCount = 0
-    mergePetName = petName
-    mergeSelectedPetID = nil
+    mergeSelectedPetID = petID
     
     -- Get the pet inventory from handler data
     local petInventory = handler.data.Inventory.PetInventory
     
-    -- Find all copies of the specified pet (by name)
-    local matchingPets = {} -- { index, petData }
-    local firstPet = nil
-    
-    for index, petData in ipairs(petInventory) do
-        if petData.Name == petName then
-            table.insert(matchingPets, { index = index, petData = petData })
-            if not firstPet then
-                firstPet = petData
-                mergeSelectedPetID = petData.ID -- Use first matching pet as the target
-            end
+    -- Find the target pet by ID to get its name for filtering copies
+    local targetPet = nil
+    for _, petData in ipairs(petInventory) do
+        if petData.ID == petID then
+            targetPet = petData
+            break
         end
     end
     
-    -- Get required copies for this tier level
-    if firstPet then
-        local tierLevel = firstPet.TierLevel or firstPet.Level or 1
-        mergeRequiredCopies = petMergeStatsM.GetCopiesRequired(tierLevel)
-        
-        -- Update merge button with gem cost
-        local gemCost = petMergeStatsM.GetMergeCost(tierLevel)
-        mergeButton.Text = "MERGE\n(" .. gemCost .. " GEMS)"
-    else
-        mergeRequiredCopies = 3 -- Default
-        mergeButton.Text = "MERGE"
+    if not targetPet then
+        warn("[InitUI] UpdateMergedUI: Target pet with ID '" .. tostring(petID) .. "' not found")
+        return
     end
+    
+    -- Store the pet name for display/reference
+    mergePetName = targetPet.Name
+    
+    -- Find all copies of the same pet (by name), excluding the target pet itself
+    local matchingPets = {} -- { index, petData }
+    
+    for index, petData in ipairs(petInventory) do
+        if petData.Name == targetPet.Name and petData.ID ~= petID then
+            table.insert(matchingPets, { index = index, petData = petData })
+        end
+    end
+    
+    -- Get required copies for this tier level (using the target pet)
+    local tierLevel = targetPet.TierLevel or targetPet.Level or 1
+    mergeRequiredCopies = petMergeStatsM.GetCopiesRequired(tierLevel)
+    
+    -- Update merge button with gem cost
+    local gemCost = petMergeStatsM.GetMergeCost(tierLevel)
+    mergeButton.Text = "MERGE\n(" .. gemCost .. " GEMS)"
     
     -- Update count label
     UpdateMergeCountLabel()
@@ -999,8 +1005,8 @@ handler._connections["PetModalMerge"] = petModalMergeButton.MouseButton1Click:Co
         return
     end
     
-    -- Open merge UI with the selected pet's name
-    handler.UpdateMergedUI(selectedPetData.Name)
+    -- Open merge UI with the selected pet's ID (specific pet to merge into)
+    handler.UpdateMergedUI(selectedPetData.ID)
     
     -- Hide the pet modal (keep inventory open so user can return)
     petModalDarkOverlay.Visible = false
