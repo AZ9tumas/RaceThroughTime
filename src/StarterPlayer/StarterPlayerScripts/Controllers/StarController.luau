@@ -25,6 +25,7 @@ local StarAssets = nil
 local PlayerStarsFolder = nil
 local ProximityCheckConnection = nil -- RenderStep connection for proximity checking
 local CollectionDebounce = {} -- [starId] = true (prevents double collection)
+local ActiveCollectionTweens = {} -- [starId] = { Tween: Tween, OriginalSize: Vector3, OriginalTransparency: number }
 
 -- Helper function for logging
 local function Log(message: string)
@@ -129,7 +130,7 @@ local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: st
 end
 
 -- Play collection effect: star flies towards player
--- This is fail-proof - if instance doesn't exist or player moves, it still works
+-- Returns true if effect started, along with tween info for cancellation if needed
 local function PlayCollectionEffect(starId: string)
 	local starData = SpawnedStars[starId]
 	if not starData or not starData.Instance then
@@ -152,7 +153,14 @@ local function PlayCollectionEffect(starId: string)
 	
 	-- Create the tween based on instance type
 	local tween
+	local targetPart
+	local originalSize
+	local originalTransparency
+	
 	if starInstance:IsA("BasePart") then
+		targetPart = starInstance
+		originalSize = starInstance.Size
+		originalTransparency = starInstance.Transparency
 		-- Scale down and move to player
 		tween = TweenService:Create(starInstance, COLLECTION_EFFECT_TWEEN_INFO, {
 			Position = targetPosition,
@@ -163,6 +171,9 @@ local function PlayCollectionEffect(starId: string)
 		-- For models, we need to move the primary part or use PivotTo in a loop
 		local primaryPart = starInstance.PrimaryPart or starInstance:FindFirstChildWhichIsA("BasePart")
 		if primaryPart then
+			targetPart = primaryPart
+			originalSize = primaryPart.Size
+			originalTransparency = primaryPart.Transparency
 			tween = TweenService:Create(primaryPart, COLLECTION_EFFECT_TWEEN_INFO, {
 				Position = targetPosition,
 				Size = primaryPart.Size * 0.3,
@@ -171,12 +182,67 @@ local function PlayCollectionEffect(starId: string)
 		end
 	end
 	
-	if tween then
+	if tween and targetPart then
+		-- Store tween info for potential cancellation
+		ActiveCollectionTweens[starId] = {
+			Tween = tween,
+			TargetPart = targetPart,
+			OriginalPosition = starData.Position,
+			OriginalSize = originalSize,
+			OriginalTransparency = originalTransparency,
+		}
+		
 		-- Play tween in protected call to handle if instance gets destroyed mid-tween
 		pcall(function()
 			tween:Play()
 		end)
 	end
+end
+
+-- Reset star after failed collection - cancel tween and restore to original state
+local function ResetStarAfterFailedCollection(starId: string)
+	local tweenData = ActiveCollectionTweens[starId]
+	local starData = SpawnedStars[starId]
+	
+	if not tweenData then return end
+	
+	-- Cancel the tween
+	pcall(function()
+		if tweenData.Tween then
+			tweenData.Tween:Cancel()
+		end
+	end)
+	
+	-- Reset the star visual to original state if it still exists
+	if starData and starData.Instance then
+		pcall(function()
+			local targetPart = tweenData.TargetPart
+			if targetPart then
+				-- Reset position, size, and transparency
+				if targetPart:IsA("BasePart") then
+					targetPart.Position = tweenData.OriginalPosition
+					targetPart.Size = tweenData.OriginalSize
+					targetPart.Transparency = tweenData.OriginalTransparency
+				end
+			end
+			
+			-- For models, reset the pivot
+			if starData.Instance:IsA("Model") then
+				starData.Instance:PivotTo(CFrame.new(tweenData.OriginalPosition))
+			end
+			
+			-- Restart the star animations
+			StarAnimations.StartAnimations(starData.Instance)
+		end)
+	end
+	
+	-- Clean up tween data
+	ActiveCollectionTweens[starId] = nil
+end
+
+-- Clean up tween data after successful collection
+local function CleanupCollectionTween(starId: string)
+	ActiveCollectionTweens[starId] = nil
 end
 
 -- Handle star spawn signal from server
@@ -194,6 +260,9 @@ end
 local function OnRemoveStar(starId: string)
 	local starData = SpawnedStars[starId]
 	if starData then
+		-- Clean up any active collection tween
+		CleanupCollectionTween(starId)
+		
 		-- Stop animations and destroy if instance exists
 		if starData.Instance then
 			StarAnimations.StopAnimations(starData.Instance)
@@ -213,6 +282,7 @@ local function OnRemoveAllStars()
 	end
 	table.clear(SpawnedStars)
 	table.clear(CollectionDebounce)
+	table.clear(ActiveCollectionTweens)
 end
 
 -- Check proximity to stars and collect if within range
@@ -243,7 +313,12 @@ local function CheckProximityCollection()
 				local StarService = Knit.GetService("StarService")
 				local success = StarService:CollectStar(starId)
 				
-				if not success then
+				if success then
+					-- Clean up tween data on success
+					CleanupCollectionTween(starId)
+				else
+					-- Reset the star back to original position if collection failed
+					ResetStarAfterFailedCollection(starId)
 					CollectionDebounce[starId] = nil
 				end
 			end)
