@@ -390,6 +390,18 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 			NotificationService.Category.Success,
 			5
 		)
+	else
+		-- Teleport player back to spawn area in current world (if not unlocking new world)
+		local spawnLocation = GetSpawnLocationForWorld(worldName)
+		if spawnLocation and character then
+			local rootPart = character:FindFirstChild("HumanoidRootPart")
+			if rootPart then
+				-- Teleport slightly above spawn to prevent clipping
+				local spawnCFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+				rootPart.CFrame = spawnCFrame
+				Log(string.format("Teleported player %s back to spawn in %s", player.Name, worldName))
+			end
+		end
 	end
 end
 
