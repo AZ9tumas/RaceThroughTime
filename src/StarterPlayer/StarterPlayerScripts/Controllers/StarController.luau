@@ -311,25 +311,20 @@ local function CheckProximityCollection()
 			-- Request collection from server
 			task.spawn(function()
 				local StarService = Knit.GetService("StarService")
-				local result: boolean
 				local promise = StarService:CollectStar(starId):andThen(function(result)
-					result = true
+					if result then
+						-- Clean up tween data on success
+						CleanupCollectionTween(starId)
+					else
+						-- Reset the star back to original position if collection failed
+						print("Collection failed")
+						ResetStarAfterFailedCollection(starId)
+						CollectionDebounce[starId] = nil
+					end
 				end):catch(function(err)
 					warn(string.format("[StarController]: Error collecting star %s: %s", starId, err))
-					result = false
-				end)
-
-				print(result, "collection result from server")
-				
-				if result then
-					-- Clean up tween data on success
-					CleanupCollectionTween(starId)
-				else
-					-- Reset the star back to original position if collection failed
-					print("Collection failed")
 					ResetStarAfterFailedCollection(starId)
-					CollectionDebounce[starId] = nil
-				end
+				end)
 			end)
 		end
 	end
