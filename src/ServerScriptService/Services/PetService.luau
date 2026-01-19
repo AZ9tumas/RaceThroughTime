@@ -533,9 +533,10 @@ function PetService:MergePets(player: Player, targetPetID: string, copyCount: nu
 	end
 	
 	-- Get current tier level and check if at max
-	local currentTierLevel = targetPet.TierLevel or targetPet.Level or 1
-	local petType = targetPet.PetType or "StandardPet"
-	local world = targetPet.World or "Main"
+	local currentTierLevel = targetPet.TierLevel or targetPet.Level
+	local petType = targetPet.PetType
+	local world = targetPet.World
+	print("Looking for", currentTierLevel, petType, world)
 	
 	if PetMergeStats.IsMaxTier(currentTierLevel) then
 		NotificationService:SendNotification(player, "Pet is already at maximum tier.", NotificationService.Category.Warning)
@@ -553,9 +554,10 @@ function PetService:MergePets(player: Player, targetPetID: string, copyCount: nu
 	-- Find all pets with the same tier level and pet type (for merging)
 	local matchingPets = {} -- { index, petData }
 	for index, petData in ipairs(inventory.PetInventory) do
-		local petTierLevel = petData.TierLevel or petData.Level or 1
-		local petPetType = petData.PetType or "StandardPet"
-		local petWorld = petData.World or "Main"
+		print(index, petData)
+		local petTierLevel = petData.TierLevel or petData.Level
+		local petPetType = petData.PetType
+		local petWorld = petData.World
 		
 		-- Must be same tier level, same pet type, and same world (if world restrictions enabled)
 		if petTierLevel == currentTierLevel and petPetType == petType then
