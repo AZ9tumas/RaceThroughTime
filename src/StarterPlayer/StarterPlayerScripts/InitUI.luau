@@ -126,6 +126,9 @@ local selectAllButton: TextButton = mergeMainFrame:WaitForChild("SelectAll")
 local mergeCloseButton: TextButton = mergeMainFrame:WaitForChild("Close")
 
 -- Merge UI state
+-- selection background color
+local DefaultBackgroundColorSelected = Color3.fromRGB(61, 61, 61)
+local DefaultBackgroundColorNotSelected = Color3.fromRGB(20, 23, 28)
 local mergeSelectedPetID: string? = nil -- The pet ID that is being merged into
 local mergeSelectedPets: { [number]: boolean } = {} -- Map of pet indices to selection state
 local mergeSelectedCount: number = 0
@@ -465,10 +468,14 @@ function handler.UpdatePetsInventory()
         -- Store pet data and index for later use
         local isEquipped = equippedSet[index] == true
 
+        petFrame.UIStroke.Color = statsM.TierColors[petData.TierLevel]
+
         if isEquipped then
-            petFrame.UIStroke.Color = Color3.fromRGB(85, 255, 0)
+            --petFrame.UIStroke.Color = Color3.fromRGB(85, 255, 0)
+            petFrame.BackgroundColor3 = DefaultBackgroundColorSelected
         else
-            petFrame.UIStroke.Color = Color3.fromRGB(49, 49, 49)
+            --petFrame.UIStroke.Color = Color3.fromRGB(49, 49, 49)
+            petFrame.BackgroundColor3 = DefaultBackgroundColorNotSelected
         end
 
         local fullPetData = {
@@ -549,7 +556,7 @@ function handler.UpdateMergedUI(petID: string)
     -- Get the pet inventory from handler data
     local petInventory = handler.data.Inventory.PetInventory
     
-    -- Find the target pet by ID to get its name for filtering copies
+    -- Find the target pet by ID to get its data
     local targetPet = nil
     for _, petData in ipairs(petInventory) do
         if petData.ID == petID then
@@ -570,7 +577,8 @@ function handler.UpdateMergedUI(petID: string)
     local matchingPets = {} -- { index, petData }
     
     for index, petData in ipairs(petInventory) do
-        if petData.Name == targetPet.Name and petData.ID ~= petID then
+        -- we do include the pet itself since that is not selected by default.
+        if petData.TierLevel == targetPet.TierLevel then
             table.insert(matchingPets, { index = index, petData = petData })
         end
     end
@@ -601,7 +609,7 @@ function handler.UpdateMergedUI(petID: string)
         -- Reset UIStroke to default color
         local uiStroke = petFrame:FindFirstChild("UIStroke")
         if uiStroke then
-            uiStroke.Color = Color3.fromRGB(49, 49, 49)
+            --uiStroke.Color = statsM.TierColors[targetPet.TierLevel] or Color3.fromRGB(49, 49, 49)
         end
         
         -- Store reference to petInfo for selection
@@ -630,7 +638,7 @@ local function SelectAllMergePets()
         if child.Name ~= "Template" and child.Name ~= "UIGridLayout" and child:IsA("TextButton") then
             local uiStroke = child:FindFirstChild("UIStroke")
             if uiStroke then
-                uiStroke.Color = Color3.fromRGB(49, 49, 49)
+                --uiStroke.Color = Color3.fromRGB(49, 49, 49)
             end
         end
     end
@@ -651,7 +659,7 @@ local function SelectAllMergePets()
                     
                     local uiStroke = child:FindFirstChild("UIStroke")
                     if uiStroke then
-                        uiStroke.Color = Color3.fromRGB(0, 255, 0) -- Green for selected
+                        --uiStroke.Color = Color3.fromRGB(0, 255, 0) -- Green for selected
                     end
                 end
             end

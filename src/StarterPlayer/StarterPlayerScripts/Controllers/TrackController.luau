@@ -691,6 +691,8 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	
 	-- Hide cancel button when track ends
 	trackCancelButton.Visible = false
+
+	print(trackData)
 	
 	-- Update results popup UI
 	local distanceTraveled = trackData.distanceTraveled
@@ -702,14 +704,14 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	end
 	
 	-- Set green fill width based on percentage (scale X from 0 to 1)
-	if greenFillFrame then
+	if greenFillFrame and trackData.cancelled == nil then
 		local fillPercentage = math.clamp(percentageToNextWorld / 100, 0, 1)
 		print("Fill percentage: ", fillPercentage)
 		greenFillFrame.Size = UDim2.new(fillPercentage, 0, greenFillFrame.Size.Y.Scale, greenFillFrame.Size.Y.Offset)
 	end
 	
 	-- Show the results popup
-	if resultsPopupUI then
+	if resultsPopupUI and not trackData.cancelled then
 		resultsPopupUI.Enabled = true
 		resultsFrame.Parent.Visible = true
 	end

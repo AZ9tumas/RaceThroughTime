@@ -283,6 +283,12 @@ Stats.Eggs = {
 	},
 }
 
+Stats.TierColors = {
+	[1] = Color3.fromRGB(255, 255, 255), -- Standard - White
+	[2] = Color3.fromRGB(0, 255, 255),   -- Premium - Cyan
+	[3] = Color3.fromRGB(255, 215, 0),   -- Limited Time - Gold
+}
+
 -- Pet Configuration
 -- Pet types with their base stats
 Stats.Pets = {
