@@ -225,8 +225,8 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 
 	-- Use StarCollectionPlayerRadius for player collection distance check
 	local distance = (rootPart.Position - starInfo.Position).Magnitude
-	if distance > Stats.StarCollectionPlayerRadius then
-		warn(string.format("[StarService]: Player %s is too far from star (distance: %.2f, max: %.2f)", player.Name, distance, Stats.StarCollectionPlayerRadius))
+	if distance > Stats.MaxStarCollectionPlayerRadius then
+		warn(string.format("[StarService]: Player %s is too far from star (distance: %.2f, max: %.2f)", player.Name, distance, Stats.MaxStarCollectionPlayerRadius))
 		return false
 	end
 

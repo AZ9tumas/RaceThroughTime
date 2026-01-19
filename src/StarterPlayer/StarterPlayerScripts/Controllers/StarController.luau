@@ -164,7 +164,7 @@ local function CheckProximityCollection()
 	if not rootPart then return end
 	
 	local playerPosition = rootPart.Position
-	local collectionRadius = Stats.StarCollectionPlayerRadius
+	local collectionRadius = Stats.MinStarCollectionPlayerRadius
 	
 	-- Check each star for proximity
 	for starId, starData in pairs(SpawnedStars) do

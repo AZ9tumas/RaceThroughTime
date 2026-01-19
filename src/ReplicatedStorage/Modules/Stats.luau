@@ -6,7 +6,8 @@
 local Stats = {}
 
 -- Player star collection radius (studs) - player can collect stars within this distance
-Stats.StarCollectionPlayerRadius = 20
+Stats.MaxStarCollectionPlayerRadius = 30
+Stats.MinStarCollectionPlayerRadius = 20
 
 Stats.BaseSpeed = 50
 
