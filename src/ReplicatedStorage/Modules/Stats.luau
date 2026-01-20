@@ -38,14 +38,14 @@ Stats.MaxStarCollectionRadius = 25
 Stats.StartingFuel = 100
 
 -- Maximum track run time in seconds
-Stats.MaxTrackTime = 30
+Stats.MaxTrackTime = 20
 
 -- Maximum physical speed limit (for body movers and lap detection)
 -- Calculated speed can exceed this for stats/distance tracking, but physical movement is capped
-Stats.MaxPhysicalSpeed = 250
+Stats.MaxPhysicalSpeed = 180
 
 -- Base acceleration for track movement (studs/sec²)
-Stats.BaseAcceleration = 15
+Stats.BaseAcceleration = 20
 
 -- World efficiency values for speed calculation
 Stats.WorldEfficiency = {
