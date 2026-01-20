@@ -48,7 +48,7 @@ local PetService = Knit.CreateService({
 	Client = {
 		PetEquipped = Knit.CreateSignal(), -- Signal to notify clients when a pet is equipped
 		PetUnequipped = Knit.CreateSignal(), -- Signal to notify clients when a pet is unequipped
-		PetStarCollected = Knit.CreateSignal(), -- Signal to notify client when a pet star is collected
+		--PetStarCollected = Knit.CreateSignal(), -- Signal to notify client when a pet star is collected
 	},
 })
 
@@ -860,10 +860,11 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 	Log(string.format("Pet collected star for player %s, gained %d fuel (multiplier: %.2f)", player.Name, finalFuelValue, fuelMultiplier))
 	
 	-- Notify client that star was collected
+	--[[
 	self.Client.PetStarCollected:Fire(player, {
 		StarId = starId,
 		FuelValue = finalFuelValue,
-	})
+	})]]
 	
 	return true, nil
 end
