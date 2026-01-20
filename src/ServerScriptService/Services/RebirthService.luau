@@ -186,7 +186,18 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 					Name = petConfig.Name .. " (Rebirth)",
 					ID = petID,
 					PetType = petType,
-					World = nextRebirth.World,
+					Multiplier = petConfig.Multiplier,
+					FuelBonus = petConfig.FuelBonus or 1.1,
+					PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
+					RoamRange = petConfig.RoamRange or 30,
+					StarCollectionRadius = petConfig.StarCollectionRadius or 5,
+					Velocity = petConfig.Velocity or 20,
+					World = nextRebirth.World or "Main",
+					Level = petConfig.BaseTierLevel or 1,
+					TierLevel = petConfig.BaseTierLevel or 1,
+					TierName = "Common",
+					Rarity = "Rebirth",
+					ObtainedAt = os.time(),
 				}
 			end
 		end

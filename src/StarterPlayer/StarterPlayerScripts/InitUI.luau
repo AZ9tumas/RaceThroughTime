@@ -468,6 +468,7 @@ function handler.UpdatePetsInventory()
         -- Store pet data and index for later use
         local isEquipped = equippedSet[index] == true
 
+        print(petData.TierLevel, petData)
         petFrame.UIStroke.Color = statsM.TierColors[petData.TierLevel]
 
         if isEquipped then
@@ -908,11 +909,7 @@ handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connec
                 handler.data.Inventory.PetInventory = {}
             end
             
-            table.insert(handler.data.Inventory.PetInventory, {
-                ID = petInfo.ID,
-                Name = petInfo.Name,
-                Multiplier = petInfo.Multiplier,
-            })
+            table.insert(handler.data.Inventory.PetInventory, petInfo)
             
             -- Update the pets inventory UI if it's visible
             handler.UpdatePetsInventory()

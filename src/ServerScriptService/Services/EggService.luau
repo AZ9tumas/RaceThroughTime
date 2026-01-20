@@ -182,6 +182,7 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	
 	-- Fire signal to client
 	EggService.Client.PetObtained:Fire(player, petInfo)
+	DataService.Client.DataReady:Fire(player)
 	
 	return true, nil, petInfo
 end
