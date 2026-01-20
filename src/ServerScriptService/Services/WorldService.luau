@@ -138,9 +138,9 @@ function WorldService:GiveWorldToPlayer(player: Player, worldName: string): bool
 	
 	Log(string.format("Unlocked world '%s' for player %s", worldName, player.Name))
 	
-	-- Update client data
+	-- Update client data using DataReady to ensure client has latest information
 	local updatedData = DataService:GetPlayerData(player)
-	self.Client.DataUpdated:Fire(player, updatedData)
+	DataService.Client.DataReady:Fire(player, updatedData)
 	
 	-- Teleport player to the new world
 	task.spawn(function()
