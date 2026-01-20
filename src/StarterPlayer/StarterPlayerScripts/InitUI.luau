@@ -606,6 +606,11 @@ function handler.UpdateMergedUI(petID: string)
         if nameLabel then
             nameLabel.Text = petInfo.petData.Name or "Unknown Pet"
         end
+
+        local multiplier: TextLabel = petFrame:FindFirstChild("Multiplier")
+        if multiplier then
+            multiplier.Text = "x" .. petInfo.petData.Multiplier
+        end
         
         -- Reset UIStroke to default color
         local uiStroke = petFrame:FindFirstChild("UIStroke")

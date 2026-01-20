@@ -5,11 +5,34 @@
 
 local Stats = {}
 
+export type Pet = {
+	Name: string,
+	PetType: string?,
+	Multiplier: number,
+	FuelBonus: number?,
+	PickupRangeBonus: number?,
+	RoamRange: number?,
+	StarCollectionRadius: number?,
+	Velocity: number?,
+	World: string?,
+	Level: number?,
+	TierLevel: number?,
+	TierName: string?,
+	Rarity: string?,
+	ID: string?,
+	Equipped: boolean?,
+}
+
 -- Player star collection radius (studs) - player can collect stars within this distance
 Stats.MaxStarCollectionPlayerRadius = 30
 Stats.MinStarCollectionPlayerRadius = 20
+Stats.BaseSpeed = 50 -- base track speed
 
-Stats.BaseSpeed = 50
+-- pet max limits
+Stats.MaxPetSpeed = 35
+Stats.MaxPetRoamRange = 150
+Stats.MaxPickupRangeBonus = 3
+Stats.MaxStarCollectionRadius = 25
 
 -- Starting fuel for new players and after rebirth
 Stats.StartingFuel = 100
@@ -283,11 +306,17 @@ Stats.Eggs = {
 	},
 }
 
-Stats.TierColors = {
+Stats.TierColors = setmetatable({
 	[1] = Color3.fromRGB(255, 255, 255), -- Standard - White
 	[2] = Color3.fromRGB(0, 255, 255),   -- Premium - Cyan
 	[3] = Color3.fromRGB(255, 215, 0),   -- Limited Time - Gold
-}
+	[4] = Color3.fromRGB(255, 0, 255),   -- Exclusive - Magenta
+}, {
+	__index = function()
+		warn("Could not find tier color, defaulting to White")
+		return Color3.fromRGB(255, 255, 255) -- Default to White
+	end,
+})
 
 -- Pet Configuration
 -- Pet types with their base stats

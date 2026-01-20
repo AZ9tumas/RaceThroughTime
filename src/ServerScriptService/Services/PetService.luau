@@ -122,6 +122,16 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 	local roamRange = petData.RoamRange or petStats.RoamRange or 30
 	local starCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius or 5
 	local petVelocity = petData.Velocity or petStats.Velocity or 20
+	
+	-- Cap velocity to 50
+	petVelocity = math.min(petVelocity or 20, Stats.MaxPetSpeed)
+
+	-- Cap roam range
+	roamRange = math.min(roamRange or 30, Stats.MaxPetRoamRange)
+
+	-- Cap star collection radius
+	starCollectionRadius = math.min(starCollectionRadius or 5, Stats.MaxStarCollectionRadius)
+	
 	local multiplier = petData.Multiplier or petStats.Multiplier or 1.0
 	
 	if not petModel then
