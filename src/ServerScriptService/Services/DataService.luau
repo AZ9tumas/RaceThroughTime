@@ -25,6 +25,7 @@ local Template = {
 		Points = 0,
 		Rebirths = 0,
 		Fuel = 100, -- Starting fuel for players
+		Stars = 0,  -- Total star equivalents collected (used to calculate fuel)
 	},
 	Progression = {
 		CurrentWorld = "Main",

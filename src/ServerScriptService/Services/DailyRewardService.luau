@@ -53,11 +53,15 @@ local function ApplyRewardItems(player: Player, items: { { ItemType: string, Qua
 				return currencies
 			end)
 		elseif itemType == "Fuel" then
-			local Stats = require(ReplicatedStorage.Modules.Stats)
+			-- In the new system, fuel is calculated from Stars
+			-- Fuel rewards now add to Stars count and recalculate fuel
 			DataService:Update(player, "Stats", function(stats)
-				stats.Fuel = (stats.Fuel or 0) + quantity
+				stats.Stars = (stats.Stars or 0) + quantity
 				return stats
 			end)
+			-- Recalculate fuel based on new Stars count
+			local StarService = Knit.GetService("StarService")
+			StarService:RecalculateFuel(player)
 		elseif itemType == "Pet" and item.PetId then
 			local Stats = require(ReplicatedStorage.Modules.Stats)
 			local petConfig = Stats.Pets[item.PetId]

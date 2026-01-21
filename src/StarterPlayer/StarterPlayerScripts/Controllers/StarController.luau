@@ -69,7 +69,7 @@ local function GetStarAssets(): Folder?
 end
 
 -- Spawn a single star at the given position
-local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number })
+local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: string, Index: number })
 	local starsFolder = GetStarsFolder()
 	if not starsFolder then
 		-- Still track the star for collection even without visual
@@ -246,7 +246,7 @@ local function CleanupCollectionTween(starId: string)
 end
 
 -- Handle star spawn signal from server
-local function OnSpawnStars(starInfoList: { { Position: Vector3, ID: string, StarName: string, FuelValue: number, Index: number } })
+local function OnSpawnStars(starInfoList: { { Position: Vector3, ID: string, StarName: string, Index: number } })
 	Log(string.format("Received %d stars to spawn", #starInfoList))
 
 	for _, starInfo in ipairs(starInfoList) do

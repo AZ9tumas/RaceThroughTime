@@ -400,6 +400,10 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 		})
 	end
 	
+	-- Recalculate fuel since multiplier has changed
+	local StarService = Knit.GetService("StarService")
+	StarService:RecalculateFuel(player)
+	
 	return true, nil
 end
 
@@ -455,6 +459,10 @@ function PetService:UnequipPet(player: Player, petID: string): (boolean, string?
 			PetIndex = petIndex,
 		})
 	end
+	
+	-- Recalculate fuel since multiplier has changed
+	local StarService = Knit.GetService("StarService")
+	StarService:RecalculateFuel(player)
 	
 	return true, nil
 end
@@ -846,34 +854,28 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 	end
 	
 	-- Use existing star collection logic
-	local fuelValue = StarService:CollectStarServer(player, starId)
+	local starEquivalent = StarService:CollectStarServer(player, starId)
 	
-	if not fuelValue then
+	if not starEquivalent then
 		return false, "Collection failed"
 	end
 	
-	-- Get rebirth multiplier
-	local stats = DataService:Get(player, "Stats")
-	local rebirthLevel = (stats and stats.Rebirths) or 0
-	local rebirthCashMultiplier = RebirthStats.CalculateTotalCashMultiplier(rebirthLevel)
-	
-	-- Calculate fuel with pet multiplier and rebirth bonus
-	local fuelMultiplier = Stats.CalculateFuelMultiplier(equippedPets) * rebirthCashMultiplier * Stats.CalculateMultipliers()
-	local finalFuelValue = math.floor(fuelValue * fuelMultiplier)
-	
-	-- Add fuel to player
-	DataService:Update(player, "Stats", function(stats)
-		stats.Fuel = stats.Fuel + finalFuelValue
-		return stats
+	-- Add star equivalents to player's Stars count and recalculate fuel
+	DataService:Update(player, "Stats", function(currentStats)
+		currentStats.Stars = (currentStats.Stars or 0) + starEquivalent
+		return currentStats
 	end)
 	
-	Log(string.format("Pet collected star for player %s, gained %d fuel (multiplier: %.2f)", player.Name, finalFuelValue, fuelMultiplier))
+	-- Recalculate fuel based on new Stars count and current multipliers
+	StarService:RecalculateFuel(player)
+	
+	Log(string.format("Pet collected star for player %s, gained %d star equivalents", player.Name, starEquivalent))
 	
 	-- Notify client that star was collected
 	--[[
 	self.Client.PetStarCollected:Fire(player, {
 		StarId = starId,
-		FuelValue = finalFuelValue,
+		StarEquivalent = starEquivalent,
 	})]]
 	
 	return true, nil

@@ -111,13 +111,14 @@ Stats.StarProbabilities = {
 	Gems = 0.04,         -- 4% chance (Rare gem)
 }
 
--- Fuel bonuses for each star type
-Stats.StarFuelValues = {
-	YellowStar = 50,     -- Low fuel bonus
-	BlueStar = 100,       -- Medium fuel bonus
-	PurpleStar = 250,     -- High fuel bonus
-	WhiteStar = 1000,     -- Very high fuel bonus
-	Gems = 0,             -- Gems don't give fuel
+-- Star equivalents for fuel calculation (1 star = 1 unit of fuel base)
+-- Total fuel = Stars * multipliers (pet + rebirth + other multipliers)
+Stats.StarEquivalents = {
+	YellowStar = 1,       -- Common star equivalent
+	BlueStar = 2,         -- Uncommon star equivalent
+	PurpleStar = 3,       -- Rare star equivalent
+	WhiteStar = 5,        -- Legendary star equivalent
+	Gems = 0,             -- Gems don't contribute to fuel
 }
 
 -- Gem values for gem-type stars
@@ -358,5 +359,18 @@ end
 
 -- Maximum number of pets that can be equipped at once
 Stats.MaxEquippedPets = 3
+
+-- Calculate total fuel from collected stars and multipliers
+-- Total fuel = Stars * (petMultiplier + rebirthMultiplier + baseMultiplier)
+-- @param stars number - Total star equivalents collected by the player
+-- @param petMultiplier number - Fuel multiplier from equipped pets
+-- @param rebirthMultiplier number - Fuel multiplier from rebirth bonuses  
+-- @param otherMultiplier number? - Other multipliers (VIP, boosts, etc.) defaults to 1.0
+-- @return number - The calculated total fuel
+function Stats.CalculateFuelFromStars(stars: number, petMultiplier: number, rebirthMultiplier: number, otherMultiplier: number?): number
+	local baseMultiplier = otherMultiplier or 1.0
+	local totalMultiplier = petMultiplier + rebirthMultiplier + baseMultiplier
+	return math.floor(stars * totalMultiplier)
+end
 
 return Stats
