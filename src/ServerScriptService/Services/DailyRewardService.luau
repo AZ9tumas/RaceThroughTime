@@ -59,18 +59,35 @@ local function ApplyRewardItems(player: Player, items: { { ItemType: string, Qua
 				return stats
 			end)
 		elseif itemType == "Pet" and item.PetId then
-			DataService:Update(player, "Inventory", function(inventory)
-				if not inventory.PetInventory then
-					inventory.PetInventory = {}
-				end
-				-- Add pet with unique ID
-				local petEntry = {
-					PetId = item.PetId,
-					ObtainedAt = os.time(),
-				}
-				table.insert(inventory.PetInventory, petEntry)
-				return inventory
-			end)
+			local Stats = require(ReplicatedStorage.Modules.Stats)
+			local petConfig = Stats.Pets[item.PetId]
+			
+			if petConfig then
+				DataService:Update(player, "Inventory", function(inventory)
+					if not inventory.PetInventory then
+						inventory.PetInventory = {}
+					end
+					-- Add pet with unique ID and full stats
+					local petEntry = {
+						PetType = item.PetId,
+						Name = petConfig.Name,
+						Multiplier = petConfig.Multiplier,
+						FuelBonus = petConfig.FuelBonus or 1.1,
+						PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
+						RoamRange = petConfig.RoamRange,
+						StarCollectionRadius = petConfig.StarCollectionRadius or 5,
+						Velocity = petConfig.Velocity or 20,
+						World = petConfig.World or "Main",
+						Level = petConfig.BaseTierLevel or 1,
+						TierLevel = petConfig.BaseTierLevel or 1,
+						TierName = "Common",
+						Rarity = petConfig.Rarity or "Standard",
+						ObtainedAt = os.time(),
+					}
+					table.insert(inventory.PetInventory, petEntry)
+					return inventory
+				end)
+			end
 		end
 	end
 end

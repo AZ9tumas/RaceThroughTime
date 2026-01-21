@@ -1,14 +1,14 @@
 --[[
 	TrackService
-	Handles track teleportation and player tracking for the racing system.
+	Handles track validation and reward processing for the racing system.
 	Players request to start running on a track, get teleported to the closest gate,
-	and are tracked while running. Uses circular movement with body movers.
+	and movement is handled client-side using BindToRenderStep. Server validates
+	and processes rewards when client requests to end track run.
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
@@ -19,15 +19,12 @@ local TrackService = Knit.CreateService({
 	Client = {
 		TrackStarted = Knit.CreateSignal(), -- Signal to notify client when track run starts
 		TrackEnded = Knit.CreateSignal(), -- Signal to notify client when track run ends
-		LapCompleted = Knit.CreateSignal(), -- Signal to notify client when a lap is completed
-		TrackProgressUpdate = Knit.CreateSignal(), -- Signal to send progress updates to client for effects
 	},
 })
 
 -- Private state
-local PlayersOnTrack = {} -- [Player.UserId] = { player, worldName, startTime, gateIndex, totalDistance, currentAngle, initialSpeed, acceleration, maxSpeed, totalTime, distanceTraveled, startAngle, lapCount, elapsedTime }
+local PlayersOnTrack = {} -- [Player.UserId] = { player, worldName, startTime, totalDistance, initialSpeed, acceleration, maxSpeed, totalTime, startAngle, worldRadius, trackCenter }
 local PlayerRequestDebounce = {} -- [Player.UserId] = lastRequestTime (for rate limiting)
-local HeartbeatConnection = nil -- Note: Connection persists for service lifetime, no cleanup needed
 local DEBOUNCE_COOLDOWN = 1 -- Minimum seconds between requests
 
 -- Helper function for logging
@@ -303,8 +300,9 @@ function TrackService:GetPlayerTrackData(player: Player)
 	return PlayersOnTrack[player.UserId]
 end
 
--- End track run for a player
-function TrackService:EndTrackRun(player: Player)
+-- End track run for a player (called by server or via RequestTrackEnd from client)
+-- distanceTraveled is provided by the client but validated against server-side parameters
+function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number?, worldUnlocked: boolean?)
 	local userId = player.UserId
 	local trackData = PlayersOnTrack[userId]
 	
@@ -316,8 +314,14 @@ function TrackService:EndTrackRun(player: Player)
 		CleanupBodyMovers(character)
 	end
 	
-	-- Calculate rewards based on distance traveled
-	local distanceTraveled = trackData.distanceTraveled or 0
+	-- Validate client-provided distance against server-side maximum
+	-- The client cannot claim more distance than what's possible given the track parameters
+	local maxPossibleDistance = trackData.totalDistance
+	local distanceTraveled = clientDistanceTraveled or 0
+	
+	-- Clamp distance to the maximum possible (prevents cheating)
+	distanceTraveled = math.clamp(distanceTraveled, 0, maxPossibleDistance)
+	
 	local worldName = trackData.worldName
 	
 	-- Get rebirth cash multiplier
@@ -345,12 +349,15 @@ function TrackService:EndTrackRun(player: Player)
 	local WorldService = Knit.GetService("WorldService")
 	local nextWorld = WorldService:GetNextWorld(worldName)
 	local unlockRequirement = nextWorld and Stats.WorldUnlockRequirements[nextWorld] or nil
-	print("requirement: ", unlockRequirement)
 	
 	local percentageToNextWorld = 0
 	if unlockRequirement and unlockRequirement > 0 then
 		percentageToNextWorld = math.clamp((distanceTraveled / unlockRequirement) * 100, 0, 100)
 	end
+	
+	-- Check if player reached world unlock threshold (only if world exists in workspace)
+	local worldExistsInWorkspace = nextWorld and Workspace:FindFirstChild(nextWorld)
+	local shouldUnlockWorld = worldUnlocked and unlockRequirement and distanceTraveled >= unlockRequirement and worldExistsInWorkspace
 	
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
@@ -367,160 +374,40 @@ function TrackService:EndTrackRun(player: Player)
 	local StarService = Knit.GetService("StarService")
 	StarService:RemoveAllStarsForPlayer(player)
 	StarService:Start(player)
+	
+	-- Handle world unlock if applicable
+	if shouldUnlockWorld then
+		Log(string.format("Player %s unlocked world %s with distance %.2f", player.Name, nextWorld, distanceTraveled))
+		
+		-- Unlock the new world for the player (this also teleports and updates client data)
+		WorldService:GiveWorldToPlayer(player, nextWorld)
+		
+		-- Send notification about world unlock
+		local NotificationService = Knit.GetService("NotificationService")
+		NotificationService:SendNotification(
+			player,
+			string.format("🌟 Congratulations! You unlocked %s! 🌟", nextWorld),
+			NotificationService.Category.Success,
+			5
+		)
+	else
+		-- Teleport player back to spawn area in current world (if not unlocking new world)
+		local spawnLocation = GetSpawnLocationForWorld(worldName)
+		if spawnLocation and character then
+			local rootPart = character:FindFirstChild("HumanoidRootPart")
+			if rootPart then
+				-- Teleport slightly above spawn to prevent clipping
+				local spawnCFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+				rootPart.CFrame = spawnCFrame
+				Log(string.format("Teleported player %s back to spawn in %s", player.Name, worldName))
+			end
+		end
+	end
 end
 
 -- Remove player from track (alias for EndTrackRun)
 function TrackService:RemovePlayerFromTrack(player: Player)
 	self:EndTrackRun(player)
-end
-
--- Main heartbeat update for all players on track
-local function OnHeartbeat(dt: number)
-	for userId, trackData in pairs(PlayersOnTrack) do
-		local player = trackData.player
-		if not player or not player:IsDescendantOf(Players) then
-			PlayersOnTrack[userId] = nil
-			continue
-		end
-		
-		local character = player.Character
-		if not character then continue end
-		
-		local rootPart = character:FindFirstChild("HumanoidRootPart")
-		if not rootPart then continue end
-		
-		-- Get body movers
-		local alignPosition = rootPart:FindFirstChild("TrackAlignPosition")
-		local alignOrientation = rootPart:FindFirstChild("TrackAlignOrientation")
-		
-		if not alignPosition or not alignOrientation then continue end
-		
-		-- Get world-specific values
-		local worldName = trackData.worldName or "Main"
-		local radius = Stats.WorldRadius[worldName] or Stats.WorldRadius.Main
-		local center = GetTrackCenterForWorld(worldName)
-		
-		if not center then continue end
-		
-		-- Update elapsed time
-		trackData.elapsedTime = trackData.elapsedTime + dt
-		
-		-- Calculate current speed using acceleration (v = v0 + a*t, capped at maxSpeed)
-		-- This is the "calculated speed" used for stats and distance tracking
-		local calculatedSpeed = Stats.CalculateCurrentSpeed(
-			trackData.initialSpeed,
-			trackData.acceleration,
-			trackData.maxSpeed,
-			trackData.elapsedTime
-		)
-		
-		-- Physical speed is capped at MaxPhysicalSpeed for body movers and lap detection
-		-- This prevents high-speed physics issues while still tracking full distance for stats
-		local physicalSpeed = math.min(calculatedSpeed, Stats.MaxPhysicalSpeed)
-		
-		-- Convert linear speed to angular velocity for polar coordinate movement
-		-- ω = v / r (angular velocity = linear velocity / radius)
-		-- Use physical speed for actual movement to prevent drifting/cutting corners
-		local angularVelocity = Stats.LinearSpeedToAngularVelocity(physicalSpeed, radius)
-		
-		-- Store previous angle for lap detection
-		local previousAngle = trackData.currentAngle
-		
-		-- Update angle based on time delta (using physical speed for lap detection)
-		trackData.currentAngle = trackData.currentAngle + (angularVelocity * dt)
-		
-		-- Calculate distance traveled this frame using CALCULATED speed (not physical)
-		-- This allows stats to reflect the true distance even if physical movement is capped
-		local distanceThisFrame = calculatedSpeed * dt
-		trackData.distanceTraveled = trackData.distanceTraveled + distanceThisFrame
-		
-		-- Check for lap completion (crossed the starting angle after completing a full circle)
-		-- A lap is complete when the angle has increased by 2*PI from the start
-		local startAngle = trackData.startAngle
-		local lapThreshold = startAngle + (2 * math.pi * (trackData.lapCount + 1))
-		if trackData.currentAngle >= lapThreshold then
-			trackData.lapCount = trackData.lapCount + 1
-			TrackService.Client.LapCompleted:Fire(player, {
-				lapNumber = trackData.lapCount,
-			})
-			Log(string.format("Player %s completed lap %d", player.Name, trackData.lapCount))
-		end
-		
-		-- Update distance NumberValue for client feedback
-		local distanceValue = rootPart:FindFirstChild("TrackDistanceTraveled")
-		if distanceValue then
-			distanceValue.Value = trackData.distanceTraveled
-		end
-		
-		-- Get next world and unlock requirement for auto-unlock
-		local WorldService = Knit.GetService("WorldService")
-		local nextWorld = WorldService:GetNextWorld(worldName)
-		local unlockRequirement = nextWorld and Stats.WorldUnlockRequirements[nextWorld] or nil
-		unlockRequirement = workspace:FindFirstChild(nextWorld) and unlockRequirement or nil
-		
-		-- Calculate progress toward world unlock and send to client for effects
-		local progressPercent = 0
-		if unlockRequirement then
-			progressPercent = trackData.distanceTraveled / unlockRequirement
-			
-			-- Send progress update to client for visual effects (fire, neon, etc.)
-			TrackService.Client.TrackProgressUpdate:Fire(player, {
-				worldName = worldName,
-				progressPercent = progressPercent,
-				distanceTraveled = trackData.distanceTraveled,
-				unlockRequirement = unlockRequirement,
-			})
-			
-			-- Check if player has reached world unlock threshold
-			if trackData.distanceTraveled >= unlockRequirement then
-				Log(string.format("Player %s unlocked world %s with distance %.2f", player.Name, nextWorld, trackData.distanceTraveled))
-				
-				-- End the track run first (this cleans up body movers, etc.)
-				TrackService:EndTrackRun(player)
-				
-				-- Unlock the new world for the player (this also teleports and updates client data)
-				WorldService:GiveWorldToPlayer(player, nextWorld)
-				
-				-- Send notification about world unlock
-				local NotificationService = Knit.GetService("NotificationService")
-				NotificationService:SendNotification(
-					player,
-					string.format("🌟 Congratulations! You unlocked %s! 🌟", nextWorld),
-					NotificationService.Category.Success,
-					5
-				)
-				
-				continue
-			end
-		end
-		
-		-- Check if player has exceeded max time OR completed their run (distance reached)
-		-- Use small epsilon tolerance for floating point precision
-		if trackData.elapsedTime >= (trackData.totalTime - 0.001) or trackData.distanceTraveled >= trackData.totalDistance then
-			TrackService:EndTrackRun(player)
-			continue
-		end
-		
-		-- Calculate new position using UpdateCircularPosition for consistency
-		local targetCFrame, targetPosition = UpdateCircularPosition(center, radius, trackData.currentAngle, center.Y + 5, worldName)
-		
-		-- Dynamically adjust body mover responsiveness based on physical speed
-		-- At higher speeds, we need higher responsiveness to prevent drifting toward center
-		-- Base responsiveness of 50, increases by 1 for every 10 studs/sec of speed
-		local baseResponsiveness = 50
-		local speedFactor = math.clamp(physicalSpeed / 10, 1, 20) -- Max 20x boost
-		local dynamicResponsiveness = baseResponsiveness + (speedFactor * 10)
-		
-		-- Also adjust MaxVelocity to match physical speed (with overhead)
-		local dynamicMaxVelocity = math.max(500, physicalSpeed * 2)
-		
-		alignPosition.Responsiveness = dynamicResponsiveness
-		alignPosition.MaxVelocity = dynamicMaxVelocity
-		
-		-- Update body mover targets
-		alignPosition.Position = targetPosition
-		alignOrientation.CFrame = targetCFrame
-	end
 end
 
 -- Client request to start running on the track
@@ -621,7 +508,12 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		lapCount = 0, -- Track number of completed laps
 	}
 	
-	-- Fire signal to client that track has started (client will apply visual effects)
+	-- Get next world unlock requirement to send to client
+	local WorldService = Knit.GetService("WorldService")
+	local nextWorld = WorldService:GetNextWorld(worldName)
+	local unlockRequirement = nextWorld and Stats.WorldUnlockRequirements[nextWorld] or nil
+	
+	-- Fire signal to client that track has started (client will handle movement and effects)
 	TrackService.Client.TrackStarted:Fire(player, {
 		gateName = closestGate,
 		totalDistance = trackParams.totalDistance,
@@ -630,7 +522,12 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		maxSpeed = trackParams.maxSpeed,
 		totalTime = trackParams.totalTime,
 		startAngle = initialAngle,
-		worldName = worldName, -- Include worldName so client can apply effects
+		worldName = worldName,
+		worldRadius = radius,
+		trackCenter = center,
+		maxPhysicalSpeed = Stats.MaxPhysicalSpeed,
+		nextWorld = nextWorld,
+		unlockRequirement = unlockRequirement,
 	})
 	
 	return true, nil
@@ -674,6 +571,36 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 	}
 end
 
+-- Client request to end track run (with distance traveled and world unlock info)
+function TrackService.Client:RequestTrackEnd(player: Player, distanceTraveled: number, worldUnlocked: boolean): (boolean, string?)
+	local userId = player.UserId
+	local trackData = PlayersOnTrack[userId]
+	
+	-- Check if player is on the track
+	if not trackData then
+		return false, "Not currently on track"
+	end
+	
+	-- Validate distance is a number and log suspicious requests
+	if type(distanceTraveled) ~= "number" then
+		warn(string.format("[TrackService]: Player %s sent invalid distance type: %s", player.Name, type(distanceTraveled)))
+		distanceTraveled = 0
+	elseif distanceTraveled < 0 then
+		warn(string.format("[TrackService]: Player %s sent negative distance: %.2f", player.Name, distanceTraveled))
+		distanceTraveled = 0
+	elseif distanceTraveled > trackData.totalDistance * 1.1 then
+		-- Allow small tolerance (10%) but log if significantly over
+		warn(string.format("[TrackService]: Player %s sent suspicious distance: %.2f (max expected: %.2f)", player.Name, distanceTraveled, trackData.totalDistance))
+	end
+	
+	Log(string.format("Player %s requested track end with distance: %.2f, worldUnlocked: %s", player.Name, distanceTraveled, tostring(worldUnlocked)))
+	
+	-- Call EndTrackRun with the client-provided distance (validated inside)
+	TrackService:EndTrackRun(player, distanceTraveled, worldUnlocked)
+	
+	return true, nil
+end
+
 -- Clean up when player leaves
 local function OnPlayerRemoving(player: Player)
 	local character = player.Character
@@ -692,8 +619,7 @@ function TrackService:KnitInit()
 end
 
 function TrackService:KnitStart()
-	-- Start the heartbeat loop for circular movement
-	HeartbeatConnection = RunService.Heartbeat:Connect(OnHeartbeat)
+	-- Movement is now handled client-side via BindToRenderStep
 	Log("TrackService started")
 end
 

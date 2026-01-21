@@ -7,6 +7,9 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local modules = ReplicatedStorage:WaitForChild("Modules")
+local statsM = require(modules:WaitForChild("Stats"))
+
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Promise = require(ReplicatedStorage.Packages.Promise)
 local ProfileStore = require(script.Parent.Parent.Modules.ProfileStore)
@@ -141,6 +144,20 @@ local function setupPets(player: Player, data: typeof(Template))
 						if petID then
 							petCopy.ID = petID
 						end
+						
+						-- Cap max velocity on load
+						petCopy.Velocity = math.min(petCopy.Velocity or 20, statsM.MaxPetSpeed)
+
+						-- Cap max roam range on load
+						petCopy.RoamRange = math.min(petCopy.RoamRange or 30, statsM.MaxPetRoamRange)
+
+						-- Cap max pickup range bonus on load
+						petCopy.PickupRangeBonus = math.min(petCopy.PickupRangeBonus or 1.0, statsM.MaxPickupRangeBonus)
+
+						-- Cap max star collection radius on load
+						petCopy.StarCollectionRadius = math.min(petCopy.StarCollectionRadius or 5, statsM.MaxStarCollectionRadius)
+						
+						
 						petInventoryCopy[index] = petCopy
 					end
 					inventoryCopy[invKey] = petInventoryCopy

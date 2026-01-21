@@ -4,6 +4,7 @@ local ContextActionService = game:GetService("ContextActionService")
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
 -- ui
 local player = Players.LocalPlayer
@@ -15,6 +16,10 @@ local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 local liveMainUI: ScreenGui = PlayerGui:WaitForChild("UI_LiveDistance")
 local distanceCounter: TextLabel = liveMainUI:WaitForChild("DistanceCounter")
 
+-- Track cancel button UI
+local trackCancelUI: ScreenGui = PlayerGui:WaitForChild("UI_CancelTrackButton")
+local trackCancelButton: TextButton = trackCancelUI:WaitForChild("Track_Cancel")
+
 -- Results popup UI
 local resultsPopupUI: ScreenGui = PlayerGui:WaitForChild("UI_ResultsPopup")
 local resultsFrame: Frame = resultsPopupUI:WaitForChild("Frame"):WaitForChild("Frame")
@@ -25,6 +30,7 @@ local greenFillFrame: Frame = progressFrame:WaitForChild("Frame"):WaitForChild("
 local closeButton: TextButton = resultsFrame:WaitForChild("TextButton")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local Stats = require(ReplicatedStorage.Modules.Stats)
 
 -- Reference to InitUI module for debounce reset
 local InitUI = nil
@@ -38,6 +44,18 @@ local TRACK_END_LOADING_DELAY = 0.8 -- Seconds to show loading screen after trac
 -- Lighting effect settings
 local LIGHTING_TWEEN_TIME = 0.5
 
+-- Raycast parameters for ground detection
+local RAYCAST_HEIGHT_OFFSET = 50
+local RAYCAST_DISTANCE = 100
+
+-- RenderStep binding name
+local RENDER_STEP_BINDING = "TrackController_Movement"
+
+-- Movement calculation constants
+local TIME_EPSILON = 0.001 -- Epsilon for floating point time comparison
+local SPEED_FACTOR_DIVISOR = 10 -- Divisor for speed factor calculation
+local MAX_SPEED_FACTOR = 20 -- Maximum speed factor for responsiveness
+
 local TrackController = Knit.CreateController({
 	Name = "TrackController",
 })
@@ -48,11 +66,16 @@ local TrackData = nil
 local CurrentWorldName = "Main"
 local OriginalWalkSpeed = 16
 local OriginalJumpPower = 50
-local DistanceUpdateConnection = nil
-local DistanceValueInstance = nil
 local TrackLightingEffects = {} -- Store created lighting effects for cleanup
 local TrackOriginalProperties = {} -- Store original track properties for restoration
 local TrackFireEffects = {} -- Store fire/smoke effects
+
+-- Movement state (client-side tracking)
+local CurrentAngle = 0
+local ElapsedTime = 0
+local DistanceTraveled = 0
+local LapCount = 0
+local WorldUnlocked = false
 
 -- Helper function for logging
 local function Log(message: string)
@@ -78,6 +101,55 @@ local function GetVisualTrackForWorld(worldName: string): BasePart?
 		end
 	end
 	return nil
+end
+
+-- Create raycast params for a specific world's visual track
+local function CreateRaycastParamsForWorld(worldName: string): RaycastParams
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Include
+	
+	local visualTrack = GetVisualTrackForWorld(worldName)
+	if visualTrack then
+		raycastParams.FilterDescendantsInstances = { visualTrack }
+	else
+		raycastParams.FilterDescendantsInstances = {}
+	end
+	
+	return raycastParams
+end
+
+-- Update circular position using polar to cartesian conversion with ground detection
+local function UpdateCircularPosition(center: Vector3, radius: number, angle: number, fallbackY: number, worldName: string): (CFrame, Vector3)
+	-- Polar to Cartesian conversion
+	local x = center.X + radius * math.cos(angle)
+	local z = center.Z + radius * math.sin(angle)
+	
+	-- Raycast only hits Visual_Track part (excludes characters and other objects)
+	local rayOrigin = Vector3.new(x, fallbackY + RAYCAST_HEIGHT_OFFSET, z)
+	local rayDirection = Vector3.new(0, -RAYCAST_DISTANCE, 0)
+	
+	-- Create world-specific raycast params
+	local raycastParams = CreateRaycastParamsForWorld(worldName)
+	local raycastResult = Workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+	
+	local groundY = fallbackY -- Default to fallback if raycast fails
+	if raycastResult then
+		-- Place player at ground position
+		groundY = raycastResult.Position.Y
+	end
+	
+	local targetPosition = Vector3.new(x, groundY, z)
+	
+	-- Calculate orientation (tangential direction - looking forward along the path)
+	local lookAtPos = targetPosition + Vector3.new(
+		-math.sin(angle), -- Derivative of cos
+		0,
+		math.cos(angle)   -- Derivative of sin
+	)
+	
+	local finalCFrame = CFrame.lookAt(targetPosition, lookAtPos)
+	
+	return finalCFrame, targetPosition
 end
 
 -- Apply neon effect to track when player starts running
@@ -334,41 +406,6 @@ local function UpdateDistanceDisplay(distance: number, totalDistance: number)
 	end
 end
 
--- Setup distance feedback loop from server NumberValue
-local function SetupDistanceFeedback(player: Player)
-	-- Find the distance value in player's character
-	local character = player.Character
-	if not character then return end
-	
-	local rootPart = character:FindFirstChild("HumanoidRootPart")
-	if not rootPart then return end
-	
-	-- Wait for the distance value created by server
-	DistanceValueInstance = rootPart:WaitForChild("TrackDistanceTraveled", 5)
-	if not DistanceValueInstance then
-		Log("Could not find TrackDistanceTraveled value")
-		return
-	end
-	
-	-- Connect to value changes
-	DistanceUpdateConnection = DistanceValueInstance.Changed:Connect(function(newValue)
-		if TrackData and TrackData.totalDistance then
-			UpdateDistanceDisplay(newValue, TrackData.totalDistance)
-		end
-	end)
-	
-	Log("Distance feedback loop setup complete")
-end
-
--- Cleanup distance feedback
-local function CleanupDistanceFeedback()
-	if DistanceUpdateConnection then
-		DistanceUpdateConnection:Disconnect()
-		DistanceUpdateConnection = nil
-	end
-	DistanceValueInstance = nil
-end
-
 -- Disable player movement controls
 local function DisablePlayerControls()
 	local player = Players.LocalPlayer
@@ -431,13 +468,34 @@ local function EnablePlayerControls()
 end
 
 -- Handle track started signal from server
-local function OnTrackStarted(trackData: { gateName: string, totalDistance: number, speed: number, startAngle: number, worldName: string? })
+local function OnTrackStarted(trackData: { 
+	gateName: string, 
+	totalDistance: number, 
+	initialSpeed: number, 
+	acceleration: number,
+	maxSpeed: number,
+	totalTime: number,
+	startAngle: number, 
+	worldName: string?,
+	worldRadius: number?,
+	trackCenter: Vector3?,
+	maxPhysicalSpeed: number?,
+	nextWorld: string?,
+	unlockRequirement: number?
+})
 	IsOnTrack = true
 	TrackData = trackData
 	CurrentWorldName = trackData.worldName or "Main"
 	distanceCounter.Visible = true
 	
-	Log(string.format("Track started at %s, total distance: %.2f, speed: %.2f", trackData.gateName, trackData.totalDistance, trackData.speed or 0))
+	-- Initialize client-side movement state
+	CurrentAngle = trackData.startAngle
+	ElapsedTime = 0
+	DistanceTraveled = 0
+	LapCount = 0
+	WorldUnlocked = false
+	
+	Log(string.format("Track started at %s, total distance: %.2f, initialSpeed: %.2f", trackData.gateName, trackData.totalDistance, trackData.initialSpeed or 0))
 	
 	-- Fade out the loading screen now that server has acknowledged the request
 	local LoadingScreenController = Knit.GetController("LoadingScreenController")
@@ -454,14 +512,14 @@ local function OnTrackStarted(trackData: { gateName: string, totalDistance: numb
 	-- Apply lighting effects (blur, color correction, bloom)
 	ApplyTrackLightingEffects()
 	
-	-- Setup distance feedback from server
-	SetupDistanceFeedback(Players.LocalPlayer)
-	
 	-- Initialize distance display
 	UpdateDistanceDisplay(0, trackData.totalDistance)
 	
 	-- Disable player controls
 	DisablePlayerControls()
+	
+	-- Show cancel button during track run
+	trackCancelButton.Visible = true
 	
 	-- Show notification
 	local NotificationController = Knit.GetController("NotificationController")
@@ -472,6 +530,127 @@ local function OnTrackStarted(trackData: { gateName: string, totalDistance: numb
 			3
 		)
 	end
+	
+	-- Start the client-side movement loop using BindToRenderStep
+	RunService:BindToRenderStep(RENDER_STEP_BINDING, Enum.RenderPriority.Character.Value + 1, function(dt)
+		if not IsOnTrack or not TrackData then
+			RunService:UnbindFromRenderStep(RENDER_STEP_BINDING)
+			return
+		end
+		
+		local localPlayer = Players.LocalPlayer
+		local character = localPlayer.Character
+		if not character then return end
+		
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+		if not rootPart then return end
+		
+		-- Get body movers (created by server)
+		local alignPosition = rootPart:FindFirstChild("TrackAlignPosition")
+		local alignOrientation = rootPart:FindFirstChild("TrackAlignOrientation")
+		
+		if not alignPosition or not alignOrientation then return end
+		
+		-- Get track parameters from TrackData
+		local worldName = TrackData.worldName or "Main"
+		local radius = TrackData.worldRadius or Stats.WorldRadius[worldName] or Stats.WorldRadius.Main
+		local center = TrackData.trackCenter
+		local maxPhysicalSpeed = TrackData.maxPhysicalSpeed or Stats.MaxPhysicalSpeed
+		
+		if not center then return end
+		
+		-- Update elapsed time
+		ElapsedTime = ElapsedTime + dt
+		
+		-- Calculate current speed using acceleration (v = v0 + a*t, capped at maxSpeed)
+		local calculatedSpeed = Stats.CalculateCurrentSpeed(
+			TrackData.initialSpeed,
+			TrackData.acceleration,
+			TrackData.maxSpeed,
+			ElapsedTime
+		)
+		
+		-- Physical speed is capped at MaxPhysicalSpeed for body movers
+		local physicalSpeed = math.min(calculatedSpeed, maxPhysicalSpeed)
+		
+		-- Convert linear speed to angular velocity for polar coordinate movement
+		local angularVelocity = Stats.LinearSpeedToAngularVelocity(physicalSpeed, radius)
+		
+		-- Update angle based on time delta
+		CurrentAngle = CurrentAngle + (angularVelocity * dt)
+		
+		-- Calculate distance traveled this frame using CALCULATED speed (not physical)
+		local distanceThisFrame = calculatedSpeed * dt
+		DistanceTraveled = DistanceTraveled + distanceThisFrame
+		
+		-- Update distance display
+		UpdateDistanceDisplay(DistanceTraveled, TrackData.totalDistance)
+		
+		-- Check for lap completion
+		local startAngle = TrackData.startAngle
+		local lapThreshold = startAngle + (2 * math.pi * (LapCount + 1))
+		if CurrentAngle >= lapThreshold then
+			LapCount = LapCount + 1
+			local NotifController = Knit.GetController("NotificationController")
+			if NotifController then
+				NotifController:ShowNotification(
+					string.format("Lap %d Complete!", LapCount),
+					NotifController.Category.Success,
+					2
+				)
+			end
+			Log(string.format("Completed lap %d", LapCount))
+		end
+		
+		-- Update distance NumberValue for server reference (if exists)
+		local distanceValue = rootPart:FindFirstChild("TrackDistanceTraveled")
+		if distanceValue then
+			distanceValue.Value = DistanceTraveled
+		end
+		
+		-- Check for world unlock (fire effects, etc.)
+		local unlockRequirement = TrackData.unlockRequirement
+		if unlockRequirement then
+			local progressPercent = DistanceTraveled / unlockRequirement
+			
+			-- Update fire effects based on progress (activates at 50%+)
+			UpdateFireEffectOnTrack(worldName, progressPercent)
+			
+			-- Check if reached unlock threshold
+			if DistanceTraveled >= unlockRequirement and not WorldUnlocked then
+				WorldUnlocked = true
+				Log(string.format("World unlock threshold reached: %.2f", DistanceTraveled))
+			end
+		end
+		
+		-- Check if track run should end (time limit or distance reached)
+		if ElapsedTime >= (TrackData.totalTime - TIME_EPSILON) or DistanceTraveled >= TrackData.totalDistance then
+			-- Unbind immediately to prevent further updates
+			RunService:UnbindFromRenderStep(RENDER_STEP_BINDING)
+			
+			-- Request track end from server with distance traveled
+			local TrackService = Knit.GetService("TrackService")
+			TrackService:RequestTrackEnd(DistanceTraveled, WorldUnlocked)
+			
+			return
+		end
+		
+		-- Calculate new position using UpdateCircularPosition
+		local targetCFrame, targetPosition = UpdateCircularPosition(center, radius, CurrentAngle, center.Y + 5, worldName)
+		
+		-- Dynamically adjust body mover responsiveness based on physical speed
+		local baseResponsiveness = 50
+		local speedFactor = math.clamp(physicalSpeed / SPEED_FACTOR_DIVISOR, 1, MAX_SPEED_FACTOR)
+		local dynamicResponsiveness = baseResponsiveness + (speedFactor * SPEED_FACTOR_DIVISOR)
+		local dynamicMaxVelocity = math.max(500, physicalSpeed * 2)
+		
+		alignPosition.Responsiveness = dynamicResponsiveness
+		alignPosition.MaxVelocity = dynamicMaxVelocity
+		
+		-- Update body mover targets
+		alignPosition.Position = targetPosition
+		alignOrientation.CFrame = targetCFrame
+	end)
 end
 
 -- Handle track ended signal from server
@@ -483,8 +662,17 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	IsOnTrack = false
 	TrackData = nil
 	
-	-- Cleanup distance feedback
-	CleanupDistanceFeedback()
+	-- Unbind the movement loop (in case it's still running)
+	pcall(function()
+		RunService:UnbindFromRenderStep(RENDER_STEP_BINDING)
+	end)
+	
+	-- Reset movement state
+	CurrentAngle = 0
+	ElapsedTime = 0
+	DistanceTraveled = 0
+	LapCount = 0
+	WorldUnlocked = false
 	
 	-- Reset camera FOV to default
 	TweenCameraFOV(DEFAULT_FOV, FOV_TWEEN_TIME)
@@ -501,6 +689,11 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	-- Re-enable player controls
 	EnablePlayerControls()
 	
+	-- Hide cancel button when track ends
+	trackCancelButton.Visible = false
+
+	print(trackData)
+	
 	-- Update results popup UI
 	local distanceTraveled = trackData.distanceTraveled
 	local percentageToNextWorld = trackData.percentageToNextWorld
@@ -511,14 +704,14 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	end
 	
 	-- Set green fill width based on percentage (scale X from 0 to 1)
-	if greenFillFrame then
+	if greenFillFrame and trackData.cancelled == nil then
 		local fillPercentage = math.clamp(percentageToNextWorld / 100, 0, 1)
 		print("Fill percentage: ", fillPercentage)
 		greenFillFrame.Size = UDim2.new(fillPercentage, 0, greenFillFrame.Size.Y.Scale, greenFillFrame.Size.Y.Offset)
 	end
 	
 	-- Show the results popup
-	if resultsPopupUI then
+	if resultsPopupUI and not trackData.cancelled then
 		resultsPopupUI.Enabled = true
 		resultsFrame.Parent.Visible = true
 	end
@@ -553,22 +746,6 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	-- Note: Run button visibility is now controlled by InitUI based on gate proximity
 end
 
--- Handle lap completed signal from server
-local function OnLapCompleted(lapData: { lapNumber: number })
-	if not IsOnTrack then return end
-	
-	Log(string.format("Lap %d completed!", lapData.lapNumber or 1))
-	
-	local NotificationController = Knit.GetController("NotificationController")
-	if NotificationController then
-		NotificationController:ShowNotification(
-			string.format("Lap %d Complete!", lapData.lapNumber or 1),
-			NotificationController.Category.Success,
-			2
-		)
-	end
-end
-
 -- Check if player is currently on track
 function TrackController:IsOnTrack(): boolean
 	return IsOnTrack
@@ -586,8 +763,17 @@ function TrackController:StopTrack()
 	IsOnTrack = false
 	TrackData = nil
 	
-	-- Cleanup distance feedback
-	CleanupDistanceFeedback()
+	-- Unbind the movement loop
+	pcall(function()
+		RunService:UnbindFromRenderStep(RENDER_STEP_BINDING)
+	end)
+	
+	-- Reset movement state
+	CurrentAngle = 0
+	ElapsedTime = 0
+	DistanceTraveled = 0
+	LapCount = 0
+	WorldUnlocked = false
 	
 	-- Reset camera FOV
 	TweenCameraFOV(DEFAULT_FOV, FOV_TWEEN_TIME)
@@ -604,15 +790,10 @@ function TrackController:StopTrack()
 	-- Re-enable player controls
 	EnablePlayerControls()
 	
-	Log("Track stopped")
-end
-
--- Handle track progress update from server for fire effects
-local function OnTrackProgressUpdate(progressData: { worldName: string, progressPercent: number, distanceTraveled: number, unlockRequirement: number })
-	if not IsOnTrack then return end
+	-- Hide cancel button
+	trackCancelButton.Visible = false
 	
-	-- Update fire effects based on progress (activates at 50%+)
-	UpdateFireEffectOnTrack(progressData.worldName, progressData.progressPercent)
+	Log("Track stopped")
 end
 
 -- Knit lifecycle
@@ -633,12 +814,27 @@ function TrackController:KnitStart()
 	
 	TrackService.TrackStarted:Connect(OnTrackStarted)
 	TrackService.TrackEnded:Connect(OnTrackEnded)
-	TrackService.LapCompleted:Connect(OnLapCompleted)
-	TrackService.TrackProgressUpdate:Connect(OnTrackProgressUpdate)
 
 	closeButton.MouseButton1Click:Connect(function()
 		resultsFrame.Parent.Visible = false
 	end)
+	
+	-- Connect cancel button to cancel track run
+	trackCancelButton.MouseButton1Click:Connect(function()
+		if not IsOnTrack then return end
+		
+		-- Request cancel from server
+		TrackService:CancelTrackRun():andThen(function(success, errorMsg)
+			if success then
+				Log("Track run cancelled successfully")
+			else
+				warn(string.format("[TrackController]: Failed to cancel track run - %s", errorMsg or "Unknown error"))
+			end
+		end)
+	end)
+	
+	-- Ensure cancel button is hidden initially
+	trackCancelButton.Visible = false
 	
 	Log("TrackController started")
 end

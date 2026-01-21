@@ -5,20 +5,47 @@
 
 local Stats = {}
 
-Stats.BaseSpeed = 50
+export type Pet = {
+	Name: string,
+	PetType: string?,
+	Multiplier: number,
+	FuelBonus: number?,
+	PickupRangeBonus: number?,
+	RoamRange: number?,
+	StarCollectionRadius: number?,
+	Velocity: number?,
+	World: string?,
+	Level: number?,
+	TierLevel: number?,
+	TierName: string?,
+	Rarity: string?,
+	ID: string?,
+	Equipped: boolean?,
+}
+
+-- Player star collection radius (studs) - player can collect stars within this distance
+Stats.MaxStarCollectionPlayerRadius = 30
+Stats.MinStarCollectionPlayerRadius = 20
+Stats.BaseSpeed = 50 -- base track speed
+
+-- pet max limits
+Stats.MaxPetSpeed = 35
+Stats.MaxPetRoamRange = 150
+Stats.MaxPickupRangeBonus = 3
+Stats.MaxStarCollectionRadius = 25
 
 -- Starting fuel for new players and after rebirth
 Stats.StartingFuel = 100
 
 -- Maximum track run time in seconds
-Stats.MaxTrackTime = 30
+Stats.MaxTrackTime = 20
 
 -- Maximum physical speed limit (for body movers and lap detection)
 -- Calculated speed can exceed this for stats/distance tracking, but physical movement is capped
-Stats.MaxPhysicalSpeed = 250
+Stats.MaxPhysicalSpeed = 180
 
 -- Base acceleration for track movement (studs/sec²)
-Stats.BaseAcceleration = 15
+Stats.BaseAcceleration = 20
 
 -- World efficiency values for speed calculation
 Stats.WorldEfficiency = {
@@ -75,11 +102,13 @@ Stats.WorldOrder = {
 -- Blue (Uncommon): Moderate spawn rate, medium fuel bonus
 -- Purple (Rare): Low spawn rate, high fuel bonus
 -- White (Legendary): Extremely rare, very high fuel bonus
+-- Gems: Rare, gives gems instead of fuel
 Stats.StarProbabilities = {
-	YellowStar = 0.65,   -- 60% chance (Common)
-	BlueStar = 0.30,     -- 25% chance (Uncommon)
-	PurpleStar = 0.03,   -- 5% chance (Rare)
-	WhiteStar = 0.02,    -- 1% chance (Legendary)
+	YellowStar = 0.60,   -- 60% chance (Common)
+	BlueStar = 0.28,     -- 28% chance (Uncommon)
+	PurpleStar = 0.06,   -- 6% chance (Rare)
+	WhiteStar = 0.02,    -- 2% chance (Legendary)
+	Gems = 0.04,         -- 4% chance (Rare gem)
 }
 
 -- Fuel bonuses for each star type
@@ -88,6 +117,12 @@ Stats.StarFuelValues = {
 	BlueStar = 100,       -- Medium fuel bonus
 	PurpleStar = 250,     -- High fuel bonus
 	WhiteStar = 1000,     -- Very high fuel bonus
+	Gems = 0,             -- Gems don't give fuel
+}
+
+-- Gem values for gem-type stars
+Stats.StarGemValues = {
+	Gems = 5,             -- Base gem value for collecting a Gems star
 }
 
 -- Star spawn configuration
@@ -112,6 +147,7 @@ Stats.MaxGateIndex = 3 -- Gates are numbered 0 to MaxGateIndex (0, 1, 2, 3)
 function Stats.CalculateMultipliers(rebirthSpeedMultiplier: number?): number
 	-- multiplier from pets is handled separately
 	-- here dev products, vip access and rebirths can be added
+	-- also rebirth speed multiplier is used to increase speed in track run, thereby increasing distance covered
 	local baseMultiplier = 1.0
 	local rebirthMultiplier = rebirthSpeedMultiplier or 1.0
 	
@@ -259,6 +295,7 @@ end
 Stats.Eggs = {
 	StandardEgg = {
 		Cost = 500,
+		Tier = "Basic",
 		Currency = "Cash",
 		World = "Main",
 		-- Pets array contains possible pets with their spawn probabilities (must sum to 1.0)
@@ -269,18 +306,24 @@ Stats.Eggs = {
 	},
 }
 
--- Pet Rarity tiers
-Stats.PetRarity = {
-	Standard = "Standard",
-	Premium = "Premium",
-	LimitedTime = "LimitedTime",
-}
+Stats.TierColors = setmetatable({
+	[1] = Color3.fromRGB(255, 255, 255), -- Standard - White
+	[2] = Color3.fromRGB(0, 255, 255),   -- Premium - Cyan
+	[3] = Color3.fromRGB(255, 215, 0),   -- Limited Time - Gold
+	[4] = Color3.fromRGB(255, 0, 255),   -- Exclusive - Magenta
+}, {
+	__index = function()
+		warn("Could not find tier color, defaulting to White")
+		return Color3.fromRGB(255, 255, 255) -- Default to White
+	end,
+})
 
 -- Pet Configuration
 -- Pet types with their base stats
 Stats.Pets = {
 	StandardPet = {
 		Name = "Standard Pet",
+		TierLevel = 1, -- Required especially during merging pets
 		Multiplier = 1.1, -- 10% boost to earnings
 		FuelBonus = 1.1, -- 10% fuel collection increase
 		PickupRangeBonus = 1.0, -- No range extension (base range)
