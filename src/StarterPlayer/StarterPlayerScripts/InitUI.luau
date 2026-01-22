@@ -58,6 +58,8 @@ local modules = ReplicatedStorage:WaitForChild("Modules")
 local statsM = require(modules:WaitForChild("Stats"))
 local rebirthStatsM = require(modules:WaitForChild("RebirthStats"))
 local petMergeStatsM = require(modules:WaitForChild("PetMergeStats"))
+local EggHatchStats = require(modules:WaitForChild("EggHatchStats"))
+local EggHatchAnimation = require(modules:WaitForChild("EggHatchAnimation"))
 
 -- Debounce state for track requests
 local isRequestingTrack = false
@@ -97,8 +99,9 @@ local standardEggBuy = shopEggsContainer:WaitForChild("StandardEgg"):WaitForChil
 
 -- egg hatching ui
 local eggHatchScreenGui: ScreenGui = PlayerGui:WaitForChild("EggHatchScreen")
-local eggviewport: ViewportFrame = eggHatchScreenGui:WaitForChild("Dimmer"):WaitForChild("Viewport")
-local tierName: TextLabel = eggviewport.Dimmer:WaitForChild("TierName")
+local eggHatchDimmer: Frame = eggHatchScreenGui:WaitForChild("Dimmer")
+local eggviewport: ViewportFrame = eggHatchDimmer:WaitForChild("Viewport")
+local eggHatchFlash: Frame? = eggHatchScreenGui:FindFirstChild("Flash")
 
 -- pets and inv
 local petsButton: TextButton = leftPanel:WaitForChild("PetsButton")
@@ -914,24 +917,46 @@ handler._connections["ShopButton"] = shopButton.MouseButton1Click:Connect(functi
 end)
 
 handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connect(function()
-    -- Purchase egg and immediately receive pet
-    EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, petInfo)
-        if success and petInfo then
-            print("Obtained pet from StandardEgg:", petInfo.Name, "ID:", petInfo.ID)
-            
-            -- Update local pet inventory
-            if not handler.data.Inventory.PetInventory then
-                handler.data.Inventory.PetInventory = {}
+    -- Check if animation is already playing
+    if EggHatchAnimation.IsPlaying() then
+        return
+    end
+    
+    -- Show the egg hatch screen
+    eggHatchScreenGui.Enabled = true
+    
+    -- Play egg hatch animation first, then request purchase from server
+    EggHatchAnimation.PlayHatch(
+        eggviewport,
+        "StandardEgg", -- Egg model name in Assets/Eggs
+        eggHatchDimmer,
+        eggHatchFlash,
+        function(animationSuccess)
+            -- Animation complete, now request the actual purchase from server
+            if animationSuccess then
+                EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, petInfo)
+                    if success and petInfo then
+                        print("Obtained pet from StandardEgg:", petInfo.Name, "ID:", petInfo.ID)
+                        
+                        -- Update local pet inventory
+                        if not handler.data.Inventory.PetInventory then
+                            handler.data.Inventory.PetInventory = {}
+                        end
+                        
+                        table.insert(handler.data.Inventory.PetInventory, petInfo)
+                        
+                        -- Update the pets inventory UI if it's visible
+                        handler.UpdatePetsInventory()
+                    else
+                        print("Failed to purchase StandardEgg:", errorMsg or "Unknown error")
+                    end
+                end)
             end
             
-            table.insert(handler.data.Inventory.PetInventory, petInfo)
-            
-            -- Update the pets inventory UI if it's visible
-            handler.UpdatePetsInventory()
-        else
-            print("Failed to purchase StandardEgg:", errorMsg or "Unknown error")
+            -- Hide the egg hatch screen after animation
+            eggHatchScreenGui.Enabled = false
         end
-    end)
+    )
 end)
 
 handler._connections["ShopClose"] = shopMain:WaitForChild("Close").MouseButton1Click:Connect(function()
