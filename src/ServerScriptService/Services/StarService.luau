@@ -53,8 +53,11 @@ local function GetFuelMultiplierForPlayer(player: Player): number
 	local rebirthLevel = (stats and stats.Rebirths) or 0
 	local rebirthBonus = RebirthStats.CalculateTotalMultiplier(rebirthLevel)
 	
+	-- Get other bonuses (VIP, boosts, etc.)
+	local otherBonus = Stats.CalculateOtherBonus()
+	
 	-- Return total multiplier: 1 + all bonuses
-	return 1 + petBonus + rebirthBonus
+	return 1 + petBonus + rebirthBonus + otherBonus
 end
 
 -- Recalculate and update the player's fuel based on their Stars and multipliers
@@ -85,8 +88,8 @@ local function RecalculateFuelForPlayer(player: Player)
 	local rebirthLevel = stats.Rebirths or 0
 	local rebirthBonus = RebirthStats.CalculateTotalMultiplier(rebirthLevel)
 	
-	-- Get other bonuses (VIP, boosts, etc.) - currently returns 0
-	local otherBonus = 0
+	-- Get other bonuses (VIP, boosts, etc.)
+	local otherBonus = Stats.CalculateOtherBonus()
 	
 	-- Calculate new fuel: Stars * (1 + petBonus + rebirthBonus + otherBonus)
 	local newFuel = Stats.CalculateFuelFromStars(stars, petBonus, rebirthBonus, otherBonus)

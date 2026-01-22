@@ -341,7 +341,7 @@ Stats.Pets = {
 -- Returns the sum of all equipped pets' bonuses (0 if no pets equipped)
 -- The bonus is added to the base 1.0 multiplier in CalculateFuelFromStars
 -- @param equippedPets table? - Array of equipped pet data { Multiplier: number, ... }
--- @return number - Total fuel bonus (sum of all pet multipliers - 1.0 per pet, or 0 if no pets)
+-- @return number - Total fuel bonus (sum of pet Multiplier values, or 0 if no pets)
 function Stats.CalculateFuelMultiplier(equippedPets: {any}?): number
 	if not equippedPets or #equippedPets == 0 then
 		return 0
@@ -349,7 +349,7 @@ function Stats.CalculateFuelMultiplier(equippedPets: {any}?): number
 	
 	local totalBonus = 0
 	for _, pet in ipairs(equippedPets) do
-		-- Each pet contributes its multiplier value as bonus (e.g., 1.1 means +1.1 bonus)
+		-- Each pet's Multiplier value is added directly as bonus
 		totalBonus = totalBonus + (pet.Multiplier or 0)
 	end
 	
@@ -361,6 +361,18 @@ end
 
 -- Maximum number of pets that can be equipped at once
 Stats.MaxEquippedPets = 3
+
+-- Calculate other bonuses (VIP, dev products, boosts, etc.)
+-- Returns 0 by default - to be extended with VIP and dev product bonuses
+-- @return number - Total other bonus (0 if no special bonuses active)
+function Stats.CalculateOtherBonus(): number
+	-- Placeholder for future implementation of VIP, dev products, etc.
+	local vipBonus = 0
+	local devProductBonus = 0
+	local boostBonus = 0
+	
+	return vipBonus + devProductBonus + boostBonus
+end
 
 -- Calculate total fuel from collected stars and multipliers
 -- Total fuel = Stars * (1 + petBonus + rebirthBonus + otherBonus)

@@ -1171,12 +1171,11 @@ handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(functio
     
     local petBonus = statsM.CalculateFuelMultiplier(equippedPetsList)
     
-    -- VIP and Dev Products (Placeholders - assume 0 bonus if not implemented yet)
-    local vipBonus = 0
-    local devProductBonus = 0
+    -- Get other bonuses (VIP, dev products, etc.)
+    local otherBonus = statsM.CalculateOtherBonus()
     
     -- Total multiplier = 1 + all bonuses
-    local totalMultiplier = 1 + petBonus + rebirthBonus + vipBonus + devProductBonus
+    local totalMultiplier = 1 + petBonus + rebirthBonus + otherBonus
     
     local formattedMultiplier = truncateNumber(totalMultiplier)
     
