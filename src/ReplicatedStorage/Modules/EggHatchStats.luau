@@ -45,7 +45,7 @@ EggHatchStats.Effects = {
 	FlashDuration = 0.15,
 	
 	-- Result display time
-	ResultDisplayTime = 2.5,
+	ResultDisplayTime = 1,
 	
 	-- Fade out duration
 	FadeOutDuration = 0.5,

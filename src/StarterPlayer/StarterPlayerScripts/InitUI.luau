@@ -923,7 +923,8 @@ handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connec
     end
     
     -- Show the egg hatch screen
-    eggHatchScreenGui.Enabled = true
+    eggviewport.Parent.Visible = true
+    shopMain.Visible = false
     
     -- Play egg hatch animation first, then request purchase from server
     EggHatchAnimation.PlayHatch(
@@ -954,7 +955,7 @@ handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connec
             end
             
             -- Hide the egg hatch screen after animation
-            eggHatchScreenGui.Enabled = false
+            eggviewport.Parent.Visible = false
         end
     )
 end)
