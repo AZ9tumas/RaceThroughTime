@@ -29,7 +29,6 @@ export type Pet = {
 	Name: string,
 	PetType: string?,
 	Multiplier: number,
-	FuelBonus: number?,
 	PickupRangeBonus: number?,
 	RoamRange: number?,
 	StarCollectionRadius: number?,
@@ -496,7 +495,6 @@ function PetService:GetPlayerPets(player: Player): { Pet }
 				Name = petData.Name,
 				PetType = petType,
 				Multiplier = petData.Multiplier or petStats.Multiplier or 1.0,
-				FuelBonus = petData.FuelBonus or petStats.FuelBonus or 1.0,
 				PickupRangeBonus = petData.PickupRangeBonus or petStats.PickupRangeBonus or 1.0,
 				RoamRange = petData.RoamRange or petStats.RoamRange or 30,
 				StarCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius or 5,
@@ -643,7 +641,6 @@ function PetService:MergePets(player: Player, targetPetID: string, copyCount: nu
 	local newTierLevel = currentTierLevel + 1
 	local oldStats = {
 		Multiplier = targetPet.Multiplier or 1.0,
-		FuelBonus = targetPet.FuelBonus or 1.0,
 		PickupRangeBonus = targetPet.PickupRangeBonus or 1.0,
 		RoamRange = targetPet.RoamRange or 30,
 		StarCollectionRadius = targetPet.StarCollectionRadius or 5,
@@ -684,7 +681,6 @@ function PetService:MergePets(player: Player, targetPetID: string, copyCount: nu
 			inv.PetInventory[newTargetIndex].TierLevel = newTierLevel
 			inv.PetInventory[newTargetIndex].TierName = newTier.Name
 			inv.PetInventory[newTargetIndex].Multiplier = newStats.Multiplier
-			inv.PetInventory[newTargetIndex].FuelBonus = newStats.FuelBonus
 			inv.PetInventory[newTargetIndex].PickupRangeBonus = newStats.PickupRangeBonus
 			inv.PetInventory[newTargetIndex].RoamRange = newStats.RoamRange
 			inv.PetInventory[newTargetIndex].StarCollectionRadius = newStats.StarCollectionRadius
@@ -766,7 +762,6 @@ function PetService:MergePets(player: Player, targetPetID: string, copyCount: nu
 		TierLevel = newTierLevel,
 		TierName = newTier.Name,
 		Multiplier = newStats.Multiplier,
-		FuelBonus = newStats.FuelBonus,
 		PickupRangeBonus = newStats.PickupRangeBonus,
 		RoamRange = newStats.RoamRange,
 		StarCollectionRadius = newStats.StarCollectionRadius,

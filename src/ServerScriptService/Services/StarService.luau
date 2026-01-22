@@ -29,8 +29,9 @@ local StarsFolder = nil
 local TotalStarsCollected = 0 -- Counter for total stars collected by all players in the server
 local StarSpawnLoops = {} -- [Player.UserId] = thread (spawn loop thread)
 
--- Helper function to get total fuel multiplier for player (1 + bonuses)
+-- Helper function to get total fuel multiplier for player
 -- Used for Gems calculation with multipliers
+-- If all bonuses are 0, returns 1. Otherwise returns the sum of all bonuses.
 local function GetFuelMultiplierForPlayer(player: Player): number
 	local DataService = Knit.GetService("DataService")
 	local inventory = DataService:Get(player, "Inventory")
@@ -56,8 +57,9 @@ local function GetFuelMultiplierForPlayer(player: Player): number
 	-- Get other bonuses (VIP, boosts, etc.)
 	local otherBonus = Stats.CalculateOtherBonus()
 	
-	-- Return total multiplier: 1 + all bonuses
-	return 1 + petBonus + rebirthBonus + otherBonus
+	-- Return total multiplier: if all bonuses are 0, use 1; otherwise sum of all bonuses
+	local totalBonuses = petBonus + rebirthBonus + otherBonus
+	return totalBonuses > 0 and totalBonuses or 1
 end
 
 -- Recalculate and update the player's fuel based on their Stars and multipliers

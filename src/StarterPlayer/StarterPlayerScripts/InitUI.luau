@@ -18,7 +18,7 @@ local handler = {
         },
         Inventory = {
             -- PetInventory stores full pet data:
-            -- { Name: string, PetType: string, Multiplier: number, FuelBonus: number, 
+            -- { Name: string, PetType: string, Multiplier: number, 
             --   PickupRangeBonus: number, World: string, Level: number, Rarity: string }
             PetInventory = {},
             EquippedPets = {}, -- Indices of equipped pets (max 3)
@@ -484,7 +484,6 @@ function handler.UpdatePetsInventory()
             ID = petData.ID,
             Name = petData.Name,
             Multiplier = petData.Multiplier,
-            FuelBonus = petData.FuelBonus,
             PickupRangeBonus = petData.PickupRangeBonus,
             RoamRange = petData.RoamRange,
             StarCollectionRadius = petData.StarCollectionRadius,
@@ -1174,8 +1173,9 @@ handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(functio
     -- Get other bonuses (VIP, dev products, etc.)
     local otherBonus = statsM.CalculateOtherBonus()
     
-    -- Total multiplier = 1 + all bonuses
-    local totalMultiplier = 1 + petBonus + rebirthBonus + otherBonus
+    -- Total multiplier: if all bonuses are 0, use 1; otherwise sum of all bonuses
+    local totalBonuses = petBonus + rebirthBonus + otherBonus
+    local totalMultiplier = totalBonuses > 0 and totalBonuses or 1
     
     local formattedMultiplier = truncateNumber(totalMultiplier)
     

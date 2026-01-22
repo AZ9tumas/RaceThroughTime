@@ -9,7 +9,6 @@ export type Pet = {
 	Name: string,
 	PetType: string?,
 	Multiplier: number,
-	FuelBonus: number?,
 	PickupRangeBonus: number?,
 	RoamRange: number?,
 	StarCollectionRadius: number?,
@@ -326,7 +325,6 @@ Stats.Pets = {
 		Name = "Standard Pet",
 		TierLevel = 1, -- Required especially during merging pets
 		Multiplier = 10, -- x10
-		FuelBonus = 1.1, -- 10% fuel collection increase
 		PickupRangeBonus = 1.0, -- No range extension (base range)
 		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
 		StarCollectionRadius = 10, -- Distance from star to collect it
@@ -375,16 +373,18 @@ function Stats.CalculateOtherBonus(): number
 end
 
 -- Calculate total fuel from collected stars and multipliers
--- Total fuel = Stars * (1 + petBonus + rebirthBonus + otherBonus)
--- Base multiplier is 1.0, and bonuses are added on top of it
+-- Total fuel = Stars * totalMultiplier
+-- If all bonuses are 0, use 1 as the default multiplier
+-- Otherwise, use the sum of all bonuses
 -- @param stars number - Total star equivalents collected by the player
--- @param petBonus number - Fuel bonus from equipped pets (0 if no pets, or sum of pet bonuses)
+-- @param petBonus number - Fuel bonus from equipped pets (0 if no pets, or sum of pet Multiplier values)
 -- @param rebirthBonus number - Fuel bonus from rebirth levels (0 if no rebirths, or accumulated bonuses)  
 -- @param otherBonus number? - Other bonuses (VIP, boosts, etc.) defaults to 0
 -- @return number - The calculated total fuel
 function Stats.CalculateFuelFromStars(stars: number, petBonus: number, rebirthBonus: number, otherBonus: number?): number
-	local baseMultiplier = 1.0
-	local totalMultiplier = baseMultiplier + petBonus + rebirthBonus + (otherBonus or 0)
+	local totalBonuses = petBonus + rebirthBonus + (otherBonus or 0)
+	-- If all bonuses are 0, use 1 as default multiplier
+	local totalMultiplier = totalBonuses > 0 and totalBonuses or 1
 	return math.floor(stars * totalMultiplier)
 end
 

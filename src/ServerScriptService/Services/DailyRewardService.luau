@@ -76,7 +76,6 @@ local function ApplyRewardItems(player: Player, items: { { ItemType: string, Qua
 						PetType = item.PetId,
 						Name = petConfig.Name,
 						Multiplier = petConfig.Multiplier,
-						FuelBonus = petConfig.FuelBonus or 1.1,
 						PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
 						RoamRange = petConfig.RoamRange,
 						StarCollectionRadius = petConfig.StarCollectionRadius or 5,
