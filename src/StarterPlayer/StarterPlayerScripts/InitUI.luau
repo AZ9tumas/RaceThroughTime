@@ -77,6 +77,7 @@ local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 local fuelBar = centerHUD:WaitForChild("FuelBar")
 local multiplierLabel: TextLabel = fuelBar:WaitForChild("SpeedStat")
 local fuelText: TextLabel = fuelBar:WaitForChild("FuelText")
+local starCountText: TextLabel = fuelBar:WaitForChild("StarStat")
 local otherFrames: Frame = mainUi:WaitForChild("OtherFrames")
 local worldlabel: TextLabel = mainUi:WaitForChild("TopInfo"):WaitForChild("WorldName")
 
@@ -739,9 +740,13 @@ handler._connections["MergeClose"] = mergeCloseButton.MouseButton1Click:Connect(
     mergeMainFrame.Visible = false
 end)
 
+function handler.UpdateStar(amount: number)
+    starCountText.Text = "⭐ " .. truncateNumber(amount)
+end
+
 function handler.UpdateFuelUI(amount: number)
     -- Update fuel text
-    fuelText.Text = "⭐ FUEL: " .. math.floor(amount)
+    fuelText.Text = "⛽ FUEL: " .. math.floor(amount)
 end
 
 function handler.UpdateCashUI(amount: number)
@@ -775,6 +780,7 @@ function handler.UpdateDataOnClient(newData)
     handler.UpdateRewardsStatus()
     handler.UpdateShopUI()
     handler.UpdateWorlds()
+    handler.UpdateStar(handler.data.Stats.Stars)
 
     print("UPDATED DATA ON CLIENT:", handler.data)
 end
@@ -1168,12 +1174,9 @@ handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(functio
     -- VIP and Dev Products (Placeholders - assume 1.0 if not implemented yet)
     local vipMultiplier = 1.0 
     local devProductMultiplier = 1.0
-    local totalMultiplier = rebirthMultiplier * petMultiplier * vipMultiplier * devProductMultiplier
+    local totalMultiplier = petMultiplier -- rebirthMultiplier * petMultiplier * vipMultiplier * devProductMultiplier
     
-    local formattedMultiplier = string.format("%.1f", totalMultiplier)
-    if formattedMultiplier:sub(-2) == ".0" then
-        formattedMultiplier = formattedMultiplier:sub(1, -3)
-    end
+    local formattedMultiplier = truncateNumber(totalMultiplier)
     
     multiplierLabel.Text = "⚡ x" .. formattedMultiplier
 

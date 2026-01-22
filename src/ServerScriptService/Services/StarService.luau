@@ -318,6 +318,8 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 		}, 2)
 	end
 
+	DataService.Client.DataReady:Fire(player, DataService:Get(player))
+
 	-- Increment total stars collected counter
 	TotalStarsCollected = TotalStarsCollected + 1
 	Log(string.format("Total stars collected on server: %d", TotalStarsCollected))

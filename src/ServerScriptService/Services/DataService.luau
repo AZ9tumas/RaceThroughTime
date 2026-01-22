@@ -24,7 +24,7 @@ local Template = {
 		TotalDistance = 0,
 		Points = 0,
 		Rebirths = 0,
-		Fuel = 100, -- Starting fuel for players
+		Fuel = 0, -- Starting fuel for players
 		Stars = 0,  -- Total star equivalents collected (used to calculate fuel)
 	},
 	Progression = {
