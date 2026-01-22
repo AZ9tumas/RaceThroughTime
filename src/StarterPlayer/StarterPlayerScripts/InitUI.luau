@@ -95,6 +95,11 @@ local shopGemsCount = shopTop:WaitForChild("Gems"):WaitForChild("Count")
 local shopEggsContainer = shopMain:WaitForChild("ScrollingFrame"):WaitForChild("Eggs"):WaitForChild("MainFrame")
 local standardEggBuy = shopEggsContainer:WaitForChild("StandardEgg"):WaitForChild("Buy")
 
+-- egg hatching ui
+local eggHatchScreenGui: ScreenGui = PlayerGui:WaitForChild("EggHatchScreen")
+local eggviewport: ViewportFrame = eggHatchScreenGui:WaitForChild("Dimmer"):WaitForChild("Viewport")
+local tierName: TextLabel = eggviewport.Dimmer:WaitForChild("TierName")
+
 -- pets and inv
 local petsButton: TextButton = leftPanel:WaitForChild("PetsButton")
 local uiInventory: ScreenGui = PlayerGui:WaitForChild("UI_Inventory")
