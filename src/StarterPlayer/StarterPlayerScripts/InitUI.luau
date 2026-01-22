@@ -1154,11 +1154,11 @@ handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(functio
     handler.UpdateCashUI(cashVal.Value)
     handler.UpdateGemsUI(gemsVal.Value)
     
-    -- Calculate Rebirth Multiplier (using Multiplier for star collection, not CashMultiplier)
+    -- Calculate Rebirth Bonus (using Multiplier for star collection, not CashMultiplier)
     local currentRebirthLevel = handler.data.Stats.Rebirths or 0
-    local rebirthMultiplier = rebirthStatsM.CalculateTotalMultiplier(currentRebirthLevel)
+    local rebirthBonus = rebirthStatsM.CalculateTotalMultiplier(currentRebirthLevel)
     
-    -- Calculate Pet Multiplier
+    -- Calculate Pet Bonus
     local equippedPetsList = {}
     if handler.data.Inventory and handler.data.Inventory.EquippedPets and handler.data.Inventory.PetInventory then
         for _, petIndex in ipairs(handler.data.Inventory.EquippedPets) do
@@ -1169,12 +1169,14 @@ handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(functio
         end
     end
     
-    local petMultiplier = statsM.CalculateFuelMultiplier(equippedPetsList)
+    local petBonus = statsM.CalculateFuelMultiplier(equippedPetsList)
     
-    -- VIP and Dev Products (Placeholders - assume 1.0 if not implemented yet)
-    local vipMultiplier = 1.0 
-    local devProductMultiplier = 1.0
-    local totalMultiplier = petMultiplier -- rebirthMultiplier * petMultiplier * vipMultiplier * devProductMultiplier
+    -- VIP and Dev Products (Placeholders - assume 0 bonus if not implemented yet)
+    local vipBonus = 0
+    local devProductBonus = 0
+    
+    -- Total multiplier = 1 + all bonuses
+    local totalMultiplier = 1 + petBonus + rebirthBonus + vipBonus + devProductBonus
     
     local formattedMultiplier = truncateNumber(totalMultiplier)
     

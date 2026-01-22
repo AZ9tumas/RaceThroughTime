@@ -337,21 +337,23 @@ Stats.Pets = {
 	},
 }
 
--- Calculate total fuel multiplier from all equipped pets
--- Returns the sum of all equipped pets' multipliers (default 1.0 if no pets equipped)
+-- Calculate total fuel bonus from all equipped pets
+-- Returns the sum of all equipped pets' bonuses (0 if no pets equipped)
+-- The bonus is added to the base 1.0 multiplier in CalculateFuelFromStars
 -- @param equippedPets table? - Array of equipped pet data { Multiplier: number, ... }
--- @return number - Total fuel multiplier (sum of all pet multipliers)
+-- @return number - Total fuel bonus (sum of all pet multipliers - 1.0 per pet, or 0 if no pets)
 function Stats.CalculateFuelMultiplier(equippedPets: {any}?): number
 	if not equippedPets or #equippedPets == 0 then
-		return 1.0
+		return 0
 	end
 	
-	local totalMultiplier = 0
+	local totalBonus = 0
 	for _, pet in ipairs(equippedPets) do
-		totalMultiplier = totalMultiplier + (pet.Multiplier or 1.0)
+		-- Each pet contributes its multiplier value as bonus (e.g., 1.1 means +1.1 bonus)
+		totalBonus = totalBonus + (pet.Multiplier or 0)
 	end
 	
-	return totalMultiplier
+	return totalBonus
 end
 
 -- Note: Merge costs, bonuses, and grind wall configuration are now in PetMergeStats.luau
@@ -361,15 +363,16 @@ end
 Stats.MaxEquippedPets = 3
 
 -- Calculate total fuel from collected stars and multipliers
--- Total fuel = Stars * (petMultiplier + rebirthMultiplier + baseMultiplier)
+-- Total fuel = Stars * (1 + petBonus + rebirthBonus + otherBonus)
+-- Base multiplier is 1.0, and bonuses are added on top of it
 -- @param stars number - Total star equivalents collected by the player
--- @param petMultiplier number - Fuel multiplier from equipped pets
--- @param rebirthMultiplier number - Fuel multiplier from rebirth bonuses  
--- @param otherMultiplier number? - Other multipliers (VIP, boosts, etc.) defaults to 1.0
+-- @param petBonus number - Fuel bonus from equipped pets (0 if no pets, or sum of pet bonuses)
+-- @param rebirthBonus number - Fuel bonus from rebirth levels (0 if no rebirths, or accumulated bonuses)  
+-- @param otherBonus number? - Other bonuses (VIP, boosts, etc.) defaults to 0
 -- @return number - The calculated total fuel
-function Stats.CalculateFuelFromStars(stars: number, petMultiplier: number, rebirthMultiplier: number, otherMultiplier: number?): number
-	local baseMultiplier = otherMultiplier or 1.0
-	local totalMultiplier = petMultiplier + rebirthMultiplier + baseMultiplier
+function Stats.CalculateFuelFromStars(stars: number, petBonus: number, rebirthBonus: number, otherBonus: number?): number
+	local baseMultiplier = 1.0
+	local totalMultiplier = baseMultiplier + petBonus + rebirthBonus + (otherBonus or 0)
 	return math.floor(stars * totalMultiplier)
 end
 

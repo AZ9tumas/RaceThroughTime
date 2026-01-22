@@ -29,13 +29,15 @@ local StarsFolder = nil
 local TotalStarsCollected = 0 -- Counter for total stars collected by all players in the server
 local StarSpawnLoops = {} -- [Player.UserId] = thread (spawn loop thread)
 
--- Helper function to get fuel multiplier from equipped pets
+-- Helper function to get total fuel multiplier for player (1 + bonuses)
+-- Used for Gems calculation with multipliers
 local function GetFuelMultiplierForPlayer(player: Player): number
 	local DataService = Knit.GetService("DataService")
 	local inventory = DataService:Get(player, "Inventory")
 	local stats = DataService:Get(player, "Stats")
 	
-	local petMultiplier = 1.0
+	-- Calculate pet bonus (0 if no pets equipped)
+	local petBonus = 0
 	if inventory and inventory.PetInventory and inventory.EquippedPets then
 		local equippedPets = {}
 		for _, petIndex in ipairs(inventory.EquippedPets) do
@@ -44,14 +46,15 @@ local function GetFuelMultiplierForPlayer(player: Player): number
 				table.insert(equippedPets, petData)
 			end
 		end
-		petMultiplier = Stats.CalculateFuelMultiplier(equippedPets)
+		petBonus = Stats.CalculateFuelMultiplier(equippedPets)
 	end
 	
-	-- Get rebirth Multiplier (used for star collection, different from speed multiplier)
+	-- Get rebirth bonus (0 if no rebirths)
 	local rebirthLevel = (stats and stats.Rebirths) or 0
-	local rebirthMultiplier = RebirthStats.CalculateTotalMultiplier(rebirthLevel)
+	local rebirthBonus = RebirthStats.CalculateTotalMultiplier(rebirthLevel)
 	
-	return petMultiplier + rebirthMultiplier + Stats.CalculateMultipliers()
+	-- Return total multiplier: 1 + all bonuses
+	return 1 + petBonus + rebirthBonus
 end
 
 -- Recalculate and update the player's fuel based on their Stars and multipliers
@@ -65,8 +68,8 @@ local function RecalculateFuelForPlayer(player: Player)
 	
 	local stars = stats.Stars or 0
 	
-	-- Calculate pet multiplier
-	local petMultiplier = 1.0
+	-- Calculate pet bonus (0 if no pets equipped)
+	local petBonus = 0
 	if inventory and inventory.PetInventory and inventory.EquippedPets then
 		local equippedPets = {}
 		for _, petIndex in ipairs(inventory.EquippedPets) do
@@ -75,18 +78,18 @@ local function RecalculateFuelForPlayer(player: Player)
 				table.insert(equippedPets, petData)
 			end
 		end
-		petMultiplier = Stats.CalculateFuelMultiplier(equippedPets)
+		petBonus = Stats.CalculateFuelMultiplier(equippedPets)
 	end
 	
-	-- Get rebirth multiplier
+	-- Get rebirth bonus (0 if no rebirths)
 	local rebirthLevel = stats.Rebirths or 0
-	local rebirthMultiplier = RebirthStats.CalculateTotalMultiplier(rebirthLevel)
+	local rebirthBonus = RebirthStats.CalculateTotalMultiplier(rebirthLevel)
 	
-	-- Get other multipliers (VIP, boosts, etc.)
-	local otherMultiplier = Stats.CalculateMultipliers()
+	-- Get other bonuses (VIP, boosts, etc.) - currently returns 0
+	local otherBonus = 0
 	
-	-- Calculate new fuel
-	local newFuel = Stats.CalculateFuelFromStars(stars, petMultiplier, rebirthMultiplier, otherMultiplier)
+	-- Calculate new fuel: Stars * (1 + petBonus + rebirthBonus + otherBonus)
+	local newFuel = Stats.CalculateFuelFromStars(stars, petBonus, rebirthBonus, otherBonus)
 	
 	-- Update fuel in player stats
 	DataService:Update(player, "Stats", function(currentStats)
