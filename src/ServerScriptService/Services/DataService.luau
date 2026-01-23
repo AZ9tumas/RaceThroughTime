@@ -427,6 +427,28 @@ function DataService:GetPlayerData(player: Player): any?
 end
 
 --[[
+	Fire the DataReady signal to the client with properly prepared data.
+	This function automatically loads pet information (including IDs) and
+	sends the complete data to the client.
+	
+	Use this function instead of directly calling DataReady:Fire() to ensure
+	pet IDs and other session-specific data are always included.
+	
+	@param player Player - The player to send data to
+	@return boolean - True if data was sent successfully, false if no profile found
+]]
+function DataService:FireDataReady(player: Player): boolean
+	local dataToSend = self:GetPlayerData(player)
+	if not dataToSend then
+		warn(string.format("[DataService]: Cannot fire DataReady for %s - no profile found", player.Name))
+		return false
+	end
+	
+	self.Client.DataReady:Fire(player, dataToSend)
+	return true
+end
+
+--[[
 	Client request to fetch their own data (read-only deep copy).
 	Clients can only fetch their own data.
 	

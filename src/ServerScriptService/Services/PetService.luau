@@ -749,11 +749,8 @@ function PetService:MergePets(player: Player, targetPetID: string, copyCount: nu
 	
 	NotificationService:SendNotification(player, string.format("Merged! %s is now %s tier!", targetPet.Name, newTier.Name), NotificationService.Category.Success)
 	
-	-- Fire DataReady event to update client UI with new data
-	local dataToSend = DataService:GetPlayerData(player)
-	if dataToSend then
-		DataService.Client.DataReady:Fire(player, dataToSend)
-	end
+	-- Fire DataReady event to update client UI with new data including pet IDs
+	DataService:FireDataReady(player)
 	
 	return true, nil, {
 		Name = targetPet.Name,
