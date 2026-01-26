@@ -70,7 +70,7 @@ local PendingRequests = {} -- { Player }
 local function ShowNotification(message: string, category: string?)
 	local NotificationController = Knit.GetController("NotificationController")
 	if NotificationController then
-		local cat = NotificationController.Category[category or "Default"]
+		local cat = NotificationController.Category[category or "Default"] or NotificationController.Category.Default
 		NotificationController:ShowNotification(message, cat)
 	end
 end

@@ -92,6 +92,32 @@ local function IsPlayer1(session: TradeSession, player: Player): boolean
 	return session.Player1 == player
 end
 
+-- Deep copy a table (handles nested tables)
+local function DeepCopy(original: any): any
+	if type(original) ~= "table" then
+		return original
+	end
+	
+	local copy = {}
+	for key, value in pairs(original) do
+		copy[key] = DeepCopy(value)
+	end
+	return copy
+end
+
+-- Copy pet data for trading (creates a deep copy with updated timestamp)
+local function CopyPetDataForTrade(petData: any): any
+	local copy = DeepCopy(petData)
+	copy.ObtainedAt = os.time()
+	return copy
+end
+
+-- Reset acceptance state when offers change
+local function ResetAcceptance(session: TradeSession)
+	session.Player1Accepted = false
+	session.Player2Accepted = false
+end
+
 -- Cancel a specific outgoing request
 local function CancelOutgoingRequest(fromPlayer: Player)
 	local request = OutgoingRequests[fromPlayer.UserId]
@@ -251,26 +277,14 @@ local function CompleteTrade(session: TradeSession)
 	for _, offer in ipairs(session.Player2Offers) do
 		local petData = GetPetData(player2, offer.PetIndex)
 		if petData then
-			-- Create a copy of pet data
-			local petCopy = {}
-			for k, v in pairs(petData) do
-				petCopy[k] = v
-			end
-			petCopy.ObtainedAt = os.time() -- Update obtained time
-			table.insert(petsForPlayer1, petCopy)
+			table.insert(petsForPlayer1, CopyPetDataForTrade(petData))
 		end
 	end
 	
 	for _, offer in ipairs(session.Player1Offers) do
 		local petData = GetPetData(player1, offer.PetIndex)
 		if petData then
-			-- Create a copy of pet data
-			local petCopy = {}
-			for k, v in pairs(petData) do
-				petCopy[k] = v
-			end
-			petCopy.ObtainedAt = os.time() -- Update obtained time
-			table.insert(petsForPlayer2, petCopy)
+			table.insert(petsForPlayer2, CopyPetDataForTrade(petData))
 		end
 	end
 	
@@ -531,8 +545,7 @@ function TradeService:OfferItem(player: Player, petIndex: number): (boolean, str
 	table.insert(offers, offer)
 	
 	-- Reset acceptance since offers changed
-	session.Player1Accepted = false
-	session.Player2Accepted = false
+	ResetAcceptance(session)
 	
 	-- Notify both players
 	NotifyOffersUpdated(session)
@@ -580,8 +593,7 @@ function TradeService:RemoveItem(player: Player, petIndex: number): (boolean, st
 	table.remove(offers, foundIndex)
 	
 	-- Reset acceptance since offers changed
-	session.Player1Accepted = false
-	session.Player2Accepted = false
+	ResetAcceptance(session)
 	
 	-- Notify both players
 	NotifyOffersUpdated(session)
