@@ -127,13 +127,12 @@ function PetMergeStats.IsMaxTier(tierLevel: number): boolean
 end
 
 -- Calculate new stats after merging using the formula: NewStats = OldStats × (2 + RarityBonus)
-function PetMergeStats.CalculateMergedStats(oldStats: { Multiplier: number, FuelBonus: number, PickupRangeBonus: number, RoamRange: number?, StarCollectionRadius: number?, Velocity: number? }, tierLevel: number)
+function PetMergeStats.CalculateMergedStats(oldStats: { Multiplier: number, PickupRangeBonus: number, RoamRange: number?, StarCollectionRadius: number?, Velocity: number? }, tierLevel: number)
 	local tier = PetMergeStats.GetTierByLevel(tierLevel)
 	local formula = 2 + tier.RarityBonus
 	
 	return {
 		Multiplier = oldStats.Multiplier * formula,
-		FuelBonus = oldStats.FuelBonus * formula,
 		PickupRangeBonus = oldStats.PickupRangeBonus * formula,
 		RoamRange = (oldStats.RoamRange) * formula,
 		StarCollectionRadius = (oldStats.StarCollectionRadius) * formula,
@@ -163,7 +162,6 @@ end
 -- These are additive bonuses applied on top of the multiplicative formula
 PetMergeStats.TierBonuses = {
 	MultiplierBonus = 0.05, -- +5% base multiplier per tier
-	FuelBonusIncrease = 0.05, -- +5% fuel bonus per tier
 	PickupRangeBonusIncrease = 0.10, -- +10% pickup range per tier
 }
 

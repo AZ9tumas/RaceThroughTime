@@ -18,7 +18,7 @@ local handler = {
         },
         Inventory = {
             -- PetInventory stores full pet data:
-            -- { Name: string, PetType: string, Multiplier: number, FuelBonus: number, 
+            -- { Name: string, PetType: string, Multiplier: number, 
             --   PickupRangeBonus: number, World: string, Level: number, Rarity: string }
             PetInventory = {},
             EquippedPets = {}, -- Indices of equipped pets (max 3)
@@ -58,6 +58,8 @@ local modules = ReplicatedStorage:WaitForChild("Modules")
 local statsM = require(modules:WaitForChild("Stats"))
 local rebirthStatsM = require(modules:WaitForChild("RebirthStats"))
 local petMergeStatsM = require(modules:WaitForChild("PetMergeStats"))
+local EggHatchStats = require(modules:WaitForChild("EggHatchStats"))
+local EggHatchAnimation = require(modules:WaitForChild("EggHatchAnimation"))
 
 -- Debounce state for track requests
 local isRequestingTrack = false
@@ -77,6 +79,7 @@ local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 local fuelBar = centerHUD:WaitForChild("FuelBar")
 local multiplierLabel: TextLabel = fuelBar:WaitForChild("SpeedStat")
 local fuelText: TextLabel = fuelBar:WaitForChild("FuelText")
+local starCountText: TextLabel = fuelBar:WaitForChild("StarStat")
 local otherFrames: Frame = mainUi:WaitForChild("OtherFrames")
 local worldlabel: TextLabel = mainUi:WaitForChild("TopInfo"):WaitForChild("WorldName")
 
@@ -93,6 +96,12 @@ local shopGemsCount = shopTop:WaitForChild("Gems"):WaitForChild("Count")
 
 local shopEggsContainer = shopMain:WaitForChild("ScrollingFrame"):WaitForChild("Eggs"):WaitForChild("MainFrame")
 local standardEggBuy = shopEggsContainer:WaitForChild("StandardEgg"):WaitForChild("Buy")
+
+-- egg hatching ui
+local eggHatchScreenGui: ScreenGui = PlayerGui:WaitForChild("EggHatchScreen")
+local eggHatchDimmer: Frame = eggHatchScreenGui:WaitForChild("Dimmer")
+local eggviewport: ViewportFrame = eggHatchDimmer:WaitForChild("Viewport")
+local eggHatchFlash: Frame? = eggHatchScreenGui:FindFirstChild("Flash")
 
 -- pets and inv
 local petsButton: TextButton = leftPanel:WaitForChild("PetsButton")
@@ -483,7 +492,6 @@ function handler.UpdatePetsInventory()
             ID = petData.ID,
             Name = petData.Name,
             Multiplier = petData.Multiplier,
-            FuelBonus = petData.FuelBonus,
             PickupRangeBonus = petData.PickupRangeBonus,
             RoamRange = petData.RoamRange,
             StarCollectionRadius = petData.StarCollectionRadius,
@@ -739,9 +747,13 @@ handler._connections["MergeClose"] = mergeCloseButton.MouseButton1Click:Connect(
     mergeMainFrame.Visible = false
 end)
 
+function handler.UpdateStar(amount: number)
+    starCountText.Text = "⭐ " .. truncateNumber(amount)
+end
+
 function handler.UpdateFuelUI(amount: number)
     -- Update fuel text
-    fuelText.Text = "⭐ FUEL: " .. math.floor(amount)
+    fuelText.Text = "⛽ FUEL: " .. math.floor(amount)
 end
 
 function handler.UpdateCashUI(amount: number)
@@ -775,6 +787,7 @@ function handler.UpdateDataOnClient(newData)
     handler.UpdateRewardsStatus()
     handler.UpdateShopUI()
     handler.UpdateWorlds()
+    handler.UpdateStar(handler.data.Stats.Stars)
 
     print("UPDATED DATA ON CLIENT:", handler.data)
 end
@@ -904,24 +917,47 @@ handler._connections["ShopButton"] = shopButton.MouseButton1Click:Connect(functi
 end)
 
 handler._connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connect(function()
-    -- Purchase egg and immediately receive pet
-    EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, petInfo)
-        if success and petInfo then
-            print("Obtained pet from StandardEgg:", petInfo.Name, "ID:", petInfo.ID)
-            
-            -- Update local pet inventory
-            if not handler.data.Inventory.PetInventory then
-                handler.data.Inventory.PetInventory = {}
+    -- Check if animation is already playing
+    if EggHatchAnimation.IsPlaying() then
+        return
+    end
+    
+    -- Show the egg hatch screen
+    eggviewport.Parent.Visible = true
+    shopMain.Visible = false
+    
+    -- Play egg hatch animation first, then request purchase from server
+    EggHatchAnimation.PlayHatch(
+        eggviewport,
+        "StandardEgg", -- Egg model name in Assets/Eggs
+        eggHatchDimmer,
+        eggHatchFlash,
+        function(animationSuccess)
+            -- Animation complete, now request the actual purchase from server
+            if animationSuccess then
+                EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, petInfo)
+                    if success and petInfo then
+                        print("Obtained pet from StandardEgg:", petInfo.Name, "ID:", petInfo.ID)
+                        
+                        -- Update local pet inventory
+                        if not handler.data.Inventory.PetInventory then
+                            handler.data.Inventory.PetInventory = {}
+                        end
+                        
+                        table.insert(handler.data.Inventory.PetInventory, petInfo)
+                        
+                        -- Update the pets inventory UI if it's visible
+                        handler.UpdatePetsInventory()
+                    else
+                        print("Failed to purchase StandardEgg:", errorMsg or "Unknown error")
+                    end
+                end)
             end
             
-            table.insert(handler.data.Inventory.PetInventory, petInfo)
-            
-            -- Update the pets inventory UI if it's visible
-            handler.UpdatePetsInventory()
-        else
-            print("Failed to purchase StandardEgg:", errorMsg or "Unknown error")
+            -- Hide the egg hatch screen after animation
+            eggviewport.Parent.Visible = false
         end
-    end)
+    )
 end)
 
 handler._connections["ShopClose"] = shopMain:WaitForChild("Close").MouseButton1Click:Connect(function()
@@ -1148,11 +1184,11 @@ handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(functio
     handler.UpdateCashUI(cashVal.Value)
     handler.UpdateGemsUI(gemsVal.Value)
     
-    -- Calculate Rebirth Multiplier (using Multiplier for star collection, not CashMultiplier)
+    -- Calculate Rebirth Bonus (using Multiplier for star collection, not CashMultiplier)
     local currentRebirthLevel = handler.data.Stats.Rebirths or 0
-    local rebirthMultiplier = rebirthStatsM.CalculateTotalMultiplier(currentRebirthLevel)
+    local rebirthBonus = rebirthStatsM.CalculateTotalMultiplier(currentRebirthLevel)
     
-    -- Calculate Pet Multiplier
+    -- Calculate Pet Bonus
     local equippedPetsList = {}
     if handler.data.Inventory and handler.data.Inventory.EquippedPets and handler.data.Inventory.PetInventory then
         for _, petIndex in ipairs(handler.data.Inventory.EquippedPets) do
@@ -1163,17 +1199,16 @@ handler._connections["RenderStepped"] = RunService.RenderStepped:Connect(functio
         end
     end
     
-    local petMultiplier = statsM.CalculateFuelMultiplier(equippedPetsList)
+    local petBonus = statsM.CalculateFuelMultiplier(equippedPetsList)
     
-    -- VIP and Dev Products (Placeholders - assume 1.0 if not implemented yet)
-    local vipMultiplier = 1.0 
-    local devProductMultiplier = 1.0
-    local totalMultiplier = rebirthMultiplier * petMultiplier * vipMultiplier * devProductMultiplier
+    -- Get other bonuses (VIP, dev products, etc.)
+    local otherBonus = statsM.CalculateOtherBonus()
     
-    local formattedMultiplier = string.format("%.1f", totalMultiplier)
-    if formattedMultiplier:sub(-2) == ".0" then
-        formattedMultiplier = formattedMultiplier:sub(1, -3)
-    end
+    -- Total multiplier: if all bonuses are 0, use 1; otherwise sum of all bonuses
+    local totalBonuses = petBonus + rebirthBonus + otherBonus
+    local totalMultiplier = totalBonuses > 0 and totalBonuses or 1
+    
+    local formattedMultiplier = truncateNumber(totalMultiplier)
     
     multiplierLabel.Text = "⚡ x" .. formattedMultiplier
 

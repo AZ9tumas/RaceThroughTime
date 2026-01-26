@@ -9,7 +9,6 @@ export type Pet = {
 	Name: string,
 	PetType: string?,
 	Multiplier: number,
-	FuelBonus: number?,
 	PickupRangeBonus: number?,
 	RoamRange: number?,
 	StarCollectionRadius: number?,
@@ -111,13 +110,14 @@ Stats.StarProbabilities = {
 	Gems = 0.04,         -- 4% chance (Rare gem)
 }
 
--- Fuel bonuses for each star type
-Stats.StarFuelValues = {
-	YellowStar = 50,     -- Low fuel bonus
-	BlueStar = 100,       -- Medium fuel bonus
-	PurpleStar = 250,     -- High fuel bonus
-	WhiteStar = 1000,     -- Very high fuel bonus
-	Gems = 0,             -- Gems don't give fuel
+-- Star equivalents for fuel calculation (1 star = 1 unit of fuel base)
+-- Total fuel = Stars * multipliers (pet + rebirth + other multipliers)
+Stats.StarEquivalents = {
+	YellowStar = 1,       -- Common star equivalent
+	BlueStar = 2,         -- Uncommon star equivalent
+	PurpleStar = 3,       -- Rare star equivalent
+	WhiteStar = 5,        -- Legendary star equivalent
+	Gems = 0,             -- Gems don't contribute to fuel
 }
 
 -- Gem values for gem-type stars
@@ -324,8 +324,7 @@ Stats.Pets = {
 	StandardPet = {
 		Name = "Standard Pet",
 		TierLevel = 1, -- Required especially during merging pets
-		Multiplier = 1.1, -- 10% boost to earnings
-		FuelBonus = 1.1, -- 10% fuel collection increase
+		Multiplier = 10, -- x10
 		PickupRangeBonus = 1.0, -- No range extension (base range)
 		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
 		StarCollectionRadius = 10, -- Distance from star to collect it
@@ -336,21 +335,23 @@ Stats.Pets = {
 	},
 }
 
--- Calculate total fuel multiplier from all equipped pets
--- Returns the sum of all equipped pets' multipliers (default 1.0 if no pets equipped)
+-- Calculate total fuel bonus from all equipped pets
+-- Returns the sum of all equipped pets' bonuses (0 if no pets equipped)
+-- The bonus is added to the base 1.0 multiplier in CalculateFuelFromStars
 -- @param equippedPets table? - Array of equipped pet data { Multiplier: number, ... }
--- @return number - Total fuel multiplier (sum of all pet multipliers)
+-- @return number - Total fuel bonus (sum of pet Multiplier values, or 0 if no pets)
 function Stats.CalculateFuelMultiplier(equippedPets: {any}?): number
 	if not equippedPets or #equippedPets == 0 then
-		return 1.0
+		return 0
 	end
 	
-	local totalMultiplier = 0
+	local totalBonus = 0
 	for _, pet in ipairs(equippedPets) do
-		totalMultiplier = totalMultiplier + (pet.Multiplier or 1.0)
+		-- Each pet's Multiplier value is added directly as bonus
+		totalBonus = totalBonus + (pet.Multiplier or 0)
 	end
 	
-	return totalMultiplier
+	return totalBonus
 end
 
 -- Note: Merge costs, bonuses, and grind wall configuration are now in PetMergeStats.luau
@@ -358,5 +359,33 @@ end
 
 -- Maximum number of pets that can be equipped at once
 Stats.MaxEquippedPets = 3
+
+-- Calculate other bonuses (VIP, dev products, boosts, etc.)
+-- Returns 0 by default - to be extended with VIP and dev product bonuses
+-- @return number - Total other bonus (0 if no special bonuses active)
+function Stats.CalculateOtherBonus(): number
+	-- Placeholder for future implementation of VIP, dev products, etc.
+	local vipBonus = 0
+	local devProductBonus = 0
+	local boostBonus = 0
+	
+	return vipBonus + devProductBonus + boostBonus
+end
+
+-- Calculate total fuel from collected stars and multipliers
+-- Total fuel = Stars * totalMultiplier
+-- If all bonuses are 0, use 1 as the default multiplier
+-- Otherwise, use the sum of all bonuses
+-- @param stars number - Total star equivalents collected by the player
+-- @param petBonus number - Fuel bonus from equipped pets (0 if no pets, or sum of pet Multiplier values)
+-- @param rebirthBonus number - Fuel bonus from rebirth levels (0 if no rebirths, or accumulated bonuses)  
+-- @param otherBonus number? - Other bonuses (VIP, boosts, etc.) defaults to 0
+-- @return number - The calculated total fuel
+function Stats.CalculateFuelFromStars(stars: number, petBonus: number, rebirthBonus: number, otherBonus: number?): number
+	local totalBonuses = petBonus + rebirthBonus + (otherBonus or 0)
+	-- If all bonuses are 0, use 1 as default multiplier
+	local totalMultiplier = totalBonuses > 0 and totalBonuses or 1
+	return math.floor(stars * totalMultiplier)
+end
 
 return Stats

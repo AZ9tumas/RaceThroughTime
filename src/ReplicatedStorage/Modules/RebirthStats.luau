@@ -133,20 +133,22 @@ function RebirthStats.CalculateTotalSpeedMultiplier(rebirthLevel: number): numbe
 	return totalMultiplier
 end
 
--- Calculate total Multiplier from all rebirth levels
+-- Calculate total Multiplier bonus from all rebirth levels
 -- This is used for star/fuel collection bonuses (NOT speed)
+-- Returns 0 if no rebirths, or the accumulated rebirth bonuses
+-- The bonus is added to the base 1.0 multiplier in CalculateFuelFromStars
 -- @param rebirthLevel number - Current rebirth level
--- @return number - Total multiplier (1.0 base + accumulated bonuses)
+-- @return number - Total rebirth bonus (0 + accumulated bonuses from each rebirth level)
 function RebirthStats.CalculateTotalMultiplier(rebirthLevel: number): number
-	local totalMultiplier = 1.0
+	local totalBonus = 0
 	
 	for _, rebirth in ipairs(RebirthStats.RebirthLevels) do
 		if rebirth.Level <= rebirthLevel then
-			totalMultiplier = totalMultiplier + (rebirth.Multiplier or 0)
+			totalBonus = totalBonus + (rebirth.Multiplier or 0)
 		end
 	end
 	
-	return totalMultiplier
+	return totalBonus
 end
 
 -- Get progress toward next rebirth

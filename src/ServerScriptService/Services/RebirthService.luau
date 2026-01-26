@@ -92,9 +92,10 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 		return currencies
 	end)
 	
-	-- Reset fuel (personal stars)
+	-- Reset stars and fuel (fresh start after rebirth)
 	DataService:Update(player, "Stats", function(stats)
-		stats.Fuel = Stats.StartingFuel -- Reset to starting fuel
+		stats.Stars = 0 -- Reset star equivalents collected
+		stats.Fuel = Stats.StartingFuel -- Reset to starting fuel (will be recalculated)
 		stats.Rebirths = newLevel -- Increment rebirth level
 		return stats
 	end)
@@ -161,7 +162,6 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 					PetType = petType,
 					Name = petConfig.Name .. " (Rebirth)",
 					Multiplier = petConfig.Multiplier,
-					FuelBonus = petConfig.FuelBonus or 1.1,
 					PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
 					RoamRange = petConfig.RoamRange or 30,
 					StarCollectionRadius = petConfig.StarCollectionRadius or 5,
@@ -187,7 +187,6 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 					ID = petID,
 					PetType = petType,
 					Multiplier = petConfig.Multiplier,
-					FuelBonus = petConfig.FuelBonus or 1.1,
 					PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
 					RoamRange = petConfig.RoamRange or 30,
 					StarCollectionRadius = petConfig.StarCollectionRadius or 5,
@@ -217,6 +216,10 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 		newMultiplier,
 		tostring(keptPets)
 	))
+	
+	-- Recalculate fuel based on new multipliers (Stars was reset to 0)
+	local StarService = Knit.GetService("StarService")
+	StarService:RecalculateFuel(player)
 	
 	-- Send success notification
 	NotificationService:SendNotification(
