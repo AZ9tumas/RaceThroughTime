@@ -788,6 +788,8 @@ function TradeService.Client:DeclineTradeRequest(player: Player, fromPlayer: Pla
 end
 
 function TradeService.Client:OfferItem(player: Player, petIndex: number): (boolean, string?)
+	local success, response = TradeService:OfferItem(player, petIndex)
+	warn(response)
 	return TradeService:OfferItem(player, petIndex)
 end
 

@@ -1518,6 +1518,15 @@ local function ShowTradeUI(otherPlayer: Player)
     -- Show main trade frame
     mainTradeUI.MainTradeFrame.Visible = true
     
+    -- Update remote player name
+    local petsFrame = mainTradeUI.RemoteFrame:FindFirstChild("Pets")
+    if petsFrame then
+        local playerLabel = petsFrame:FindFirstChild("Player")
+        if playerLabel and playerLabel:IsA("TextLabel") then
+            playerLabel.Text = otherPlayer.DisplayName
+        end
+    end
+
     -- Update displays
     UpdateLocalTradePets()
     UpdateRemoteTradePets()
