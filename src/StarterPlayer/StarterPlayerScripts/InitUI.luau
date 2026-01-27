@@ -188,7 +188,8 @@ local playerListUI = {
 
 --[[
     The pets scrolling frame is found in (localFrame/RemoteFrame).Pets.ScrollingFrame
-    The respective template is found under ScrollingFrame.UIGridLayout.Template
+    The respective template is found under the respective ScrollingFrame.UIGridLayout.Template
+    Note that the template here is exactly the same as the template used for the pet inventory frame (refer to how pets are setup in the inventory, UpdatePetsInventory)
 
     lockin button is at localFrame.LockIn which is a text button, update this based on state (lock in or accept, colors are mentioned as well, colorDetails)
     remoteFrame.Status is a text label showing status of the other player
