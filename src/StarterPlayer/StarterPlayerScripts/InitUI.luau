@@ -1226,7 +1226,7 @@ local tradePetConnections = {} -- connections for trade pet buttons
 
 -- Debug logging helper
 local function TradeLog(message: string)
-    print("[TradeUI]: " .. message)
+    warn("[TradeUI]: " .. message)
 end
 
 -- Get local frame's pet scrolling frame and template

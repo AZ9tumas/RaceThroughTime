@@ -518,8 +518,11 @@ function TradeService:OfferItem(player: Player, petIndex: number): (boolean, str
 	end
 	
 	local isP1 = IsPlayer1(session, player)
-	local offers = isP1 and session.Player1Offers or session.Player2Offers
-	local lockedIn = isP1 and session.Player1LockedIn or session.Player2LockedIn
+	local offers = session.Player1Offers
+	if not isP1 then offers = session.Player2Offers end
+
+	local lockedIn = session.Player1LockedIn
+	if not isP1 then lockedIn = session.Player2LockedIn end
 	
 	-- Check if player is locked in
 	if lockedIn then
@@ -569,8 +572,10 @@ function TradeService:RemoveItem(player: Player, petIndex: number): (boolean, st
 	end
 	
 	local isP1 = IsPlayer1(session, player)
-	local offers = isP1 and session.Player1Offers or session.Player2Offers
-	local lockedIn = isP1 and session.Player1LockedIn or session.Player2LockedIn
+	local offers = session.Player1Offers
+	if not isP1 then offers = session.Player2Offers end
+	local lockedIn = session.Player1LockedIn
+	if not isP1 then lockedIn = session.Player2LockedIn end
 	
 	-- Check if player is locked in
 	if lockedIn then
