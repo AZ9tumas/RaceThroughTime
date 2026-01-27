@@ -1457,25 +1457,38 @@ local function UpdateRemoteTradePets()
     -- Create pet frames for their offered pets
     for _, offer in ipairs(tradeState.TheirOffers) do
         local petData = offer.PetData
-        if not petData then continue end
+        if not petData then 
+            TradeLog("WARNING: No PetData in offer for index " .. tostring(offer.PetIndex))
+            continue 
+        end
+        
+        TradeLog("Remote pet offered - Index: " .. offer.PetIndex .. ", Name: " .. (petData.Name or "nil") .. ", Multiplier: " .. tostring(petData.Multiplier or "nil"))
         
         local petFrame = template:Clone()
         petFrame.Name = "RemotePet_" .. offer.PetIndex
         petFrame.Visible = true
         
-        -- Set pet name
+        -- Set pet name (same structure as local frame)
         local nameLabel = petFrame:FindFirstChild("PetName")
         if nameLabel then
             nameLabel.Text = petData.Name or "Unknown Pet"
+            TradeLog("Set remote pet name to: " .. nameLabel.Text)
+        else
+            TradeLog("WARNING: Could not find PetName label in remote template")
         end
         
-        -- Set multiplier
+        -- Set multiplier (same structure as local frame)
         local multiplierFrame = petFrame:FindFirstChild("Multiplier")
         if multiplierFrame then
             local multiplierLabel = multiplierFrame:FindFirstChild("TextLabel")
             if multiplierLabel then
                 multiplierLabel.Text = string.format("x%.1f", petData.Multiplier or 1.0)
+                TradeLog("Set remote pet multiplier to: " .. multiplierLabel.Text)
+            else
+                TradeLog("WARNING: Could not find TextLabel in Multiplier frame")
             end
+        else
+            TradeLog("WARNING: Could not find Multiplier frame in remote template")
         end
         
         -- Set stroke color based on tier
