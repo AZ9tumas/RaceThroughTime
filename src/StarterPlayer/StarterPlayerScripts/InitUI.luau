@@ -1407,29 +1407,48 @@ local function UpdateLocalTradePets()
         
         -- Connect click to toggle offer (if not locked in)
         if petFrame:IsA("TextButton") then
+            local petIndex = index -- Capture the index for the closure
             local conn = petFrame.MouseButton1Click:Connect(function()
-                if iLockedIn then
+                -- Get current trade state (not captured state)
+                local currentTradeState = TradeController:GetTradeState()
+                if not currentTradeState then
+                    TradeLog("Cannot modify offers - no active trade")
+                    return
+                end
+                
+                if currentTradeState.ILockedIn then
                     TradeLog("Cannot modify offers - already locked in")
                     return
                 end
                 
-                if offeredSet[index] then
+                -- Check if this pet is currently offered
+                local currentlyOffered = false
+                if currentTradeState.MyOffers then
+                    for _, offer in ipairs(currentTradeState.MyOffers) do
+                        if offer.PetIndex == petIndex then
+                            currentlyOffered = true
+                            break
+                        end
+                    end
+                end
+                
+                if currentlyOffered then
                     -- Remove from offer
-                    TradeLog("Removing pet #" .. index .. " from offer")
-                    local success = TradeController:RemovePet(index)
+                    TradeLog("Removing pet #" .. petIndex .. " from offer")
+                    local success = TradeController:RemovePet(petIndex)
                     if success then
-                        TradeLog("Successfully removed pet #" .. index)
+                        TradeLog("Successfully removed pet #" .. petIndex)
                     else
-                        TradeLog("Failed to remove pet #" .. index)
+                        TradeLog("Failed to remove pet #" .. petIndex)
                     end
                 else
                     -- Add to offer
-                    TradeLog("Offering pet #" .. index)
-                    local success = TradeController:OfferPet(index)
+                    TradeLog("Offering pet #" .. petIndex)
+                    local success = TradeController:OfferPet(petIndex)
                     if success then
-                        TradeLog("Successfully offered pet #" .. index)
+                        TradeLog("Successfully offered pet #" .. petIndex)
                     else
-                        TradeLog("Failed to offer pet #" .. index)
+                        TradeLog("Failed to offer pet #" .. petIndex)
                     end
                 end
             end)
@@ -1695,13 +1714,21 @@ handler._connections["TradeLockIn"] = GetLockInButton().MouseButton1Click:Connec
     if not tradeState then return end
     
     if tradeState.ILockedIn and tradeState.TheyLockedIn then
-        -- Both locked in - this is the Accept action
-        TradeLog("Accepting trade")
-        TradeController:Accept()
+        if not tradeState.IAccepted then
+            -- Both locked in and I haven't accepted yet - this is the Accept action
+            TradeLog("Accepting trade")
+            TradeController:Accept()
+        else
+            -- Already accepted, waiting for other player
+            TradeLog("Already accepted, waiting for other player")
+        end
     elseif not tradeState.ILockedIn then
         -- Lock in
         TradeLog("Locking in trade offer")
         TradeController:LockIn()
+    else
+        -- I'm locked in but they're not
+        TradeLog("Waiting for other player to lock in")
     end
 end)
 
