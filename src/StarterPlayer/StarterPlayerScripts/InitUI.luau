@@ -162,6 +162,47 @@ local worldClose: TextButton = worldMenu:WaitForChild("Close")
 local worldScrollFrame: ScrollingFrame = worldMenu:WaitForChild("ScrollingFrame")
 local worldButtonTemplate: TextButton = worldScrollFrame:WaitForChild("UIListLayout"):WaitForChild("Template")
 
+-- trading ui
+local tradeButton: TextButton = leftPanel:WaitForChild("TradeButton")
+local tradingScreenGui: ScreenGui = PlayerGui:WaitForChild("TradingSuite")
+local cancelTrade: TextButton = tradingScreenGui:WaitForChild("MainTradeFrame"):WaitForChild("Cancel")
+local incomingRequestUI = {
+    IncomingRequestFrame = tradingScreenGui:WaitForChild("IncomingRequest") :: Frame,
+    InfoLabel = tradingScreenGui:WaitForChild("IncomingRequest"):WaitForChild("Info") :: TextLabel,
+    Accept = tradingScreenGui:WaitForChild("IncomingRequest"):WaitForChild("Accept") :: TextButton,
+    Decline = tradingScreenGui:WaitForChild("IncomingRequest"):WaitForChild("Decline") :: TextButton
+}
+local mainTradeUI = {
+    MainTradeFrame = tradingScreenGui:WaitForChild("MainTradeFrame") :: Frame,
+    -- local player's frame, updated right away here itself
+    LocalFrame = tradingScreenGui:WaitForChild("MainTradeFrame"):WaitForChild("Local") :: Frame,
+    -- other player's frame, updated via client-server networking
+    RemoteFrame = tradingScreenGui:WaitForChild("MainTradeFrame"):WaitForChild("Remote") :: Frame,
+}
+
+local playerListUI = {
+    PlayerListFrame = tradingScreenGui:WaitForChild("PlayerListFrame") :: Frame,
+    ScrollingFrame = tradingScreenGui:WaitForChild("PlayerListFrame"):WaitForChild("ScrollingFrame") :: ScrollingFrame,
+    Template = tradingScreenGui:WaitForChild("PlayerListFrame"):WaitForChild("ScrollingFrame"):WaitForChild("UIListLayout"):WaitForChild("Template") :: Frame,
+}
+
+--[[
+    The pets scrolling frame is found in (localFrame/RemoteFrame).Pets.ScrollingFrame
+    The respective template is found under ScrollingFrame.UIGridLayout.Template
+
+    lockin button is at localFrame.LockIn which is a text button, update this based on state (lock in or accept, colors are mentioned as well, colorDetails)
+    remoteFrame.Status is a text label showing status of the other player
+
+    For playerList, Template is already initialized above, it contains Trade :: TextButton, HeadShot :: ImageLabel, Username :: TextLabel
+    set the player's head pic as headshot but it is not mandatory so wrap it in a pcall and ignore errors if any
+    username must be display name of the player (not the official username)
+]]
+
+local colorDetails = {
+    LockIn = Color3.fromRGB(85, 85, 127),
+    Accept = Color3.fromRGB(46, 204, 113)
+}
+
 -- Currently selected pet data for the modal
 local selectedPetData = nil
 
@@ -1170,6 +1211,60 @@ end)
 -- worlds
 handler._connections["WorldClose"] = worldClose.MouseButton1Click:Connect(function()
     worldMenu.Visible = false
+end)
+
+-- Trade UI handlers
+local function UpdatePlayerList()
+    local TradeService = Knit.GetService("TradeService")
+    
+    -- Clear existing items (except template/layout)
+    for _, child in ipairs(playerListUI.ScrollingFrame:GetChildren()) do
+        if child.Name ~= "UIListLayout" and child.Name ~= "Template" then
+            child:Destroy()
+        end
+    end
+    
+    -- Populate list
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        if otherPlayer == player then continue end
+        
+        local template = playerListUI.Template:Clone()
+        template.Name = otherPlayer.Name
+        template.Visible = true
+        template.Username.Text = otherPlayer.DisplayName
+        
+        task.spawn(function()
+            pcall(function()
+                local content, isReady = Players:GetUserThumbnailAsync(otherPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
+                if isReady then
+                    template.HeadShot.Image = content
+                end
+            end)
+        end)
+        
+        template.Trade.MouseButton1Click:Connect(function()
+            TradeService:RequestTrade(otherPlayer)
+            
+            local NotificationController = Knit.GetController("NotificationController")
+            if NotificationController then
+                NotificationController:ShowNotification("Sent trade request to " .. otherPlayer.DisplayName, NotificationController.Category.Success, 3)
+            end
+        end)
+        
+        template.Parent = playerListUI.ScrollingFrame
+    end
+end
+
+handler._connections["TradeButton"] = tradeButton.MouseButton1Click:Connect(function()
+    local wasVisible = playerListUI.PlayerListFrame.Visible
+    CloseAllFrames() -- Close other frames
+    
+    -- Toggle visibility
+    playerListUI.PlayerListFrame.Visible = not wasVisible
+    
+    if playerListUI.PlayerListFrame.Visible then
+        UpdatePlayerList()
+    end
 end)
 
 -- Listen for DataReady signal from server to update UI

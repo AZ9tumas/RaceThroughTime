@@ -17,7 +17,7 @@ local ProfileStore = require(script.Parent.Parent.Modules.ProfileStore)
 -- Data Template
 local Template = {
 	Currencies = {
-		Cash = 0,
+		Cash = 1000,
 		Gems = 0,
 	},
 	Stats = {
@@ -184,11 +184,24 @@ local function TryResolveSession(player: Player)
 	if profile and clientReady and sessionPromise and sessionPromise.resolve then
 		print(player, "Session Initialized")
 		
+		-- Give random pet for testing
+		local standardPet = statsM.Pets.StandardPet
+		if standardPet then
+			DataService:Update(player, "Inventory", function(inventory)
+				local newPet = table.clone(standardPet)
+				newPet.Multiplier = math.random(1, 50)
+				table.insert(inventory.PetInventory, newPet)
+				return inventory
+			end)
+		end
+
 		local dataToSend = setupPets(player, profile.Data)
 		
 		DataService.Client.DataReady:Fire(player, dataToSend)
 		sessionPromise.resolve()
 		sessionPromise.resolve = nil -- Prevent double resolution
+
+		DataService:Update(player, "Currencies", function(c) c.Cash += 1000 return c end)
 	end
 end
 
