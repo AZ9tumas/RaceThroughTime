@@ -1279,17 +1279,26 @@ local function UpdateLockInButton()
     local tradeState = TradeController:GetTradeState()
     if not tradeState then return end
     
+    local otherPlayerName = tradeState.OtherPlayer and tradeState.OtherPlayer.DisplayName or "other player"
+    
     if tradeState.ILockedIn then
         if tradeState.TheyLockedIn then
-            -- Both locked in - show Accept button
-            lockInButton.Text = "Accept"
-            lockInButton.BackgroundColor3 = colorDetails.Accept
-            TradeLog("Lock-in button changed to Accept (both locked in)")
+            if tradeState.IAccepted then
+                -- I accepted, waiting for them to accept
+                lockInButton.Text = "Waiting for " .. otherPlayerName .. " to accept..."
+                lockInButton.BackgroundColor3 = colorDetails.LockIn
+                TradeLog("Lock-in button: Waiting for " .. otherPlayerName .. " to accept")
+            else
+                -- Both locked in - show Accept button
+                lockInButton.Text = "Accept"
+                lockInButton.BackgroundColor3 = colorDetails.Accept
+                TradeLog("Lock-in button changed to Accept (both locked in)")
+            end
         else
-            -- Only I'm locked in - waiting for other player
-            lockInButton.Text = "Waiting..."
+            -- Only I'm locked in - waiting for other player to lock in
+            lockInButton.Text = "Waiting for " .. otherPlayerName .. " to lock in..."
             lockInButton.BackgroundColor3 = colorDetails.LockIn
-            TradeLog("Lock-in button changed to Waiting (I'm locked in)")
+            TradeLog("Lock-in button: Waiting for " .. otherPlayerName .. " to lock in")
         end
     else
         -- Not locked in yet
@@ -1310,15 +1319,17 @@ local function UpdateRemoteStatus()
         return
     end
     
+    local otherPlayerName = tradeState.OtherPlayer and tradeState.OtherPlayer.DisplayName or "Other player"
+    
     if tradeState.TheyAccepted then
-        statusLabel.Text = "Accepted ✓"
-        TradeLog("Remote status: Accepted")
+        statusLabel.Text = otherPlayerName .. " accepted ✓"
+        TradeLog("Remote status: " .. otherPlayerName .. " accepted")
     elseif tradeState.TheyLockedIn then
-        statusLabel.Text = "Locked In"
-        TradeLog("Remote status: Locked In")
+        statusLabel.Text = otherPlayerName .. " locked in"
+        TradeLog("Remote status: " .. otherPlayerName .. " locked in")
     else
-        statusLabel.Text = "Selecting..."
-        TradeLog("Remote status: Selecting")
+        statusLabel.Text = otherPlayerName .. " is selecting..."
+        TradeLog("Remote status: " .. otherPlayerName .. " is selecting")
     end
 end
 
