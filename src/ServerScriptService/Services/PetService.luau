@@ -466,6 +466,66 @@ function PetService:UnequipPet(player: Player, petID: string): (boolean, string?
 	return true, nil
 end
 
+-- Unequip a pet by inventory index (used internally by TradeService)
+function PetService:UnequipPetByIndex(player: Player, petIndex: number): (boolean, string?)
+	local DataService = Knit.GetService("DataService")
+	
+	-- Get player inventory
+	local inventory = DataService:Get(player, "Inventory")
+	if not inventory or not inventory.EquippedPets then
+		return false, "No pets equipped"
+	end
+	
+	-- Check if this pet is equipped
+	local found = false
+	for _, equippedIndex in ipairs(inventory.EquippedPets) do
+		if equippedIndex == petIndex then
+			found = true
+			break
+		end
+	end
+	
+	if not found then
+		return true, nil -- Pet not equipped, nothing to do
+	end
+	
+	-- Get pet ID for signaling
+	local petID = self:GetPetIDByIndex(player, petIndex)
+	
+	-- Remove from equipped
+	DataService:Update(player, "Inventory", function(inv)
+		if inv.EquippedPets then
+			for i, equippedIdx in ipairs(inv.EquippedPets) do
+				if equippedIdx == petIndex then
+					table.remove(inv.EquippedPets, i)
+					break
+				end
+			end
+		end
+		return inv
+	end)
+	
+	Log(string.format("Player %s unequipped pet at index %d (by index)", player.Name, petIndex))
+	
+	-- Despawn the pet model
+	DespawnPetModel(player, petIndex)
+	
+	-- Fire signal to ALL clients
+	for _, p in ipairs(Players:GetPlayers()) do
+		PetService.Client.PetUnequipped:Fire(p, {
+			OwnerUserId = player.UserId,
+			ID = petID or "",
+			PetIndex = petIndex,
+		})
+	end
+	
+	-- Recalculate fuel since multiplier has changed
+	local StarService = Knit.GetService("StarService")
+	StarService:RecalculateFuel(player)
+	
+	return true, nil
+end
+
 -- Get all pets for a player (with runtime IDs)
 function PetService:GetPlayerPets(player: Player): { Pet }
 	local DataService = Knit.GetService("DataService")

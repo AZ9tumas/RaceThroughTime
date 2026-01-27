@@ -53,6 +53,9 @@ local DailyRewardService = Knit.GetService("DailyRewardService")
 local DataService = Knit.GetService("DataService")
 local PetService = Knit.GetService("PetService")
 
+-- Get TradeController (controller, not service - for client-side trade management)
+local TradeController = Knit.GetController("TradeController")
+
 -- modules
 local modules = ReplicatedStorage:WaitForChild("Modules")
 local statsM = require(modules:WaitForChild("Stats"))
@@ -162,6 +165,48 @@ local worldClose: TextButton = worldMenu:WaitForChild("Close")
 local worldScrollFrame: ScrollingFrame = worldMenu:WaitForChild("ScrollingFrame")
 local worldButtonTemplate: TextButton = worldScrollFrame:WaitForChild("UIListLayout"):WaitForChild("Template")
 
+-- trading ui
+local tradeButton: TextButton = leftPanel:WaitForChild("TradeButton")
+local tradingScreenGui: ScreenGui = PlayerGui:WaitForChild("TradingSuite")
+local cancelTrade: TextButton = tradingScreenGui:WaitForChild("MainTradeFrame"):WaitForChild("Cancel")
+local incomingRequestUI = {
+    IncomingRequestFrame = tradingScreenGui:WaitForChild("IncomingRequest") :: Frame,
+    InfoLabel = tradingScreenGui:WaitForChild("IncomingRequest"):WaitForChild("Info") :: TextLabel,
+    Accept = tradingScreenGui:WaitForChild("IncomingRequest"):WaitForChild("Accept") :: TextButton,
+    Decline = tradingScreenGui:WaitForChild("IncomingRequest"):WaitForChild("Decline") :: TextButton
+}
+local mainTradeUI = {
+    MainTradeFrame = tradingScreenGui:WaitForChild("MainTradeFrame") :: Frame,
+    -- local player's frame, updated right away here itself
+    LocalFrame = tradingScreenGui:WaitForChild("MainTradeFrame"):WaitForChild("Local") :: Frame,
+    -- other player's frame, updated via client-server networking
+    RemoteFrame = tradingScreenGui:WaitForChild("MainTradeFrame"):WaitForChild("Remote") :: Frame,
+}
+
+local playerListUI = {
+    PlayerListFrame = tradingScreenGui:WaitForChild("PlayerListFrame") :: Frame,
+    ScrollingFrame = tradingScreenGui:WaitForChild("PlayerListFrame"):WaitForChild("ScrollingFrame") :: ScrollingFrame,
+    Template = tradingScreenGui:WaitForChild("PlayerListFrame"):WaitForChild("ScrollingFrame"):WaitForChild("UIListLayout"):WaitForChild("Template") :: Frame,
+}
+
+--[[
+    The pets scrolling frame is found in (localFrame/RemoteFrame).Pets.ScrollingFrame
+    The respective template is found under the respective ScrollingFrame.UIGridLayout.Template
+    Note that the template here is exactly the same as the template used for the pet inventory frame (refer to how pets are setup in the inventory, UpdatePetsInventory)
+
+    lockin button is at localFrame.LockIn which is a text button, update this based on state (lock in or accept, colors are mentioned as well, colorDetails)
+    remoteFrame.Status is a text label showing status of the other player
+
+    For playerList, Template is already initialized above, it contains Trade :: TextButton, HeadShot :: ImageLabel, Username :: TextLabel
+    set the player's head pic as headshot but it is not mandatory so wrap it in a pcall and ignore errors if any
+    username must be display name of the player (not the official username)
+]]
+
+local colorDetails = {
+    LockIn = Color3.fromRGB(85, 85, 127),
+    Accept = Color3.fromRGB(46, 204, 113)
+}
+
 -- Currently selected pet data for the modal
 local selectedPetData = nil
 
@@ -236,7 +281,7 @@ local function GetTrackGatesForCurrentWorld(): Folder?
     return nil
 end
 
--- Helper function to close all frames (shop, daily rewards, inventory, pet modal)
+-- Helper function to close all frames (shop, daily rewards, inventory, pet modal, trade frames)
 -- Used to avoid cluttering of frames when opening a new one
 local function CloseAllFrames(exceptFrame: Frame?)
     local old = exceptFrame and exceptFrame.Visible
@@ -245,6 +290,8 @@ local function CloseAllFrames(exceptFrame: Frame?)
     inventoryMainFrame.Visible = false
     petModalDarkOverlay.Visible = false
     rebirthMenu.Visible = false
+    playerListUI.PlayerListFrame.Visible = false
+    -- Note: mainTradeUI and incomingRequestUI are controlled by trade flow, not CloseAllFrames
 
     if exceptFrame then exceptFrame.Visible = old end
 end
@@ -1171,6 +1218,541 @@ end)
 handler._connections["WorldClose"] = worldClose.MouseButton1Click:Connect(function()
     worldMenu.Visible = false
 end)
+
+-- ==================== TRADE UI HANDLERS ====================
+-- Trade state tracking
+local tradeOfferedPets = {} -- { [petIndex] = true } - pets we've offered
+local tradePetConnections = {} -- connections for trade pet buttons
+
+-- Debug logging helper
+local function TradeLog(message: string)
+    warn("[TradeUI]: " .. message)
+end
+
+-- Get local frame's pet scrolling frame and template
+local function GetLocalTradePetsUI()
+    local petsFrame = mainTradeUI.LocalFrame:FindFirstChild("Pets")
+    if not petsFrame then return nil, nil end
+    local scrollingFrame = petsFrame:FindFirstChild("ScrollingFrame")
+    if not scrollingFrame then return nil, nil end
+    local gridLayout = scrollingFrame:FindFirstChild("UIGridLayout")
+    if not gridLayout then return nil, nil end
+    local template = gridLayout:FindFirstChild("Template")
+    return scrollingFrame, template
+end
+
+-- Get remote frame's pet scrolling frame and template
+local function GetRemoteTradePetsUI()
+    local petsFrame = mainTradeUI.RemoteFrame:FindFirstChild("Pets")
+    if not petsFrame then return nil, nil end
+    local scrollingFrame = petsFrame:FindFirstChild("ScrollingFrame")
+    if not scrollingFrame then return nil, nil end
+    local gridLayout = scrollingFrame:FindFirstChild("UIGridLayout")
+    if not gridLayout then return nil, nil end
+    local template = gridLayout:FindFirstChild("Template")
+    return scrollingFrame, template
+end
+
+-- Get lock-in button from local frame
+local function GetLockInButton()
+    return mainTradeUI.LocalFrame:FindFirstChild("LockIn")
+end
+
+-- Get status label from remote frame
+local function GetRemoteStatusLabel()
+    return mainTradeUI.RemoteFrame:FindFirstChild("Status")
+end
+
+-- Clear trade pet connections
+local function ClearTradePetConnections()
+    for _, connection in ipairs(tradePetConnections) do
+        connection:Disconnect()
+    end
+    tradePetConnections = {}
+end
+
+-- Update the lock-in button appearance based on state
+local function UpdateLockInButton()
+    local lockInButton = GetLockInButton()
+    if not lockInButton then return end
+    
+    local tradeState = TradeController:GetTradeState()
+    if not tradeState then return end
+    
+    local otherPlayerName = tradeState.OtherPlayer and tradeState.OtherPlayer.DisplayName or "other player"
+    
+    if tradeState.ILockedIn then
+        if tradeState.TheyLockedIn then
+            if tradeState.IAccepted then
+                -- I accepted, waiting for them to accept
+                lockInButton.Text = "Waiting for " .. otherPlayerName .. " to accept..."
+                lockInButton.BackgroundColor3 = colorDetails.LockIn
+                TradeLog("Lock-in button: Waiting for " .. otherPlayerName .. " to accept")
+            else
+                -- Both locked in - show Accept button
+                lockInButton.Text = "Accept"
+                lockInButton.BackgroundColor3 = colorDetails.Accept
+                TradeLog("Lock-in button changed to Accept (both locked in)")
+            end
+        else
+            -- Only I'm locked in - waiting for other player to lock in
+            lockInButton.Text = "Waiting for " .. otherPlayerName .. " to lock in..."
+            lockInButton.BackgroundColor3 = colorDetails.LockIn
+            TradeLog("Lock-in button: Waiting for " .. otherPlayerName .. " to lock in")
+        end
+    else
+        -- Not locked in yet
+        lockInButton.Text = "Lock In"
+        lockInButton.BackgroundColor3 = colorDetails.LockIn
+        TradeLog("Lock-in button showing Lock In")
+    end
+end
+
+-- Update remote player status label
+local function UpdateRemoteStatus()
+    local statusLabel = GetRemoteStatusLabel()
+    if not statusLabel then return end
+    
+    local tradeState = TradeController:GetTradeState()
+    if not tradeState then
+        statusLabel.Text = ""
+        return
+    end
+    
+    local otherPlayerName = tradeState.OtherPlayer and tradeState.OtherPlayer.DisplayName or "Other player"
+    
+    if tradeState.TheyAccepted then
+        statusLabel.Text = otherPlayerName .. " accepted ✓"
+        TradeLog("Remote status: " .. otherPlayerName .. " accepted")
+    elseif tradeState.TheyLockedIn then
+        statusLabel.Text = otherPlayerName .. " locked in"
+        TradeLog("Remote status: " .. otherPlayerName .. " locked in")
+    else
+        statusLabel.Text = otherPlayerName .. " is selecting..."
+        TradeLog("Remote status: " .. otherPlayerName .. " is selecting")
+    end
+end
+
+-- Update the local player's pet display in trade UI
+local function UpdateLocalTradePets()
+    TradeLog("Updating local trade pets display")
+    
+    local scrollingFrame, template = GetLocalTradePetsUI()
+    if not scrollingFrame or not template then
+        TradeLog("ERROR: Could not find local trade pets UI elements")
+        return
+    end
+    
+    -- Clear existing pet frames
+    ClearTradePetConnections()
+    for _, child in ipairs(scrollingFrame:GetChildren()) do
+        if child.Name ~= "Template" and child.Name ~= "UIGridLayout" and (child:IsA("Frame") or child:IsA("TextButton")) then
+            child:Destroy()
+        end
+    end
+    
+    -- Get pet inventory
+    local petInventory = handler.data.Inventory.PetInventory
+    if not petInventory then
+        TradeLog("No pet inventory found")
+        return
+    end
+    
+    local tradeState = TradeController:GetTradeState()
+    local iLockedIn = tradeState and tradeState.ILockedIn or false
+    
+    -- Build set of offered pet indices
+    local offeredSet = {}
+    if tradeState and tradeState.MyOffers then
+        for _, offer in ipairs(tradeState.MyOffers) do
+            offeredSet[offer.PetIndex] = true
+        end
+    end
+    
+    TradeLog("Pet inventory count: " .. #petInventory .. ", Offered count: " .. (tradeState and tradeState.MyOffers and #tradeState.MyOffers or 0))
+    
+    -- Create pet buttons
+    for index, petData in ipairs(petInventory) do
+        local petFrame = template:Clone()
+        petFrame.Name = "TradePet_" .. index
+        petFrame.Visible = true
+        
+        -- Set pet name
+        local nameLabel = petFrame:FindFirstChild("PetName")
+        if nameLabel then
+            nameLabel.Text = petData.Name or "Unknown Pet"
+        end
+        
+        -- Set multiplier
+        local multiplierFrame = petFrame:FindFirstChild("Multiplier")
+        if multiplierFrame then
+            local multiplierLabel = multiplierFrame:FindFirstChild("TextLabel")
+            if multiplierLabel then
+                multiplierLabel.Text = string.format("x%.1f", petData.Multiplier or 1.0)
+            end
+        end
+        
+        -- Set stroke color based on tier
+        if petFrame:FindFirstChild("UIStroke") and petData.TierLevel then
+            petFrame.UIStroke.Color = statsM.TierColors[petData.TierLevel] or Color3.fromRGB(49, 49, 49)
+        end
+        
+        -- Set background based on selection state
+        local isOffered = offeredSet[index] == true
+        if isOffered then
+            petFrame.BackgroundColor3 = DefaultBackgroundColorSelected
+        else
+            petFrame.BackgroundColor3 = DefaultBackgroundColorNotSelected
+        end
+        
+        -- Connect click to toggle offer (if not locked in)
+        if petFrame:IsA("TextButton") then
+            local petIndex = index -- Capture the index for the closure
+            local conn = petFrame.MouseButton1Click:Connect(function()
+                -- Get current trade state (not captured state)
+                local currentTradeState = TradeController:GetTradeState()
+                if not currentTradeState then
+                    TradeLog("Cannot modify offers - no active trade")
+                    return
+                end
+                
+                if currentTradeState.ILockedIn then
+                    TradeLog("Cannot modify offers - already locked in")
+                    return
+                end
+                
+                -- Check if this pet is currently offered
+                local currentlyOffered = false
+                if currentTradeState.MyOffers then
+                    for _, offer in ipairs(currentTradeState.MyOffers) do
+                        if offer.PetIndex == petIndex then
+                            currentlyOffered = true
+                            break
+                        end
+                    end
+                end
+                
+                if currentlyOffered then
+                    -- Remove from offer
+                    TradeLog("Removing pet #" .. petIndex .. " from offer")
+                    local success = TradeController:RemovePet(petIndex)
+                    if success then
+                        TradeLog("Successfully removed pet #" .. petIndex)
+                    else
+                        TradeLog("Failed to remove pet #" .. petIndex)
+                    end
+                else
+                    -- Add to offer
+                    TradeLog("Offering pet #" .. petIndex)
+                    local success = TradeController:OfferPet(petIndex)
+                    if success then
+                        TradeLog("Successfully offered pet #" .. petIndex)
+                    else
+                        TradeLog("Failed to offer pet #" .. petIndex)
+                    end
+                end
+            end)
+            table.insert(tradePetConnections, conn)
+        end
+        
+        petFrame.Parent = scrollingFrame
+    end
+end
+
+-- Update the remote player's pet display in trade UI (their offers)
+local function UpdateRemoteTradePets()
+    TradeLog("Updating remote trade pets display")
+    
+    local scrollingFrame, template = GetRemoteTradePetsUI()
+    if not scrollingFrame or not template then
+        TradeLog("ERROR: Could not find remote trade pets UI elements")
+        return
+    end
+    
+    -- Clear existing pet frames
+    for _, child in ipairs(scrollingFrame:GetChildren()) do
+        if child.Name ~= "Template" and child.Name ~= "UIGridLayout" and (child:IsA("Frame") or child:IsA("TextButton")) then
+            child:Destroy()
+        end
+    end
+    
+    local tradeState = TradeController:GetTradeState()
+    if not tradeState or not tradeState.TheirOffers then
+        TradeLog("No trade state or their offers found")
+        return
+    end
+    
+    TradeLog("Their offers count: " .. #tradeState.TheirOffers)
+    
+    -- Create pet frames for their offered pets
+    for _, offer in ipairs(tradeState.TheirOffers) do
+        local petData = offer.PetData
+        if not petData then 
+            TradeLog("WARNING: No PetData in offer for index " .. tostring(offer.PetIndex))
+            continue 
+        end
+        
+        TradeLog("Remote pet offered - Index: " .. offer.PetIndex .. ", Name: " .. (petData.Name or "nil") .. ", Multiplier: " .. tostring(petData.Multiplier or "nil"))
+        
+        local petFrame = template:Clone()
+        petFrame.Name = "RemotePet_" .. offer.PetIndex
+        petFrame.Visible = true
+        
+        -- Set pet name (same structure as local frame)
+        local nameLabel = petFrame:FindFirstChild("PetName")
+        if nameLabel then
+            nameLabel.Text = petData.Name or "Unknown Pet"
+            TradeLog("Set remote pet name to: " .. nameLabel.Text)
+        else
+            TradeLog("WARNING: Could not find PetName label in remote template")
+        end
+        
+        -- Set multiplier (same structure as local frame)
+        local multiplierFrame = petFrame:FindFirstChild("Multiplier")
+        if multiplierFrame then
+            local multiplierLabel = multiplierFrame:FindFirstChild("TextLabel")
+            if multiplierLabel then
+                multiplierLabel.Text = string.format("x%.1f", petData.Multiplier or 1.0)
+                TradeLog("Set remote pet multiplier to: " .. multiplierLabel.Text)
+            else
+                TradeLog("WARNING: Could not find TextLabel in Multiplier frame")
+            end
+        else
+            TradeLog("WARNING: Could not find Multiplier frame in remote template")
+        end
+        
+        -- Set stroke color based on tier
+        if petFrame:FindFirstChild("UIStroke") and petData.TierLevel then
+            petFrame.UIStroke.Color = statsM.TierColors[petData.TierLevel] or Color3.fromRGB(49, 49, 49)
+        end
+        
+        -- Set as selected (they're offering it)
+        petFrame.BackgroundColor3 = DefaultBackgroundColorSelected
+        
+        petFrame.Parent = scrollingFrame
+    end
+end
+
+-- Show the main trade UI
+local function ShowTradeUI(otherPlayer: Player)
+    TradeLog("Showing trade UI with " .. otherPlayer.DisplayName)
+    
+    -- Hide other frames
+    CloseAllFrames()
+    playerListUI.PlayerListFrame.Visible = false
+    incomingRequestUI.IncomingRequestFrame.Visible = false
+    
+    -- Reset offered pets tracking
+    tradeOfferedPets = {}
+    
+    -- Show main trade frame
+    mainTradeUI.MainTradeFrame.Visible = true
+    
+    -- Update remote player name
+    local petsFrame = mainTradeUI.RemoteFrame:FindFirstChild("Pets")
+    if petsFrame then
+        local playerLabel = petsFrame:FindFirstChild("Player")
+        if playerLabel and playerLabel:IsA("TextLabel") then
+            playerLabel.Text = otherPlayer.DisplayName
+        end
+    end
+
+    -- Update displays
+    UpdateLocalTradePets()
+    UpdateRemoteTradePets()
+    UpdateLockInButton()
+    UpdateRemoteStatus()
+end
+
+-- Hide the main trade UI
+local function HideTradeUI()
+    TradeLog("Hiding trade UI")
+    mainTradeUI.MainTradeFrame.Visible = false
+    ClearTradePetConnections()
+    tradeOfferedPets = {}
+end
+
+-- Show incoming trade request UI
+local function ShowIncomingRequest(fromPlayer: Player)
+    TradeLog("Showing incoming request from " .. fromPlayer.DisplayName)
+    incomingRequestUI.InfoLabel.Text = fromPlayer.DisplayName .. " wants to trade!"
+    incomingRequestUI.IncomingRequestFrame.Visible = true
+    
+    -- Store the player for accept/decline
+    incomingRequestUI.IncomingRequestFrame:SetAttribute("FromPlayer", fromPlayer.UserId)
+end
+
+-- Hide incoming trade request UI
+local function HideIncomingRequest()
+    TradeLog("Hiding incoming request UI")
+    incomingRequestUI.IncomingRequestFrame.Visible = false
+end
+
+-- Update player list for trade requests
+local function UpdatePlayerList()
+    TradeLog("Updating player list")
+    
+    -- Clear existing items (except template/layout)
+    for _, child in ipairs(playerListUI.ScrollingFrame:GetChildren()) do
+        if child.Name ~= "UIListLayout" and child.Name ~= "Template" then
+            child:Destroy()
+        end
+    end
+    
+    -- Populate list
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        if otherPlayer == player then continue end
+        
+        local template = playerListUI.Template:Clone()
+        template.Name = otherPlayer.Name
+        template.Visible = true
+        template.Username.Text = otherPlayer.DisplayName
+        
+        task.spawn(function()
+            pcall(function()
+                local content, isReady = Players:GetUserThumbnailAsync(otherPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
+                if isReady then
+                    template.HeadShot.Image = content
+                end
+            end)
+        end)
+        
+        template.Trade.MouseButton1Click:Connect(function()
+            TradeLog("Requesting trade with " .. otherPlayer.DisplayName)
+            TradeController:RequestTrade(otherPlayer)
+        end)
+        
+        template.Parent = playerListUI.ScrollingFrame
+    end
+end
+
+-- Connect TradeController signals
+handler._connections["TradeRequestReceived"] = TradeController.OnTradeRequestReceived:Connect(function(fromPlayer)
+    TradeLog("Trade request received from " .. fromPlayer.DisplayName)
+    ShowIncomingRequest(fromPlayer)
+end)
+
+handler._connections["TradeRequestCancelled"] = TradeController.OnTradeRequestCancelled:Connect(function(fromPlayer)
+    TradeLog("Trade request cancelled by " .. fromPlayer.DisplayName)
+    -- Hide incoming request if it was from this player
+    local currentFromId = incomingRequestUI.IncomingRequestFrame:GetAttribute("FromPlayer")
+    if currentFromId == fromPlayer.UserId then
+        HideIncomingRequest()
+    end
+end)
+
+handler._connections["TradeStarted"] = TradeController.OnTradeStarted:Connect(function(otherPlayer)
+    TradeLog("Trade started with " .. otherPlayer.DisplayName)
+    HideIncomingRequest()
+    ShowTradeUI(otherPlayer)
+end)
+
+handler._connections["TradeEnded"] = TradeController.OnTradeEnded:Connect(function(reason)
+    TradeLog("Trade ended: " .. reason)
+    HideTradeUI()
+end)
+
+handler._connections["OffersUpdated"] = TradeController.OnOffersUpdated:Connect(function(myOffers, theirOffers)
+    TradeLog("Offers updated - My offers: " .. #myOffers .. ", Their offers: " .. #theirOffers)
+    UpdateLocalTradePets()
+    UpdateRemoteTradePets()
+    UpdateLockInButton()
+end)
+
+handler._connections["PlayerLockedIn"] = TradeController.OnPlayerLockedIn:Connect(function(lockedPlayer, isMe)
+    TradeLog("Player locked in: " .. lockedPlayer.DisplayName .. " (isMe: " .. tostring(isMe) .. ")")
+    UpdateLockInButton()
+    UpdateRemoteStatus()
+    if isMe then
+        -- Refresh local pets to disable clicking
+        UpdateLocalTradePets()
+    end
+end)
+
+handler._connections["PlayerAccepted"] = TradeController.OnPlayerAccepted:Connect(function(acceptedPlayer, isMe)
+    TradeLog("Player accepted: " .. acceptedPlayer.DisplayName .. " (isMe: " .. tostring(isMe) .. ")")
+    UpdateLockInButton()
+    UpdateRemoteStatus()
+end)
+
+handler._connections["TradeCompleted"] = TradeController.OnTradeCompleted:Connect(function(receivedPets)
+    TradeLog("Trade completed! Received " .. #receivedPets .. " pets")
+    HideTradeUI()
+    -- Refresh inventory after trade
+    handler.UpdatePetsInventory()
+end)
+
+-- Accept incoming trade request button
+handler._connections["AcceptTradeRequest"] = incomingRequestUI.Accept.MouseButton1Click:Connect(function()
+    local fromUserId = incomingRequestUI.IncomingRequestFrame:GetAttribute("FromPlayer")
+    if fromUserId then
+        local fromPlayer = Players:GetPlayerByUserId(fromUserId)
+        if fromPlayer then
+            TradeLog("Accepting trade request from " .. fromPlayer.DisplayName)
+            TradeController:AcceptRequest(fromPlayer)
+        end
+    end
+    HideIncomingRequest()
+end)
+
+-- Decline incoming trade request button
+handler._connections["DeclineTradeRequest"] = incomingRequestUI.Decline.MouseButton1Click:Connect(function()
+    local fromUserId = incomingRequestUI.IncomingRequestFrame:GetAttribute("FromPlayer")
+    if fromUserId then
+        local fromPlayer = Players:GetPlayerByUserId(fromUserId)
+        if fromPlayer then
+            TradeLog("Declining trade request from " .. fromPlayer.DisplayName)
+            TradeController:DeclineRequest(fromPlayer)
+        end
+    end
+    HideIncomingRequest()
+end)
+
+-- Lock-in / Accept button
+handler._connections["TradeLockIn"] = GetLockInButton().MouseButton1Click:Connect(function()
+    local tradeState = TradeController:GetTradeState()
+    if not tradeState then return end
+    
+    if tradeState.ILockedIn and tradeState.TheyLockedIn then
+        if not tradeState.IAccepted then
+            -- Both locked in and I haven't accepted yet - this is the Accept action
+            TradeLog("Accepting trade")
+            TradeController:Accept()
+        else
+            -- Already accepted, waiting for other player
+            TradeLog("Already accepted, waiting for other player")
+        end
+    elseif not tradeState.ILockedIn then
+        -- Lock in
+        TradeLog("Locking in trade offer")
+        TradeController:LockIn()
+    else
+        -- I'm locked in but they're not
+        TradeLog("Waiting for other player to lock in")
+    end
+end)
+
+-- Cancel trade button
+handler._connections["CancelTrade"] = cancelTrade.MouseButton1Click:Connect(function()
+    TradeLog("Cancelling trade")
+    TradeController:Cancel()
+    HideTradeUI()
+end)
+
+-- Trade button (opens player list)
+handler._connections["TradeButton"] = tradeButton.MouseButton1Click:Connect(function()
+    local wasVisible = playerListUI.PlayerListFrame.Visible
+    CloseAllFrames() -- Close other frames
+    
+    -- Toggle visibility
+    playerListUI.PlayerListFrame.Visible = not wasVisible
+    
+    if playerListUI.PlayerListFrame.Visible then
+        UpdatePlayerList()
+    end
+end)
+
+-- ==================== END TRADE UI HANDLERS ====================
 
 -- Listen for DataReady signal from server to update UI
 handler._connections["DataReady"] = DataService.DataReady:Connect(function(data)
