@@ -32,8 +32,8 @@ local closeButton: TextButton = resultsFrame:WaitForChild("TextButton")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 
--- Reference to InitUI module for debounce reset
-local InitUI = nil
+-- Reference to UIController for debounce reset
+local UIController = nil
 
 -- Camera settings
 local DEFAULT_FOV = 70
@@ -729,9 +729,9 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 		distanceCounter.Visible = false
 	end
 	
-	-- Reset InitUI debounce so player can request a new run
-	if InitUI and InitUI.ResetTrackDebounce then
-		InitUI.ResetTrackDebounce()
+	-- Reset UIController debounce so player can request a new run
+	if UIController then
+		UIController:ResetTrackDebounce()
 	end
 	
 	-- Show notification with cash earned
@@ -743,7 +743,7 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 		NotificationController:ShowNotification(cashMessage, NotificationController.Category.Success, 3)
 	end
 	
-	-- Note: Run button visibility is now controlled by InitUI based on gate proximity
+	-- Note: Run button visibility is now controlled by RunButtonUIController based on gate proximity
 end
 
 -- Check if player is currently on track
@@ -802,12 +802,8 @@ function TrackController:KnitInit()
 end
 
 function TrackController:KnitStart()
-	-- Get InitUI reference for debounce reset
-	local StarterPlayerScripts = Knit.Player:WaitForChild("PlayerScripts")
-	local initUIModule = StarterPlayerScripts:FindFirstChild("InitUI")
-	if initUIModule then
-		InitUI = require(initUIModule)
-	end
+	-- Get UIController reference for debounce reset
+	UIController = Knit.GetController("UIController")
 	
 	-- Listen for server signals
 	local TrackService = Knit.GetService("TrackService")
