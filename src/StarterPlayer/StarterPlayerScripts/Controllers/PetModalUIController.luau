@@ -158,10 +158,6 @@ function PetModalUIController:UpdateMergeUI(petID: string)
 end
 
 local function SelectAllMergePets()
-	for _, child in ipairs(mergePetGrid:GetChildren()) do
-		if child.Name ~= "Template" and child.Name ~= "UIGridLayout" and child:IsA("TextButton") then
-		end
-	end
 	mergeSelectedPets = {}
 	mergeSelectedCount = 0
 	local selectedSoFar = 0

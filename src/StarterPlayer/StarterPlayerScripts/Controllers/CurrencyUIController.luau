@@ -25,14 +25,9 @@ local cashVal
 local fuelVal
 
 local function TruncateNumber(n: number): string
-	if n >= 1e12 then
-		return string.format("%.2fT", n / 1e12)
-	elseif n >= 1e9 then
-		return string.format("%.2fB", n / 1e9)
-	elseif n >= 1e6 then
-		return string.format("%.2fM", n / 1e6)
-	elseif n >= 1e3 then
-		return string.format("%.2fK", n / 1e3)
+	local UIController = Knit.GetController("UIController")
+	if UIController then
+		return UIController:TruncateNumber(n)
 	end
 	return tostring(n)
 end
