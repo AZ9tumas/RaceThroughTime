@@ -75,6 +75,16 @@ Stats.WorldCashRates = {
 	StoneAge = 180, -- 20% higher cash rate in StoneAge
 }
 
+-- Min requirement of total stars collected per world to unlock the respective main boss
+Stats.MainBoss = {
+	Main = 10,
+	StoneAge = 10,
+	AncientEgypt = 10,
+	Medieval = 10,
+	Industrial = 10,
+	Neon = 10,
+}
+
 -- World unlock requirements (required distance traveled at once to unlock next world)
 -- Players need to accumulate this much fuel throughout their gameplay
 Stats.WorldUnlockRequirements = {

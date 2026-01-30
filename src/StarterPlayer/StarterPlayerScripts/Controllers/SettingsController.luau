@@ -33,10 +33,10 @@ local _connections = {}
 local function UpdateButtonAppearance(button: TextButton, isEnabled: boolean)
 	if isEnabled then
 		button.Text = "On"
-		button.BackgroundColor3 = Color3.fromRGB(76, 175, 80)
+		button.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
 	else
 		button.Text = "Off"
-		button.BackgroundColor3 = Color3.fromRGB(244, 67, 54)
+		button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
 	end
 end
 

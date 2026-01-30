@@ -269,10 +269,12 @@ function UIController:KnitStart()
 		local DailyRewardsUIController = Knit.GetController("DailyRewardsUIController")
 		local ShopUIController = Knit.GetController("ShopUIController")
 		local WorldUIController = Knit.GetController("WorldUIController")
+		local MainBossController = Knit.GetController("MainBossController")
 		if CurrencyUIController then CurrencyUIController:UpdateAllDisplays() end
 		if DailyRewardsUIController then DailyRewardsUIController:UpdateRewardsStatus() end
 		if ShopUIController then ShopUIController:UpdateShopUI() end
 		if WorldUIController then WorldUIController:UpdateWorlds() end
+		if MainBossController then MainBossController:UpdateUnlockProgress() end
 	end)
 
 	RunService.RenderStepped:Connect(function()
@@ -280,10 +282,12 @@ function UIController:KnitStart()
 		local RunButtonUIController = Knit.GetController("RunButtonUIController")
 		local WorldUIController = Knit.GetController("WorldUIController")
 		local RebirthUIController = Knit.GetController("RebirthUIController")
+		local MainBossController = Knit.GetController("MainBossController")
 		if CurrencyUIController then CurrencyUIController:UpdateFromLeaderstats() end
 		if RunButtonUIController then RunButtonUIController:UpdateVisibility() end
 		if WorldUIController then WorldUIController:UpdateMenuVisibility() end
 		if RebirthUIController then RebirthUIController:UpdateMenuVisibility() end
+		if MainBossController then MainBossController:UpdateUnlockProgress() end
 	end)
 end
 
