@@ -22,6 +22,7 @@ local uiInventory: ScreenGui
 local uiPetModal: ScreenGui
 local uiMerge: ScreenGui
 local tradingScreenGui: ScreenGui
+local uiSettings: ScreenGui
 local rebirthMenu: Frame
 local worldMenu: Frame
 local dailyFrame: Frame
@@ -37,7 +38,7 @@ local data = {
 	Stats = { TotalDistance = 0, Points = 0, Rebirths = 0, Fuel = 100, Stars = 0 },
 	Progression = { CurrentWorld = "Main", UnlockedWorlds = { "Main" } },
 	Inventory = { PetInventory = {}, EquippedPets = {}, Potions = {} },
-	Meta = { DailyStreak = 0, LastClaim = 0, CollectedRewards = {}, UpdateVersion = 0, Settings = { Music = true, SFX = true } },
+	Meta = { DailyStreak = 0, LastClaim = 0, CollectedRewards = {}, UpdateVersion = 0, Settings = { Music = true, SFX = true, HidePets = false, TradingEnabled = true } },
 }
 
 function UIController:GetData()
@@ -206,6 +207,10 @@ function UIController:CloseAllFrames(exceptFrame: Frame?)
 		local playerListFrame = tradingScreenGui:FindFirstChild("PlayerListFrame")
 		if playerListFrame then playerListFrame.Visible = false end
 	end
+	if uiSettings then
+		local settingsMain = uiSettings:FindFirstChild("MainFrame")
+		if settingsMain then settingsMain.Visible = false end
+	end
 	if exceptFrame then exceptFrame.Visible = old end
 end
 
@@ -248,6 +253,7 @@ function UIController:KnitInit()
 	uiPetModal = PlayerGui:WaitForChild("UI_PetModal")
 	uiMerge = PlayerGui:WaitForChild("UI_Merge")
 	tradingScreenGui = PlayerGui:WaitForChild("TradingSuite")
+	uiSettings = PlayerGui:WaitForChild("SettingsUI")
 	local simulatorPopups = PlayerGui:WaitForChild("SimulatorPopups")
 	rebirthMenu = simulatorPopups:WaitForChild("RebirthMenu")
 	worldMenu = simulatorPopups:WaitForChild("WorldMenu")

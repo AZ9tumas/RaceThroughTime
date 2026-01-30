@@ -46,6 +46,8 @@ local Template = {
 		Settings = {
 			Music = true,
 			SFX = true,
+			HidePets = false,
+			TradingEnabled = true,
 		},
 	},
 }
