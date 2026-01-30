@@ -497,6 +497,12 @@ local function OnTrackStarted(trackData: {
 	
 	Log(string.format("Track started at %s, total distance: %.2f, initialSpeed: %.2f", trackData.gateName, trackData.totalDistance, trackData.initialSpeed or 0))
 	
+	-- Notify PetController that track run has started (pets should follow, not collect stars)
+	local PetController = Knit.GetController("PetController")
+	if PetController then
+		PetController:SetOnTrack(true)
+	end
+	
 	-- Fade out the loading screen now that server has acknowledged the request
 	local LoadingScreenController = Knit.GetController("LoadingScreenController")
 	if LoadingScreenController then
@@ -662,6 +668,12 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	IsOnTrack = false
 	TrackData = nil
 	
+	-- Notify PetController that track run has ended (pets can resume normal behavior)
+	local PetController = Knit.GetController("PetController")
+	if PetController then
+		PetController:SetOnTrack(false)
+	end
+	
 	-- Unbind the movement loop (in case it's still running)
 	pcall(function()
 		RunService:UnbindFromRenderStep(RENDER_STEP_BINDING)
@@ -762,6 +774,12 @@ function TrackController:StopTrack()
 	
 	IsOnTrack = false
 	TrackData = nil
+	
+	-- Notify PetController that track run has ended
+	local PetController = Knit.GetController("PetController")
+	if PetController then
+		PetController:SetOnTrack(false)
+	end
 	
 	-- Unbind the movement loop
 	pcall(function()
