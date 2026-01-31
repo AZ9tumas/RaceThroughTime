@@ -21,6 +21,7 @@ local RaceHUD : ScreenGui = PlayerGui:WaitForChild("RaceHUD")
 local RaceHUDMainFrame: Frame = RaceHUD:WaitForChild("MainFrame")
 local globalView: Frame = RaceHUDMainFrame:WaitForChild("GlobalView")
 local strokeTemplate: UIStroke = globalView:WaitForChild("Templates"):WaitForChild("UIStroke")
+local playerIndicatorTemplate: ImageLabel = globalView:WaitForChild("Templates"):WaitForChild("ImageLabel")
 local localView: Frame = RaceHUDMainFrame:WaitForChild("LocalView")
 local progressFrameFill: Frame = localView:WaitForChild("Progress"):WaitForChild("Fill")
 local progressHeadshotImage: ImageLabel = progressFrameFill:WaitForChild("Frame"):WaitForChild("ImageLabel")
@@ -90,6 +91,11 @@ local ElapsedTime = 0
 local DistanceTraveled = 0
 local LapCount = 0
 local WorldUnlocked = false
+
+-- Player indicators on globalView
+local PlayerIndicators: { [number]: ImageLabel } = {}
+local PlayerHeadshotCache: { [number]: string } = {}
+local PlayerLapsFolder: Folder = nil
 
 -- Helper function for logging
 local function Log(message: string)
@@ -928,6 +934,115 @@ function TrackController:UpdateWorldFrameColors()
 	end
 end
 
+-- Get or create player indicator
+local function GetOrCreatePlayerIndicator(targetPlayer: Player): ImageLabel?
+	if PlayerIndicators[targetPlayer.UserId] then
+		return PlayerIndicators[targetPlayer.UserId]
+	end
+	
+	if not playerIndicatorTemplate then return nil end
+	
+	local indicator = playerIndicatorTemplate:Clone()
+	indicator.Name = "PlayerIndicator_" .. targetPlayer.UserId
+	indicator.Visible = true
+	indicator.Parent = globalView
+	
+	PlayerIndicators[targetPlayer.UserId] = indicator
+	
+	task.spawn(function()
+		local success, content = pcall(function()
+			return Players:GetUserThumbnailAsync(
+				targetPlayer.UserId,
+				Enum.ThumbnailType.HeadShot,
+				Enum.ThumbnailSize.Size48x48
+			)
+		end)
+		
+		if success and content then
+			indicator.Image = content
+			indicator.ImageTransparency = 0
+			PlayerHeadshotCache[targetPlayer.UserId] = content
+		else
+			indicator.ImageTransparency = 1
+		end
+	end)
+	
+	return indicator
+end
+
+-- Remove player indicator
+local function RemovePlayerIndicator(targetPlayer: Player)
+	local indicator = PlayerIndicators[targetPlayer.UserId]
+	if indicator then
+		indicator:Destroy()
+		PlayerIndicators[targetPlayer.UserId] = nil
+	end
+	PlayerHeadshotCache[targetPlayer.UserId] = nil
+end
+
+-- Get world frame Y position
+local function GetWorldFrameYPosition(worldName: string): number
+	local worldFrame = globalView:FindFirstChild(worldName)
+	if worldFrame then
+		return worldFrame.Position.Y.Scale
+	end
+	return 0
+end
+
+-- Update all player position indicators
+local function UpdatePlayerPositionIndicators()
+	if not PlayerLapsFolder then
+		PlayerLapsFolder = ReplicatedStorage:FindFirstChild("PlayerLaps")
+		if not PlayerLapsFolder then return end
+	end
+	
+	local currentPlayers = {}
+	for _, targetPlayer in ipairs(Players:GetPlayers()) do
+		currentPlayers[targetPlayer.UserId] = true
+		
+		local indicator = GetOrCreatePlayerIndicator(targetPlayer)
+		if not indicator then continue end
+		
+		local lapValue = PlayerLapsFolder:FindFirstChild(tostring(targetPlayer.UserId))
+		
+		local launchWorld = "Main"
+		local targetWorld = "Main"
+		local lapPercentage = 0
+		
+		if lapValue then
+			launchWorld = lapValue:GetAttribute("LaunchWorldName") or "Main"
+			targetWorld = lapValue:GetAttribute("TargetWorldName") or "Main"
+			lapPercentage = lapValue.Value or 0
+		else
+			local currentWorld = targetPlayer:GetAttribute("CurrentWorld")
+			if currentWorld then
+				launchWorld = currentWorld
+				targetWorld = currentWorld
+			end
+		end
+		
+		local launchY = GetWorldFrameYPosition(launchWorld)
+		local targetY = GetWorldFrameYPosition(targetWorld)
+		
+		local interpolatedY = launchY + (targetY - launchY) * lapPercentage
+		
+		indicator.Position = UDim2.new(
+			indicator.Position.X.Scale,
+			indicator.Position.X.Offset,
+			interpolatedY,
+			indicator.Position.Y.Offset
+		)
+	end
+	
+	for userId, indicator in pairs(PlayerIndicators) do
+		if not currentPlayers[userId] then
+			indicator:Destroy()
+			PlayerIndicators[userId] = nil
+			PlayerHeadshotCache[userId] = nil
+		end
+	end
+end
+
 -- Knit lifecycle
 function TrackController:KnitInit()
 	-- Controller initialization
@@ -969,6 +1084,9 @@ function TrackController:KnitStart()
 	DataService.DataReady:Connect(function()
 		self:UpdateWorldFrameColors()
 	end)
+	
+	-- Update player position indicators on RenderStepped
+	RunService.RenderStepped:Connect(UpdatePlayerPositionIndicators)
 	
 	Log("TrackController started")
 end

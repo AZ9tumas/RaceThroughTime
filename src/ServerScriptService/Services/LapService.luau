@@ -134,8 +134,34 @@ function LapService:StopTracking(player: Player)
 	
 	local lapValue = GetPlayerLapValue(player)
 	if lapValue then
+		lapValue.Value = 0
+		local currentWorld = player:GetAttribute("CurrentWorld") or "Main"
+		lapValue:SetAttribute("LaunchWorldName", currentWorld)
+		lapValue:SetAttribute("TargetWorldName", currentWorld)
+	end
+end
+
+function LapService:CreatePlayerLapValue(player: Player)
+	local folder = GetOrCreatePlayerLapsFolder()
+	local existing = folder:FindFirstChild(tostring(player.UserId))
+	if existing then return end
+	
+	local currentWorld = player:GetAttribute("CurrentWorld") or "Main"
+	local lapValue = Instance.new("NumberValue")
+	lapValue.Name = tostring(player.UserId)
+	lapValue.Value = 0
+	lapValue:SetAttribute("LaunchWorldName", currentWorld)
+	lapValue:SetAttribute("TargetWorldName", currentWorld)
+	lapValue:SetAttribute("PlayerName", player.Name)
+	lapValue.Parent = folder
+end
+
+function LapService:RemovePlayerLapValue(player: Player)
+	local lapValue = GetPlayerLapValue(player)
+	if lapValue then
 		lapValue:Destroy()
 	end
+	TrackedPlayers[player.UserId] = nil
 end
 
 function LapService:GetLapInfoForPlayer(player: Player): LapInfo?
@@ -159,8 +185,34 @@ end
 function LapService:KnitInit()
 	GetOrCreatePlayerLapsFolder()
 	
-	Players.PlayerRemoving:Connect(function(player)
-		LapService:StopTracking(player)
+	local function SetupPlayerWorldListener(plr: Player)
+		plr:GetAttributeChangedSignal("CurrentWorld"):Connect(function()
+			if not TrackedPlayers[plr.UserId] then
+				local lapValue = GetPlayerLapValue(plr)
+				if lapValue then
+					local currentWorld = plr:GetAttribute("CurrentWorld") or "Main"
+					lapValue:SetAttribute("LaunchWorldName", currentWorld)
+					lapValue:SetAttribute("TargetWorldName", currentWorld)
+				end
+			end
+		end)
+	end
+	
+	for _, plr in ipairs(Players:GetPlayers()) do
+		self:CreatePlayerLapValue(plr)
+		SetupPlayerWorldListener(plr)
+	end
+	
+	Players.PlayerAdded:Connect(function(plr)
+		task.spawn(function()
+			plr:GetAttributeChangedSignal("CurrentWorld"):Wait()
+			LapService:CreatePlayerLapValue(plr)
+			SetupPlayerWorldListener(plr)
+		end)
+	end)
+	
+	Players.PlayerRemoving:Connect(function(plr)
+		LapService:RemovePlayerLapValue(plr)
 	end)
 end
 
