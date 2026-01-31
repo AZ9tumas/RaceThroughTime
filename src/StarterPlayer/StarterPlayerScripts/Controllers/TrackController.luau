@@ -91,6 +91,10 @@ local DistanceTraveled = 0
 local LapCount = 0
 local WorldUnlocked = false
 
+-- Lap percentage update throttling
+local LastLapPercentageUpdate = 0
+local LAP_UPDATE_INTERVAL = 0.1 -- Update server every 0.1 seconds
+
 -- Helper function for logging
 local function Log(message: string)
 	--print(string.format("[TrackController]: %s", message))
@@ -633,6 +637,14 @@ local function OnTrackStarted(trackData: {
 		local angleIntoCurrentLap = CurrentAngle - lapStartAngle
 		local lapPercentage = math.clamp(angleIntoCurrentLap / (2 * math.pi), 0, 1)
 		progressFrameFill.Size = UDim2.new(1, 0, lapPercentage, 0)
+		
+		-- Update LapService with lap percentage (throttled)
+		local currentTime = tick()
+		if currentTime - LastLapPercentageUpdate >= LAP_UPDATE_INTERVAL then
+			LastLapPercentageUpdate = currentTime
+			local LapService = Knit.GetService("LapService")
+			LapService:UpdateLapPercentage(lapPercentage)
+		end
 		
 		if CurrentAngle >= lapThreshold then
 			LapCount = LapCount + 1

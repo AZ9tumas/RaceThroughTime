@@ -365,6 +365,10 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
 	
+	-- Stop lap tracking
+	local LapService = Knit.GetService("LapService")
+	LapService:StopTracking(player)
+	
 	-- Fire signal to client that track has ended
 	TrackService.Client.TrackEnded:Fire(player, {
 		distanceTraveled = distanceTraveled,
@@ -518,6 +522,10 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	local unlockRequirement = nextWorld and Stats.GetWorldDistanceRequirement(nextWorld) or nil
 	local rebirthRequirement = nextWorld and Stats.GetWorldRebirthRequirement(nextWorld) or nil
 	
+	-- Start lap tracking
+	local LapService = Knit.GetService("LapService")
+	LapService:StartTracking(player, worldName, nextWorld or worldName)
+	
 	-- Fire signal to client that track has started (client will handle movement and effects)
 	TrackService.Client.TrackStarted:Fire(player, {
 		gateName = closestGate,
@@ -564,6 +572,10 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 	
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
+	
+	-- Stop lap tracking
+	local LapService = Knit.GetService("LapService")
+	LapService:StopTracking(player)
 	
 	-- Fire signal to client that track has ended (cancelled, no rewards)
 	TrackService.Client.TrackEnded:Fire(player, {
