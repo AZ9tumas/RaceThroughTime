@@ -501,6 +501,9 @@ local function OnTrackStarted(trackData: {
 	LapCount = 0
 	WorldUnlocked = false
 	
+	-- Reset progress bar
+	progressFrameFill.Size = UDim2.new(1, 0, 0, 0)
+	
 	Log(string.format("Track started at %s, total distance: %.2f, initialSpeed: %.2f", trackData.gateName, trackData.totalDistance, trackData.initialSpeed or 0))
 	
 	-- Notify PetController that track run has started (pets should follow, not collect stars)
@@ -601,6 +604,13 @@ local function OnTrackStarted(trackData: {
 		-- Check for lap completion
 		local startAngle = TrackData.startAngle
 		local lapThreshold = startAngle + (2 * math.pi * (LapCount + 1))
+		
+		-- Calculate lap progress percentage (0 to 1)
+		local lapStartAngle = startAngle + (2 * math.pi * LapCount)
+		local angleIntoCurrentLap = CurrentAngle - lapStartAngle
+		local lapPercentage = math.clamp(angleIntoCurrentLap / (2 * math.pi), 0, 1)
+		progressFrameFill.Size = UDim2.new(1, 0, lapPercentage, 0)
+		
 		if CurrentAngle >= lapThreshold then
 			LapCount = LapCount + 1
 			local NotifController = Knit.GetController("NotificationController")
