@@ -20,6 +20,7 @@ local distanceCounter: TextLabel = liveMainUI:WaitForChild("DistanceCounter")
 local RaceHUD : ScreenGui = PlayerGui:WaitForChild("RaceHUD")
 local RaceHUDMainFrame: Frame = RaceHUD:WaitForChild("MainFrame")
 local globalView: Frame = RaceHUDMainFrame:WaitForChild("GlobalView")
+local strokeTemplate: UIStroke = globalView:WaitForChild("Templates"):WaitForChild("UIStroke")
 local localView: Frame = RaceHUDMainFrame:WaitForChild("LocalView")
 local progressFrameFill: Frame = localView:WaitForChild("Progress"):WaitForChild("Fill")
 local progressHeadshotImage: ImageLabel = progressFrameFill:WaitForChild("Frame"):WaitForChild("ImageLabel")
@@ -896,19 +897,21 @@ function TrackController:UpdateWorldFrameColors()
 			if worldName == latestUnlockedWorld then
 				worldFrame.BackgroundColor3 = COLOR_CURRENT
 				local uiStroke = worldFrame:FindFirstChild("UIStroke")
-				if uiStroke then
-					local innerStroke = uiStroke:FindFirstChild("UIStroke")
-					if innerStroke then
-						innerStroke.Enabled = true
-					end
+				if uiStroke then uiStroke:Destroy() end
+
+				local innerStroke = strokeTemplate:Clone()
+				if innerStroke then
+					innerStroke.Enabled = true
+					innerStroke.Parent = worldFrame
 				end
+				
 			elseif isOwned then
 				worldFrame.BackgroundColor3 = COLOR_OWNED
 				local uiStroke = worldFrame:FindFirstChild("UIStroke")
 				if uiStroke then
 					local innerStroke = uiStroke:FindFirstChild("UIStroke")
 					if innerStroke then
-						innerStroke.Enabled = false
+						innerStroke:Destroy()
 					end
 				end
 			else
@@ -917,7 +920,7 @@ function TrackController:UpdateWorldFrameColors()
 				if uiStroke then
 					local innerStroke = uiStroke:FindFirstChild("UIStroke")
 					if innerStroke then
-						innerStroke.Enabled = false
+						innerStroke:Destroy()
 					end
 				end
 			end
