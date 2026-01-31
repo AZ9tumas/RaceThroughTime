@@ -18,9 +18,10 @@ local distanceCounter: TextLabel = liveMainUI:WaitForChild("DistanceCounter")
 
 -- live race stats ui
 local RaceHUD : ScreenGui = PlayerGui:WaitForChild("RaceHUD")
-local localView: Frame = RaceHUD:WaitForChild("LocalView")
-local progressFrame: Frame = localView:WaitForChild("Progress")
-local progressFrameFill: Frame = progressFrame:WaitForChild("Fill")
+local RaceHUDMainFrame: Frame = RaceHUD:WaitForChild("MainFrame")
+local globalView: Frame = RaceHUDMainFrame:WaitForChild("GlobalView")
+local localView: Frame = RaceHUDMainFrame:WaitForChild("LocalView")
+local progressFrameFill: Frame = localView:WaitForChild("Progress"):WaitForChild("Fill")
 
 -- Track cancel button UI
 local trackCancelUI: ScreenGui = PlayerGui:WaitForChild("UI_CancelTrackButton")
