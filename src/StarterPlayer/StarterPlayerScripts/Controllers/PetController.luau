@@ -38,6 +38,7 @@ local ARENA_CHECK_INTERVAL = 0.2
 local Player = Players.LocalPlayer
 local PetService = nil
 local IsInArena = false
+local IsOnTrack = false
 local LastArenaCheck = 0
 
 -- Pet objects: [PetModel] = petObj
@@ -346,10 +347,17 @@ local function UpdatePet(petObj: {Player: Player, PetParams: any, PetModel: Mode
 		return
 	end
 	
-	-- For local player: handle star collection when in arena
+	-- For local player: handle star collection when in arena (but NOT during track runs)
 	local petPos = primaryPart.Position
 	local playerPos = ownerRoot.Position
 	local roamRange = petParams.RoamRange or 150
+	
+	-- During track runs, pets follow the player alongside them (no star collection)
+	if IsOnTrack then
+		PetTargets[petModel] = nil
+		SetPetToFollowPlayer(petModel, petIndex, ownerRoot, true)
+		return
+	end
 	
 	if IsInArena then
 		local targetId = PetTargets[petModel]
@@ -465,6 +473,20 @@ end
 -- Knit lifecycle
 function PetController:KnitInit()
 	-- Nothing needed
+end
+
+function PetController:SetOnTrack(onTrack: boolean)
+	IsOnTrack = onTrack
+	if onTrack then
+		PetTargets = {}
+		for petModel, _ in pairs(DebugBeams) do
+			ClearDebugBeam(petModel)
+		end
+	end
+end
+
+function PetController:IsOnTrack(): boolean
+	return IsOnTrack
 end
 
 function PetController:KnitStart()

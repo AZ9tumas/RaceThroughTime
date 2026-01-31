@@ -274,10 +274,36 @@ end
 	Get the fuel requirement to unlock a specific world.
 	
 	@param worldName string - The world name to check
-	@return number? - The fuel requirement, or nil if world is Main or doesn't exist
+	@return number? - The distance requirement, or nil if world is Main or doesn't exist
 ]]
 function WorldService:GetWorldUnlockRequirement(worldName: string): number?
-	return Stats.WorldUnlockRequirements[worldName]
+	return Stats.GetWorldDistanceRequirement(worldName)
+end
+
+--[[
+	Get the rebirth requirement to unlock a specific world.
+	
+	@param worldName string - The world name to check
+	@return number? - The rebirth requirement, or nil if no rebirth is required
+]]
+function WorldService:GetWorldRebirthRequirement(worldName: string): number?
+	return Stats.GetWorldRebirthRequirement(worldName)
+end
+
+--[[
+	Check if a player meets all unlock requirements for a world (distance and rebirth).
+	
+	@param player Player - The player to check
+	@param worldName string - The world name to check
+	@param distanceTraveled number - The distance traveled by the player
+	@return boolean - True if player meets all requirements
+]]
+function WorldService:PlayerMeetsUnlockRequirements(player: Player, worldName: string, distanceTraveled: number): boolean
+	local DataService = Knit.GetService("DataService")
+	local stats = DataService:Get(player, "Stats")
+	local playerRebirths = stats and stats.Rebirths or 0
+	
+	return Stats.MeetsWorldUnlockRequirements(worldName, distanceTraveled, playerRebirths)
 end
 
 --[[

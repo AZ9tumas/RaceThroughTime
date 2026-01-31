@@ -1,6 +1,7 @@
 --[[
 	AssetLoaderController
 	Handles preloading of critical game assets and synchronizes with server.
+	Waits for both assets to be preloaded AND Knit services to be ready before signaling completion.
 ]]
 
 local ContentProvider = game:GetService("ContentProvider")
@@ -18,6 +19,8 @@ local LoadingProgress = 0 -- 0.0 to 1.0
 local IsLoadingComplete = false
 local TotalAssets = 0
 local LoadedAssets = 0
+local IsKnitServicesReady = false
+local IsAssetPreloadComplete = false
 
 --[[
 	Collects all critical game assets for preloading.
@@ -91,7 +94,7 @@ local function PreloadAssets()
 	if TotalAssets == 0 then
 		-- No assets to preload
 		LoadingProgress = 1
-		IsLoadingComplete = true
+		IsAssetPreloadComplete = true
 		return
 	end
 
@@ -113,7 +116,18 @@ local function PreloadAssets()
 	end)
 
 	LoadingProgress = 1
-	IsLoadingComplete = true
+	IsAssetPreloadComplete = true
+end
+
+-- Try to complete loading if both assets and Knit services are ready
+local function TryCompleteLoading()
+	if IsAssetPreloadComplete and IsKnitServicesReady then
+		IsLoadingComplete = true
+		local LoadingScreenController = Knit.GetController("LoadingScreenController")
+		if LoadingScreenController then
+			LoadingScreenController:SetAssetsReady()
+		end
+	end
 end
 
 -- Get current loading status (0.0 to 1.0)
@@ -126,6 +140,12 @@ function AssetLoaderController:IsComplete(): boolean
 	return IsLoadingComplete
 end
 
+-- Called by KnitClientInit when all Knit services are ready
+function AssetLoaderController:OnKnitServicesReady()
+	IsKnitServicesReady = true
+	TryCompleteLoading()
+end
+
 -- Knit lifecycle
 function AssetLoaderController:KnitInit()
 	
@@ -135,10 +155,7 @@ function AssetLoaderController:KnitStart()
 	-- Start preloading assets
 	task.spawn(function()
 		PreloadAssets()
-
-		-- Notify LoadingScreenController that assets are ready
-		local LoadingScreenController = Knit.GetController("LoadingScreenController")
-		LoadingScreenController:SetAssetsReady()
+		TryCompleteLoading()
 	end)
 end
 

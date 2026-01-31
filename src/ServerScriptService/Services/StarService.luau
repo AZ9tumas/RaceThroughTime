@@ -147,6 +147,27 @@ local function InitializeStarsFolder()
 	end
 end
 
+-- Initialize the StarsCollected folder in ReplicatedStorage with IntValues for each world
+local function InitializeStarsCollectedFolder()
+	local folder = ReplicatedStorage:FindFirstChild("StarsCollected")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "StarsCollected"
+		folder.Parent = ReplicatedStorage
+	end
+	
+	for _, worldName in ipairs(Stats.WorldOrder) do
+		if not folder:FindFirstChild(worldName) then
+			local intValue = Instance.new("IntValue")
+			intValue.Name = worldName
+			intValue.Value = 0
+			intValue.Parent = folder
+		end
+	end
+	
+	Log("StarsCollected folder initialized")
+end
+
 -- Get a random star type based on probability weights
 local function GetRandomStarType(): string
 	local random = math.random()
@@ -332,6 +353,41 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 	TotalStarsCollected = TotalStarsCollected + 1
 	Log(string.format("Total stars collected on server: %d", TotalStarsCollected))
 
+	-- Increment per-world collected count
+	local worldName = DataService:GetPlayerWorld(player)
+	local starsCollectedFolder = ReplicatedStorage:FindFirstChild("StarsCollected")
+	if starsCollectedFolder and worldName then
+		local worldStat = starsCollectedFolder:FindFirstChild(worldName)
+		if worldStat and worldStat:IsA("IntValue") then
+			worldStat.Value = worldStat.Value + 1
+		end
+	end
+
+	-- Check if boss should spawn (total stars across all worlds meets requirement)
+	local bossUnlockReq = Stats.BossUnlockRequirement and Stats.BossUnlockRequirement.Stars or 10
+	local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
+	local bossFightActive = statsFolder and statsFolder:FindFirstChild("BossFight")
+	local isBossFightAlreadyActive = bossFightActive and bossFightActive:IsA("BoolValue") and bossFightActive.Value
+	
+	if not isBossFightAlreadyActive then
+		local totalWorldStars = 0
+		if starsCollectedFolder then
+			for _, worldValue in ipairs(starsCollectedFolder:GetChildren()) do
+				if worldValue:IsA("IntValue") or worldValue:IsA("NumberValue") then
+					totalWorldStars = totalWorldStars + worldValue.Value
+				end
+			end
+		end
+		
+		if totalWorldStars >= bossUnlockReq then
+			local BossService = Knit.GetService("BossService")
+			if BossService then
+				BossService:SpawnBoss()
+				Log("Boss spawned! Total stars: " .. totalWorldStars)
+			end
+		end
+	end
+
 	-- Remove star from tracker
 	local starInfoList = UniversalTracker[userId]
 	if starInfoList then
@@ -474,6 +530,8 @@ end
 function StarService:KnitInit()
 	-- Initialize Stars folder in workspace
 	InitializeStarsFolder()
+	-- Initialize StarsCollected folder in ReplicatedStorage
+	InitializeStarsCollectedFolder()
 
 	-- Clean up when player leaves
 	Players.PlayerRemoving:Connect(OnPlayerRemoving)

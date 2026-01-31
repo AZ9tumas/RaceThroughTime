@@ -80,13 +80,18 @@ end
 -- Check if loading is complete and fade out if so
 local function TryCompleteLoading()
 	if IsDataReady and IsAssetsReady and PlayerData then
-		-- We execute initui.luau here to ensure UI is ready before hiding loading screen
-		-- InitUI sets up all the UI event handlers
-		local uiInit = require(script.Parent.Parent:WaitForChild("InitUI"))
-		
-		-- Initialize UI with the player data we received from server
-		uiInit.UpdateDataOnClient(PlayerData)
-		
+		local UIController = Knit.GetController("UIController")
+		if UIController then
+			UIController:SetData(PlayerData)
+		end
+		local CurrencyUIController = Knit.GetController("CurrencyUIController")
+		local DailyRewardsUIController = Knit.GetController("DailyRewardsUIController")
+		local ShopUIController = Knit.GetController("ShopUIController")
+		local WorldUIController = Knit.GetController("WorldUIController")
+		if CurrencyUIController then CurrencyUIController:UpdateAllDisplays() end
+		if DailyRewardsUIController then DailyRewardsUIController:UpdateRewardsStatus() end
+		if ShopUIController then ShopUIController:UpdateShopUI() end
+		if WorldUIController then WorldUIController:UpdateWorlds() end
 		FadeOut(LoadingFrame)
 	end
 end
