@@ -6,6 +6,19 @@ local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 
+local PLACEHOLDER_HEADSHOT = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+
+local function SafeGetHeadshot(userId: number, size: Enum.ThumbnailSize?): string
+	local thumbnailSize = size or Enum.ThumbnailSize.Size100x100
+	local success, content = pcall(function()
+		return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, thumbnailSize)
+	end)
+	if success and content then
+		return content
+	end
+	return PLACEHOLDER_HEADSHOT
+end
+
 -- ui
 local player = Players.LocalPlayer
 local PlayerGui = player:WaitForChild("PlayerGui")
@@ -512,16 +525,10 @@ local function OnTrackStarted(trackData: {
 	localView.Visible = true
 	globalView.Visible = false
 	
-	-- Set player headshot on progress bar
-	local success, headshotContent = pcall(function()
-		return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-	end)
-	if success and headshotContent then
-		progressHeadshotImage.Image = headshotContent
-		progressHeadshotImage.ImageTransparency = 0
-	else
-		progressHeadshotImage.ImageTransparency = 1
-	end
+	-- Set player headshot on progress bar with placeholder fallback
+	local headshotContent = SafeGetHeadshot(player.UserId, Enum.ThumbnailSize.Size100x100)
+	progressHeadshotImage.Image = headshotContent
+	progressHeadshotImage.ImageTransparency = 0
 	
 	-- Initialize client-side movement state
 	CurrentAngle = trackData.startAngle
@@ -950,21 +957,10 @@ local function GetOrCreatePlayerIndicator(targetPlayer: Player): ImageLabel?
 	PlayerIndicators[targetPlayer.UserId] = indicator
 	
 	task.spawn(function()
-		local success, content = pcall(function()
-			return Players:GetUserThumbnailAsync(
-				targetPlayer.UserId,
-				Enum.ThumbnailType.HeadShot,
-				Enum.ThumbnailSize.Size48x48
-			)
-		end)
-		
-		if success and content then
-			indicator.Image = content
-			indicator.ImageTransparency = 0
-			PlayerHeadshotCache[targetPlayer.UserId] = content
-		else
-			indicator.ImageTransparency = 1
-		end
+		local content = SafeGetHeadshot(targetPlayer.UserId, Enum.ThumbnailSize.Size48x48)
+		indicator.Image = content
+		indicator.ImageTransparency = 0
+		PlayerHeadshotCache[targetPlayer.UserId] = content
 	end)
 	
 	return indicator

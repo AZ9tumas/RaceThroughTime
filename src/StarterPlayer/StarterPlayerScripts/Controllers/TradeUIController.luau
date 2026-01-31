@@ -6,6 +6,19 @@ local Knit = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Kn
 local modules = ReplicatedStorage:WaitForChild("Modules")
 local statsM = require(modules:WaitForChild("Stats"))
 
+local PLACEHOLDER_HEADSHOT = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+
+local function SafeGetHeadshot(userId: number, size: Enum.ThumbnailSize?): string
+	local thumbnailSize = size or Enum.ThumbnailSize.Size100x100
+	local success, content = pcall(function()
+		return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, thumbnailSize)
+	end)
+	if success and content then
+		return content
+	end
+	return PLACEHOLDER_HEADSHOT
+end
+
 local TradeUIController = Knit.CreateController({
 	Name = "TradeUIController",
 })
@@ -272,12 +285,8 @@ function TradeUIController:UpdatePlayerList()
 		template.Visible = true
 		template.Username.Text = otherPlayer.DisplayName
 		task.spawn(function()
-			pcall(function()
-				local content, isReady = Players:GetUserThumbnailAsync(otherPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
-				if isReady then
-					template.HeadShot.Image = content
-				end
-			end)
+			local content = SafeGetHeadshot(otherPlayer.UserId, Enum.ThumbnailSize.Size420x420)
+			template.HeadShot.Image = content
 		end)
 		template.Trade.MouseButton1Click:Connect(function()
 			TradeController:RequestTrade(otherPlayer)
