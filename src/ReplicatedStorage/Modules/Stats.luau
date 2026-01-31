@@ -86,43 +86,35 @@ Stats.MainBoss = {
 }
 
 -- World unlock requirements
--- Some worlds require just distance, others require distance AND rebirths
--- Format: { Distance = number, Rebirth = number? } or just number for distance-only
+-- Players need to accumulate this much distance throughout their gameplay
+-- Format: { Distance = number, Rebirth = number? }
 Stats.WorldUnlockRequirements = {
 	-- Main is unlocked by default
 	StoneAge = { Distance = 10510 },
 	AncientEgypt = { Distance = 110110, Rebirth = 1 },
 	Medieval = { Distance = 250000, Rebirth = 2 },
-	Industrial = 550000,
-	Neon = 1500000,
+	Industrial = { Distance = 1250000, Rebirth = 5 },
+	Neon = { Distance = 5250000, Rebirth = 10 },
 }
 
--- Get distance requirement for a world (handles both table and number formats)
+-- Get distance requirement for a world
 function Stats.GetWorldDistanceRequirement(worldName: string): number?
 	local req = Stats.WorldUnlockRequirements[worldName]
-	if not req then return nil end
-	if type(req) == "number" then return req end
-	if type(req) == "table" then return req.Distance end
-	return nil
+	return req and req.Distance
 end
 
 -- Get rebirth requirement for a world (returns nil if no rebirth required)
 function Stats.GetWorldRebirthRequirement(worldName: string): number?
 	local req = Stats.WorldUnlockRequirements[worldName]
-	if not req then return nil end
-	if type(req) == "table" then return req.Rebirth end
-	return nil
+	return req and req.Rebirth
 end
 
 -- Check if a player meets the unlock requirements for a world
 function Stats.MeetsWorldUnlockRequirements(worldName: string, distanceTraveled: number, playerRebirths: number): boolean
-	local distanceReq = Stats.GetWorldDistanceRequirement(worldName)
-	local rebirthReq = Stats.GetWorldRebirthRequirement(worldName)
-	
-	if not distanceReq then return false end
-	if distanceTraveled < distanceReq then return false end
-	if rebirthReq and playerRebirths < rebirthReq then return false end
-	
+	local req = Stats.WorldUnlockRequirements[worldName]
+	if not req then return false end
+	if distanceTraveled < req.Distance then return false end
+	if req.Rebirth and playerRebirths < req.Rebirth then return false end
 	return true
 end
 
