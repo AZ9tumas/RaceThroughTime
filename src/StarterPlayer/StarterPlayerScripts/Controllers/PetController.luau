@@ -33,6 +33,7 @@ local PetController = Knit.CreateController({
 -- Constants
 local PET_FOLLOW_DISTANCE = 8
 local ARENA_CHECK_INTERVAL = 0.2
+local PET_REFRESH_INTERVAL = 1.0
 
 -- Private state
 local Player = Players.LocalPlayer
@@ -40,6 +41,7 @@ local PetService = nil
 local IsInArena = false
 local IsOnTrack = false
 local LastArenaCheck = 0
+local LastPetRefresh = 0
 
 -- Pet objects: [PetModel] = petObj
 local PetObjects = {}
@@ -423,11 +425,15 @@ end
 
 -- Main update loop
 local function Update()
-	-- Refresh pet objects periodically
-	RefreshPetObjects()
+	local now = tick()
+	
+	-- Refresh pet objects periodically (throttled to avoid constant refreshes)
+	if now - LastPetRefresh >= PET_REFRESH_INTERVAL then
+		LastPetRefresh = now
+		RefreshPetObjects()
+	end
 	
 	-- Check arena status (throttled)
-	local now = tick()
 	if now - LastArenaCheck >= ARENA_CHECK_INTERVAL then
 		LastArenaCheck = now
 		local wasInArena = IsInArena
