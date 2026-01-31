@@ -522,9 +522,19 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	local unlockRequirement = nextWorld and Stats.GetWorldDistanceRequirement(nextWorld) or nil
 	local rebirthRequirement = nextWorld and Stats.GetWorldRebirthRequirement(nextWorld) or nil
 	
-	-- Start lap tracking
+	-- Start lap tracking with full track data for server-side percentage calculation
 	local LapService = Knit.GetService("LapService")
-	LapService:StartTracking(player, worldName, nextWorld or worldName)
+	LapService:StartTracking(player, worldName, nextWorld or worldName, {
+		player = player,
+		launchWorld = worldName,
+		targetWorld = nextWorld or worldName,
+		startTime = tick(),
+		startAngle = initialAngle,
+		initialSpeed = trackParams.initialSpeed,
+		acceleration = trackParams.acceleration,
+		maxSpeed = trackParams.maxSpeed,
+		worldRadius = radius,
+	})
 	
 	-- Fire signal to client that track has started (client will handle movement and effects)
 	TrackService.Client.TrackStarted:Fire(player, {
