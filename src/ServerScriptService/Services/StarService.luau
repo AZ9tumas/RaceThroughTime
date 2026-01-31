@@ -363,6 +363,31 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 		end
 	end
 
+	-- Check if boss should spawn (total stars across all worlds meets requirement)
+	local bossUnlockReq = Stats.BossUnlockRequirement and Stats.BossUnlockRequirement.Stars or 10
+	local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
+	local bossFightActive = statsFolder and statsFolder:FindFirstChild("BossFight")
+	local isBossFightAlreadyActive = bossFightActive and bossFightActive:IsA("BoolValue") and bossFightActive.Value
+	
+	if not isBossFightAlreadyActive then
+		local totalWorldStars = 0
+		if starsCollectedFolder then
+			for _, worldValue in ipairs(starsCollectedFolder:GetChildren()) do
+				if worldValue:IsA("IntValue") or worldValue:IsA("NumberValue") then
+					totalWorldStars = totalWorldStars + worldValue.Value
+				end
+			end
+		end
+		
+		if totalWorldStars >= bossUnlockReq then
+			local BossService = Knit.GetService("BossService")
+			if BossService then
+				BossService:SpawnBoss()
+				Log("Boss spawned! Total stars: " .. totalWorldStars)
+			end
+		end
+	end
+
 	-- Remove star from tracker
 	local starInfoList = UniversalTracker[userId]
 	if starInfoList then

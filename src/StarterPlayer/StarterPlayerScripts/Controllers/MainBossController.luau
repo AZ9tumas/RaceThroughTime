@@ -1,9 +1,8 @@
--- client handler for main boss
+-- client handler for main boss (single global boss system)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Knit"))
 local Stats = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Stats"))
@@ -20,17 +19,15 @@ local topBar: Frame
 local serverBar: Frame
 local Unlockfill: Frame
 
-local currentWorld = nil
-local starsCollectedFolder = ReplicatedStorage:WaitForChild("StarsCollected")
-local starConnection = nil
+local starConnections = {}
 
 local function TweenBar(progress: number)
 	if not Unlockfill then return end
 	local targetSize = UDim2.new(math.clamp(progress, 0, 1), 0, 1, 0)
 	
 	local tweenInfo = TweenInfo.new(
-		0.5, -- Duration
-		Enum.EasingStyle.Elastic, -- Quirky tween
+		0.5,
+		Enum.EasingStyle.Elastic,
 		Enum.EasingDirection.Out
 	)
 	
@@ -39,39 +36,49 @@ local function TweenBar(progress: number)
 end
 
 function MainBossController:UpdateUnlockProgress()
-	local UIController = Knit.GetController("UIController")
-	if not UIController then return end
+	local unlockReq = Stats.BossUnlockRequirement.Stars or 10
 	
-	local data = UIController:GetData()
-	local newWorld = data.Progression and data.Progression.CurrentWorld
+	local starsCollectedFolder = ReplicatedStorage:FindFirstChild("StarsCollected")
+	if not starsCollectedFolder then return end
 	
-	-- Handle World Change
-	if newWorld ~= currentWorld then
-		currentWorld = newWorld
-		self:SetupWorldListener(currentWorld)
+	local totalStars = 0
+	for _, worldValue in ipairs(starsCollectedFolder:GetChildren()) do
+		if worldValue:IsA("IntValue") or worldValue:IsA("NumberValue") then
+			totalStars = totalStars + worldValue.Value
+		end
 	end
 	
-	if not currentWorld then return end
-	
-	local unlockReq = Stats.MainBoss[currentWorld] or 10 -- Default fallback
-	local collectedVal = starsCollectedFolder:FindFirstChild(currentWorld)
-	local collected = collectedVal and collectedVal.Value or 0
-	
-	TweenBar(collected / unlockReq)
+	TweenBar(totalStars / unlockReq)
 end
 
-function MainBossController:SetupWorldListener(worldName: string)
-	if starConnection then
-		starConnection:Disconnect()
-		starConnection = nil
+function MainBossController:SetupStarListeners()
+	for _, conn in pairs(starConnections) do
+		conn:Disconnect()
+	end
+	starConnections = {}
+	
+	local starsCollectedFolder = ReplicatedStorage:FindFirstChild("StarsCollected")
+	if not starsCollectedFolder then return end
+	
+	for _, worldValue in ipairs(starsCollectedFolder:GetChildren()) do
+		if worldValue:IsA("IntValue") or worldValue:IsA("NumberValue") then
+			local conn = worldValue.Changed:Connect(function()
+				self:UpdateUnlockProgress()
+			end)
+			table.insert(starConnections, conn)
+		end
 	end
 	
-	local collectedVal = starsCollectedFolder:FindFirstChild(worldName)
-	if collectedVal then
-		starConnection = collectedVal.Changed:Connect(function()
+	local childAddedConn = starsCollectedFolder.ChildAdded:Connect(function(child)
+		if child:IsA("IntValue") or child:IsA("NumberValue") then
+			local conn = child.Changed:Connect(function()
+				self:UpdateUnlockProgress()
+			end)
+			table.insert(starConnections, conn)
 			self:UpdateUnlockProgress()
-		end)
-	end
+		end
+	end)
+	table.insert(starConnections, childAddedConn)
 end
 
 function MainBossController:KnitInit()
@@ -82,10 +89,9 @@ function MainBossController:KnitInit()
 end
 
 function MainBossController:KnitStart()
-	-- Initial update
 	task.spawn(function()
-		-- Wait for data to be ready (usually signaled via UIController or just ready after start)
 		task.wait(1) 
+		self:SetupStarListeners()
 		self:UpdateUnlockProgress()
 	end)
 end

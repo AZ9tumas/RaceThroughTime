@@ -75,15 +75,11 @@ Stats.WorldCashRates = {
 	StoneAge = 180, -- 20% higher cash rate in StoneAge
 }
 
--- Min requirement of total stars collected per world to unlock the respective main boss
-Stats.MainBoss = {
-	Main = 10,
-	StoneAge = 10,
-	AncientEgypt = 10,
-	Medieval = 10,
-	Industrial = 10,
-	Neon = 10,
-}
+-- Available bosses (single global boss system)
+Stats.Bosses = { "ChickenBoss", "MoonBoss", "SunBoss" }
+
+-- Boss spawn requirement (stars needed to trigger boss fight)
+Stats.BossUnlockRequirement = { Stars = 10 }
 
 -- World unlock requirements
 -- Players need to accumulate this much distance throughout their gameplay
