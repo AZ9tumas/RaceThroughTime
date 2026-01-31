@@ -22,6 +22,7 @@ local RaceHUDMainFrame: Frame = RaceHUD:WaitForChild("MainFrame")
 local globalView: Frame = RaceHUDMainFrame:WaitForChild("GlobalView")
 local localView: Frame = RaceHUDMainFrame:WaitForChild("LocalView")
 local progressFrameFill: Frame = localView:WaitForChild("Progress"):WaitForChild("Fill")
+local progressHeadshotImage: ImageLabel = progressFrameFill:WaitForChild("Frame"):WaitForChild("ImageLabel")
 
 -- Track cancel button UI
 local trackCancelUI: ScreenGui = PlayerGui:WaitForChild("UI_CancelTrackButton")
@@ -495,6 +496,21 @@ local function OnTrackStarted(trackData: {
 	CurrentWorldName = trackData.worldName or "Main"
 	distanceCounter.Visible = true
 	
+	-- Toggle view visibility: localView visible, globalView hidden during race
+	localView.Visible = true
+	globalView.Visible = false
+	
+	-- Set player headshot on progress bar
+	local success, headshotContent = pcall(function()
+		return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+	end)
+	if success and headshotContent then
+		progressHeadshotImage.Image = headshotContent
+		progressHeadshotImage.ImageTransparency = 0
+	else
+		progressHeadshotImage.ImageTransparency = 1
+	end
+	
 	-- Initialize client-side movement state
 	CurrentAngle = trackData.startAngle
 	ElapsedTime = 0
@@ -685,6 +701,10 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	IsOnTrack = false
 	TrackData = nil
 	
+	-- Toggle view visibility: globalView visible, localView hidden when race ends
+	localView.Visible = false
+	globalView.Visible = true
+	
 	-- Notify PetController that track run has ended (pets can resume normal behavior)
 	local PetController = Knit.GetController("PetController")
 	if PetController then
@@ -791,6 +811,10 @@ function TrackController:StopTrack()
 	
 	IsOnTrack = false
 	TrackData = nil
+	
+	-- Toggle view visibility: globalView visible, localView hidden when race ends
+	localView.Visible = false
+	globalView.Visible = true
 	
 	-- Notify PetController that track run has ended
 	local PetController = Knit.GetController("PetController")
