@@ -270,11 +270,13 @@ function UIController:KnitStart()
 		local ShopUIController = Knit.GetController("ShopUIController")
 		local WorldUIController = Knit.GetController("WorldUIController")
 		local MainBossController = Knit.GetController("MainBossController")
+		local TrackController = Knit.GetController("TrackController")
 		if CurrencyUIController then CurrencyUIController:UpdateAllDisplays() end
 		if DailyRewardsUIController then DailyRewardsUIController:UpdateRewardsStatus() end
 		if ShopUIController then ShopUIController:UpdateShopUI() end
 		if WorldUIController then WorldUIController:UpdateWorlds() end
 		if MainBossController then MainBossController:UpdateUnlockProgress() end
+		if TrackController then TrackController:UpdateWorldFrameColors() end
 	end)
 
 	RunService.RenderStepped:Connect(function()

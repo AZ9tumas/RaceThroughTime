@@ -64,6 +64,11 @@ local TIME_EPSILON = 0.001 -- Epsilon for floating point time comparison
 local SPEED_FACTOR_DIVISOR = 10 -- Divisor for speed factor calculation
 local MAX_SPEED_FACTOR = 20 -- Maximum speed factor for responsiveness
 
+-- World frame colors
+local COLOR_OWNED = Color3.fromRGB(46, 204, 113) -- Green for owned worlds
+local COLOR_NOT_OWNED = Color3.fromRGB(100, 100, 100) -- Gray for not owned worlds
+local COLOR_CURRENT = Color3.fromRGB(52, 152, 219) -- Blue for current/latest unlocked world
+
 local TrackController = Knit.CreateController({
 	Name = "TrackController",
 })
@@ -855,6 +860,71 @@ function TrackController:StopTrack()
 	Log("Track stopped")
 end
 
+-- Update world frame colors in globalView based on unlocked worlds
+function TrackController:UpdateWorldFrameColors()
+	local data = UIController and UIController:GetData()
+	if not data then return end
+	
+	local unlockedWorlds = data.Progression and data.Progression.UnlockedWorlds or { "Main" }
+	
+	-- Find the latest unlocked world based on Stats.WorldOrder
+	local latestUnlockedWorld = "Main"
+	for i = #Stats.WorldOrder, 1, -1 do
+		local worldName = Stats.WorldOrder[i]
+		for _, unlockedWorld in ipairs(unlockedWorlds) do
+			if unlockedWorld == worldName then
+				latestUnlockedWorld = worldName
+				break
+			end
+		end
+		if latestUnlockedWorld ~= "Main" or Stats.WorldOrder[i] == "Main" then break end
+	end
+	
+	-- Update each world frame in globalView
+	for _, worldName in ipairs(Stats.WorldOrder) do
+		local worldFrame = globalView:FindFirstChild(worldName)
+		if worldFrame then
+			local isOwned = false
+			for _, unlockedWorld in ipairs(unlockedWorlds) do
+				if unlockedWorld == worldName then
+					isOwned = true
+					break
+				end
+			end
+			
+			-- Determine color and stroke visibility
+			if worldName == latestUnlockedWorld then
+				worldFrame.BackgroundColor3 = COLOR_CURRENT
+				local uiStroke = worldFrame:FindFirstChild("UIStroke")
+				if uiStroke then
+					local innerStroke = uiStroke:FindFirstChild("UIStroke")
+					if innerStroke then
+						innerStroke.Enabled = true
+					end
+				end
+			elseif isOwned then
+				worldFrame.BackgroundColor3 = COLOR_OWNED
+				local uiStroke = worldFrame:FindFirstChild("UIStroke")
+				if uiStroke then
+					local innerStroke = uiStroke:FindFirstChild("UIStroke")
+					if innerStroke then
+						innerStroke.Enabled = false
+					end
+				end
+			else
+				worldFrame.BackgroundColor3 = COLOR_NOT_OWNED
+				local uiStroke = worldFrame:FindFirstChild("UIStroke")
+				if uiStroke then
+					local innerStroke = uiStroke:FindFirstChild("UIStroke")
+					if innerStroke then
+						innerStroke.Enabled = false
+					end
+				end
+			end
+		end
+	end
+end
+
 -- Knit lifecycle
 function TrackController:KnitInit()
 	-- Controller initialization
@@ -890,6 +960,12 @@ function TrackController:KnitStart()
 	
 	-- Ensure cancel button is hidden initially
 	trackCancelButton.Visible = false
+	
+	-- Listen for data updates to refresh world frame colors
+	local DataService = Knit.GetService("DataService")
+	DataService.DataReady:Connect(function()
+		self:UpdateWorldFrameColors()
+	end)
 	
 	Log("TrackController started")
 end
