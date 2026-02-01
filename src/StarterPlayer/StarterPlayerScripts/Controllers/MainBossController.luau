@@ -20,6 +20,11 @@ local serverBar: Frame
 local Unlockfill: Frame
 
 local starConnections = {}
+local healthConnection = nil
+local bossFightConnection = nil
+
+local COLOR_HEALTH_ACTIVE = Color3.fromRGB(46, 204, 113)
+local COLOR_INACTIVE = Color3.fromRGB(255, 100, 50)
 
 local function TweenBar(progress: number)
 	if not Unlockfill then return end
@@ -35,7 +40,45 @@ local function TweenBar(progress: number)
 	tween:Play()
 end
 
+local function SetBarColor(color: Color3)
+	if Unlockfill then
+		Unlockfill.BackgroundColor3 = color
+	end
+end
+
+function MainBossController:IsBossFightActive()
+	local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
+	if statsFolder then
+		local bossFight = statsFolder:FindFirstChild("BossFight")
+		if bossFight and bossFight:IsA("BoolValue") then
+			return bossFight.Value
+		end
+	end
+	return false
+end
+
+function MainBossController:UpdateHealthDisplay()
+	local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
+	if not statsFolder then return end
+	
+	local bossHealth = statsFolder:FindFirstChild("BossHealth")
+	if not bossHealth then return end
+	
+	local maxHealth = Stats.BossMaxHealth or 100
+	local currentHealth = bossHealth.Value
+	
+	SetBarColor(COLOR_HEALTH_ACTIVE)
+	TweenBar(currentHealth / maxHealth)
+end
+
 function MainBossController:UpdateUnlockProgress()
+	if self:IsBossFightActive() then
+		self:UpdateHealthDisplay()
+		return
+	end
+	
+	SetBarColor(COLOR_INACTIVE)
+	
 	local unlockReq = Stats.BossUnlockRequirement.Stars or 10
 	
 	local starsCollectedFolder = ReplicatedStorage:FindFirstChild("StarsCollected")
@@ -49,6 +92,42 @@ function MainBossController:UpdateUnlockProgress()
 	end
 	
 	TweenBar(totalStars / unlockReq)
+end
+
+function MainBossController:SetupHealthListener()
+	if healthConnection then
+		healthConnection:Disconnect()
+		healthConnection = nil
+	end
+	
+	local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
+	if not statsFolder then return end
+	
+	local bossHealth = statsFolder:FindFirstChild("BossHealth")
+	if bossHealth and bossHealth:IsA("NumberValue") then
+		healthConnection = bossHealth.Changed:Connect(function()
+			if self:IsBossFightActive() then
+				self:UpdateHealthDisplay()
+			end
+		end)
+	end
+end
+
+function MainBossController:SetupBossFightListener()
+	if bossFightConnection then
+		bossFightConnection:Disconnect()
+		bossFightConnection = nil
+	end
+	
+	local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
+	if not statsFolder then return end
+	
+	local bossFight = statsFolder:FindFirstChild("BossFight")
+	if bossFight and bossFight:IsA("BoolValue") then
+		bossFightConnection = bossFight.Changed:Connect(function()
+			self:UpdateUnlockProgress()
+		end)
+	end
 end
 
 function MainBossController:SetupStarListeners()
@@ -92,6 +171,8 @@ function MainBossController:KnitStart()
 	task.spawn(function()
 		task.wait(1) 
 		self:SetupStarListeners()
+		self:SetupHealthListener()
+		self:SetupBossFightListener()
 		self:UpdateUnlockProgress()
 	end)
 end

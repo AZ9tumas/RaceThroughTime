@@ -72,6 +72,11 @@ function BossService:SpawnBoss()
 		if bossFight and bossFight:IsA("BoolValue") then
 			bossFight.Value = true
 		end
+		
+		local bossHealth = statsFolder:FindFirstChild("BossHealth")
+		if bossHealth and bossHealth:IsA("NumberValue") then
+			bossHealth.Value = Stats.BossMaxHealth
+		end
 	end
 	
 	return bossName
@@ -109,6 +114,11 @@ function BossService:EndBossFight()
 		if bossFight and bossFight:IsA("BoolValue") then
 			bossFight.Value = false
 		end
+		
+		local bossHealth = statsFolder:FindFirstChild("BossHealth")
+		if bossHealth and bossHealth:IsA("NumberValue") then
+			bossHealth.Value = 0
+		end
 	end
 end
 
@@ -129,6 +139,14 @@ function BossService:KnitInit()
 		bossFight.Name = "BossFight"
 		bossFight.Value = false
 		bossFight.Parent = statsFolder
+	end
+	
+	local bossHealth = statsFolder:FindFirstChild("BossHealth")
+	if not bossHealth then
+		bossHealth = Instance.new("NumberValue")
+		bossHealth.Name = "BossHealth"
+		bossHealth.Value = 0
+		bossHealth.Parent = statsFolder
 	end
 end
 

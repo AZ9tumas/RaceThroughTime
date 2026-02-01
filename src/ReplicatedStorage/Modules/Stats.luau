@@ -81,6 +81,9 @@ Stats.Bosses = { "ChickenBoss", "MoonBoss", "SunBoss" }
 -- Boss spawn requirement (stars needed to trigger boss fight)
 Stats.BossUnlockRequirement = { Stars = 10 }
 
+-- Boss health
+Stats.BossMaxHealth = 100
+
 -- World unlock requirements
 -- Players need to accumulate this much distance throughout their gameplay
 -- Format: { Distance = number, Rebirth = number? }
