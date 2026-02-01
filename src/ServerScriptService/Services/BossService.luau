@@ -131,6 +131,21 @@ function BossService:IsBossFightActive()
 	return false
 end
 
+function BossService:DamageBoss(damage: number)
+	local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
+	if not statsFolder then return end
+	
+	local bossHealth = statsFolder:FindFirstChild("BossHealth")
+	if not bossHealth or not bossHealth:IsA("NumberValue") then return end
+	
+	bossHealth.Value = math.max(0, bossHealth.Value - damage)
+	
+	-- Check if boss is dead
+	if bossHealth.Value <= 0 then
+		self:EndBossFight()
+	end
+end
+
 function BossService:EndBossFight()
 	for _, existingBoss in ipairs(SpawnedBosses) do
 		if existingBoss and existingBoss.Parent then
@@ -138,6 +153,7 @@ function BossService:EndBossFight()
 		end
 	end
 	SpawnedBosses = {}
+	CurrentBossKey = nil
 	
 	local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
 	if statsFolder then
@@ -150,6 +166,17 @@ function BossService:EndBossFight()
 		if bossHealth and bossHealth:IsA("NumberValue") then
 			bossHealth.Value = 0
 		end
+		
+		local currentBossValue = statsFolder:FindFirstChild("CurrentBoss")
+		if currentBossValue and currentBossValue:IsA("StringValue") then
+			currentBossValue.Value = ""
+		end
+	end
+	
+	-- Reset server stars - get StarService and reset
+	local StarService = Knit.GetService("StarService")
+	if StarService and StarService.ResetAllStars then
+		StarService:ResetAllStars()
 	end
 end
 

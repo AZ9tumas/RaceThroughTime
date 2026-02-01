@@ -40,8 +40,10 @@ local Player = Players.LocalPlayer
 local PetService = nil
 local IsInArena = false
 local IsOnTrack = false
+local IsBossFight = false
 local LastArenaCheck = 0
 local LastPetRefresh = 0
+local LastPetAttackTime = {} -- [PetModel] = last attack time
 
 -- Pet objects: [PetModel] = petObj
 local PetObjects = {}
@@ -354,6 +356,68 @@ local function UpdatePet(petObj: {Player: Player, PetParams: any, PetModel: Mode
 	local playerPos = ownerRoot.Position
 	local roamRange = petParams.RoamRange or 150
 	
+	-- During boss fights, pets target and attack the boss
+	if IsBossFight then
+		PetTargets[petModel] = nil
+		
+		-- Find boss in current world
+		local world = GetCurrentWorld(owner)
+		local worldFolder = Workspace:FindFirstChild(world)
+		local boss = nil
+		local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
+		local currentBossValue = statsFolder and statsFolder:FindFirstChild("CurrentBoss")
+		local bossName = currentBossValue and currentBossValue.Value or ""
+		
+		if worldFolder and bossName ~= "" then
+			boss = worldFolder:FindFirstChild(bossName)
+		end
+		
+		if boss then
+			-- Find boss position
+			local bossRoot = boss.PrimaryPart or boss:FindFirstChildWhichIsA("BasePart")
+			if bossRoot then
+				local bossPos = bossRoot.Position
+				
+				-- Move towards boss
+				alignPos.Position = bossPos
+				
+				-- Face the boss
+				if alignOri then
+					local diff = bossPos - petPos
+					if diff.Magnitude > 0.1 then
+						alignOri.CFrame = CFrame.lookAt(petPos, bossPos)
+					end
+				end
+				
+				-- Check if close enough to attack
+				local dist = (petPos - bossPos).Magnitude
+				local attackRange = 15 -- Attack range for boss
+				
+				if dist <= attackRange then
+					-- Check attack rate
+					local attackRate = Stats.DefaultPetAttackRate or 1
+					local lastAttack = LastPetAttackTime[petModel] or 0
+					local now = tick()
+					
+					if now - lastAttack >= (1 / attackRate) then
+						-- Attack boss - send to server
+						LastPetAttackTime[petModel] = now
+						-- Request server to damage boss
+						if PetService then
+							PetService:RequestPetAttackBoss()
+						end
+					end
+				end
+				
+				return
+			end
+		end
+		
+		-- No boss found, follow player
+		SetPetToFollowPlayer(petModel, petIndex, ownerRoot, true)
+		return
+	end
+	
 	-- During track runs, pets follow the player alongside them (no star collection)
 	if IsOnTrack then
 		PetTargets[petModel] = nil
@@ -495,6 +559,24 @@ function PetController:IsOnTrack(): boolean
 	return IsOnTrack
 end
 
+function PetController:SetBossFight(bossFight: boolean)
+	IsBossFight = bossFight
+	if bossFight then
+		PetTargets = {}
+		LastPetAttackTime = {}
+		for petModel, _ in pairs(DebugBeams) do
+			ClearDebugBeam(petModel)
+		end
+	else
+		-- Boss fight ended, reset attack timers
+		LastPetAttackTime = {}
+	end
+end
+
+function PetController:IsBossFightActive(): boolean
+	return IsBossFight
+end
+
 function PetController:KnitStart()
 	PetService = Knit.GetService("PetService")
 	
@@ -525,6 +607,21 @@ function PetController:KnitStart()
 			ClearDebugBeam(petModel)
 		end
 	end)
+	
+	-- Listen for boss fight state changes
+	local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
+	if statsFolder then
+		local bossFight = statsFolder:FindFirstChild("BossFight")
+		if bossFight and bossFight:IsA("BoolValue") then
+			-- Initial state
+			IsBossFight = bossFight.Value
+			
+			-- Listen for changes
+			bossFight.Changed:Connect(function(newValue)
+				self:SetBossFight(newValue)
+			end)
+		end
+	end
 end
 
 return PetController

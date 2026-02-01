@@ -526,6 +526,24 @@ function StarService:RecalculateFuel(player: Player)
 	RecalculateFuelForPlayer(player)
 end
 
+-- Reset all stars collected (called when boss dies)
+function StarService:ResetAllStars()
+	-- Reset the per-world collected counts
+	local starsCollectedFolder = ReplicatedStorage:FindFirstChild("StarsCollected")
+	if starsCollectedFolder then
+		for _, worldValue in ipairs(starsCollectedFolder:GetChildren()) do
+			if worldValue:IsA("IntValue") or worldValue:IsA("NumberValue") then
+				worldValue.Value = 0
+			end
+		end
+	end
+	
+	-- Reset total counter
+	TotalStarsCollected = 0
+	
+	Log("All stars reset after boss death")
+end
+
 -- Knit lifecycle
 function StarService:KnitInit()
 	-- Initialize Stars folder in workspace

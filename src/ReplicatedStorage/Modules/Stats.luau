@@ -94,6 +94,9 @@ end
 -- Boss spawn requirement (stars needed to trigger boss fight)
 Stats.BossUnlockRequirement = { Stars = 10 }
 
+-- Default pet attack rate against bosses (attacks per second)
+Stats.DefaultPetAttackRate = 1 -- 1 attack per second
+
 -- World unlock requirements
 -- Players need to accumulate this much distance throughout their gameplay
 -- Format: { Distance = number, Rebirth = number? }
