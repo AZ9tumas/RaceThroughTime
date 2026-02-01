@@ -76,13 +76,14 @@ Stats.WorldCashRates = {
 }
 
 -- Available bosses (single global boss system)
-Stats.Bosses = { "ChickenBoss", "MoonBoss", "SunBoss" }
+Stats.Bosses = { 
+	ChickenBoss = { Name = "Chicken Boss", Health = 100 },
+	MoonBoss = { Name = "Moon Boss", Health = 200 },
+	SunBoss = { Name = "Sun Boss", Health = 300 },
+}
 
 -- Boss spawn requirement (stars needed to trigger boss fight)
 Stats.BossUnlockRequirement = { Stars = 10 }
-
--- Boss health
-Stats.BossMaxHealth = 100
 
 -- World unlock requirements
 -- Players need to accumulate this much distance throughout their gameplay
