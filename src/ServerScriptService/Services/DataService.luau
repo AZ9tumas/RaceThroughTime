@@ -123,7 +123,7 @@ end
 local function setupPets(player: Player, data: typeof(Template))
 	-- Initialize pets BEFORE sending data to client so IDs are available
 	local PetService = Knit.GetService("PetService")
-	PetService:InitializePets(player)
+	-- PetService:InitializePets(player) -- Respawns pets, moved to TryResolveSession
 	
 	-- Create a copy of the data to avoid modifying the persistent profile
 	-- Deep copy PetInventory to inject session-only IDs, other fields are shallow copied
@@ -196,6 +196,10 @@ local function TryResolveSession(player: Player)
 				return inventory
 			end)
 		end
+
+		-- Initialize pets once when session is resolved
+		local PetService = Knit.GetService("PetService")
+		PetService:InitializePets(player)
 
 		local dataToSend = setupPets(player, profile.Data)
 		

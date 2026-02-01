@@ -109,6 +109,7 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 	
 	-- Respawn if already spawned
 	if SpawnedPets[userId][petIndex] then
+		error("Respawning pet that is already spawned!", 3)
 		if SpawnedPets[userId][petIndex]:IsA("Model") then SpawnedPets[userId][petIndex]:Destroy() end
 		warn("Spawning again.")
 	end
