@@ -11,14 +11,31 @@ local BossService = Knit.CreateService({
 
 local CurrentBossIndex = 0
 local SpawnedBosses = {}
+local CurrentBossKey = nil
+
+local function AnchorAndDisableCollision(model)
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.Anchored = true
+			descendant.CanCollide = false
+		end
+	end
+end
 
 function BossService:SpawnBoss()
 	CurrentBossIndex = CurrentBossIndex + 1
-	if CurrentBossIndex > #Stats.Bosses then
+	if CurrentBossIndex > #Stats.BossList then
 		CurrentBossIndex = 1
 	end
 	
-	local bossName = Stats.Bosses[CurrentBossIndex]
+	local bossKey = Stats.BossList[CurrentBossIndex]
+	CurrentBossKey = bossKey
+	local bossInfo = Stats.Bosses[bossKey]
+	if not bossInfo then
+		warn("[BossService] Boss info not found for:", bossKey)
+		return
+	end
+	
 	local bossAssets = ServerStorage:FindFirstChild("Assets")
 	if not bossAssets then
 		warn("[BossService] ServerStorage.Assets not found")
@@ -31,9 +48,9 @@ function BossService:SpawnBoss()
 		return
 	end
 	
-	local bossModel = bossesFolder:FindFirstChild(bossName)
+	local bossModel = bossesFolder:FindFirstChild(bossKey)
 	if not bossModel then
-		warn("[BossService] Boss model not found:", bossName)
+		warn("[BossService] Boss model not found:", bossKey)
 		return
 	end
 	
@@ -48,7 +65,9 @@ function BossService:SpawnBoss()
 		local spawnLocation = world:FindFirstChild("SpawnLocation")
 		if spawnLocation and spawnLocation:IsA("BasePart") then
 			local bossClone = bossModel:Clone()
-			bossClone.Name = bossName
+			bossClone.Name = bossKey
+			
+			AnchorAndDisableCollision(bossClone)
 			
 			if bossClone.PrimaryPart then
 				bossClone:SetPrimaryPartCFrame(spawnLocation.CFrame + Vector3.new(0, 5, 0))
@@ -75,18 +94,30 @@ function BossService:SpawnBoss()
 		
 		local bossHealth = statsFolder:FindFirstChild("BossHealth")
 		if bossHealth and bossHealth:IsA("NumberValue") then
-			bossHealth.Value = Stats.BossMaxHealth
+			bossHealth.Value = Stats.GetBossHealth(bossKey)
 		end
+		
+		local currentBossValue = statsFolder:FindFirstChild("CurrentBoss")
+		if not currentBossValue then
+			currentBossValue = Instance.new("StringValue")
+			currentBossValue.Name = "CurrentBoss"
+			currentBossValue.Parent = statsFolder
+		end
+		currentBossValue.Value = bossKey
 	end
 	
-	return bossName
+	return bossKey
 end
 
 function BossService:GetCurrentBossName()
-	if CurrentBossIndex > 0 and CurrentBossIndex <= #Stats.Bosses then
-		return Stats.Bosses[CurrentBossIndex]
+	return CurrentBossKey
+end
+
+function BossService:GetCurrentBossHealth(): number
+	if CurrentBossKey then
+		return Stats.GetBossHealth(CurrentBossKey)
 	end
-	return nil
+	return 100
 end
 
 function BossService:IsBossFightActive()

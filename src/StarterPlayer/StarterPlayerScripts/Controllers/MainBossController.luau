@@ -57,6 +57,17 @@ function MainBossController:IsBossFightActive()
 	return false
 end
 
+function MainBossController:GetCurrentBossMaxHealth()
+	local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
+	if statsFolder then
+		local currentBoss = statsFolder:FindFirstChild("CurrentBoss")
+		if currentBoss and currentBoss:IsA("StringValue") and currentBoss.Value ~= "" then
+			return Stats.GetBossHealth(currentBoss.Value)
+		end
+	end
+	return 100
+end
+
 function MainBossController:UpdateHealthDisplay()
 	local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
 	if not statsFolder then return end
@@ -64,7 +75,7 @@ function MainBossController:UpdateHealthDisplay()
 	local bossHealth = statsFolder:FindFirstChild("BossHealth")
 	if not bossHealth then return end
 	
-	local maxHealth = Stats.BossMaxHealth or 100
+	local maxHealth = self:GetCurrentBossMaxHealth()
 	local currentHealth = bossHealth.Value
 	
 	SetBarColor(COLOR_HEALTH_ACTIVE)

@@ -76,11 +76,20 @@ Stats.WorldCashRates = {
 }
 
 -- Available bosses (single global boss system)
+Stats.BossList = { "ChickenBoss", "MoonBoss", "SunBoss" }
 Stats.Bosses = { 
 	ChickenBoss = { Name = "Chicken Boss", Health = 100 },
 	MoonBoss = { Name = "Moon Boss", Health = 200 },
 	SunBoss = { Name = "Sun Boss", Health = 300 },
 }
+
+function Stats.GetBossHealth(bossKey: string): number
+	local boss = Stats.Bosses[bossKey]
+	if boss then
+		return boss.Health or 100
+	end
+	return 100
+end
 
 -- Boss spawn requirement (stars needed to trigger boss fight)
 Stats.BossUnlockRequirement = { Stars = 10 }
