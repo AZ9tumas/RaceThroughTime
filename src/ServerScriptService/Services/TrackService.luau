@@ -307,16 +307,13 @@ local function SetupPetWeldsForTrack(player: Player)
 	local PetService = Knit.GetService("PetService")
 	local spawnedPets = PetService:GetSpawnedPets(player)
 	
-	-- Counter for positioning pets in formation
-	local petCounter = 0
-	
 	for petIndex, petModel in pairs(spawnedPets) do
 		if petModel and petModel.PrimaryPart then
 			local primaryPart = petModel.PrimaryPart
-			petCounter = petCounter + 1
 			
 			-- Calculate the offset for this pet (same formula as PetController)
 			-- Use petIndex for the angle calculation to match client-side behavior
+			-- PetIndex is the inventory index, which is consistent between server and client
 			local offset = Vector3.new(
 				math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
 				PET_FOLLOW_HEIGHT,
