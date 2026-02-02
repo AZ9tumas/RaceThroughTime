@@ -348,7 +348,8 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 	-- Calculate percentage to next world
 	local WorldService = Knit.GetService("WorldService")
 	local nextWorld = WorldService:GetNextWorld(worldName)
-	local unlockRequirement = nextWorld and Stats.WorldUnlockRequirements[nextWorld] or nil
+	local unlockRequirement = nextWorld and Stats.GetWorldDistanceRequirement(nextWorld) or nil
+	local rebirthRequirement = nextWorld and Stats.GetWorldRebirthRequirement(nextWorld) or nil
 	
 	local percentageToNextWorld = 0
 	if unlockRequirement and unlockRequirement > 0 then
@@ -356,11 +357,17 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 	end
 	
 	-- Check if player reached world unlock threshold (only if world exists in workspace)
+	-- Must meet both distance AND rebirth requirements (if applicable)
 	local worldExistsInWorkspace = nextWorld and Workspace:FindFirstChild(nextWorld)
-	local shouldUnlockWorld = worldUnlocked and unlockRequirement and distanceTraveled >= unlockRequirement and worldExistsInWorkspace
+	local meetsRequirements = worldUnlocked and nextWorld and WorldService:PlayerMeetsUnlockRequirements(player, nextWorld, distanceTraveled)
+	local shouldUnlockWorld = meetsRequirements and worldExistsInWorkspace
 	
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
+	
+	-- Stop lap tracking
+	local LapService = Knit.GetService("LapService")
+	LapService:StopTracking(player)
 	
 	-- Fire signal to client that track has ended
 	TrackService.Client.TrackEnded:Fire(player, {
@@ -368,6 +375,7 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 		cashEarned = cashEarned,
 		percentageToNextWorld = percentageToNextWorld,
 		unlockRequirement = unlockRequirement,
+		rebirthRequirement = rebirthRequirement,
 	})
 
 	-- clear all stars
@@ -511,7 +519,22 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	-- Get next world unlock requirement to send to client
 	local WorldService = Knit.GetService("WorldService")
 	local nextWorld = WorldService:GetNextWorld(worldName)
-	local unlockRequirement = nextWorld and Stats.WorldUnlockRequirements[nextWorld] or nil
+	local unlockRequirement = nextWorld and Stats.GetWorldDistanceRequirement(nextWorld) or nil
+	local rebirthRequirement = nextWorld and Stats.GetWorldRebirthRequirement(nextWorld) or nil
+	
+	-- Start lap tracking with full track data for server-side percentage calculation
+	local LapService = Knit.GetService("LapService")
+	LapService:StartTracking(player, worldName, nextWorld or worldName, {
+		player = player,
+		launchWorld = worldName,
+		targetWorld = nextWorld or worldName,
+		startTime = tick(),
+		startAngle = initialAngle,
+		initialSpeed = trackParams.initialSpeed,
+		acceleration = trackParams.acceleration,
+		maxSpeed = trackParams.maxSpeed,
+		worldRadius = radius,
+	})
 	
 	-- Fire signal to client that track has started (client will handle movement and effects)
 	TrackService.Client.TrackStarted:Fire(player, {
@@ -528,6 +551,7 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		maxPhysicalSpeed = Stats.MaxPhysicalSpeed,
 		nextWorld = nextWorld,
 		unlockRequirement = unlockRequirement,
+		rebirthRequirement = rebirthRequirement,
 	})
 	
 	return true, nil
@@ -558,6 +582,10 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 	
 	-- Clear player from track
 	PlayersOnTrack[userId] = nil
+	
+	-- Stop lap tracking
+	local LapService = Knit.GetService("LapService")
+	LapService:StopTracking(player)
 	
 	-- Fire signal to client that track has ended (cancelled, no rewards)
 	TrackService.Client.TrackEnded:Fire(player, {

@@ -6,6 +6,19 @@ local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 
+local PLACEHOLDER_HEADSHOT = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+
+local function SafeGetHeadshot(userId: number, size: Enum.ThumbnailSize?): string
+	local thumbnailSize = size or Enum.ThumbnailSize.Size100x100
+	local success, content = pcall(function()
+		return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, thumbnailSize)
+	end)
+	if success and content then
+		return content
+	end
+	return PLACEHOLDER_HEADSHOT
+end
+
 -- ui
 local player = Players.LocalPlayer
 local PlayerGui = player:WaitForChild("PlayerGui")
@@ -15,6 +28,16 @@ local runButton: TextButton = centerHUD:WaitForChild("RunButton")
 
 local liveMainUI: ScreenGui = PlayerGui:WaitForChild("UI_LiveDistance")
 local distanceCounter: TextLabel = liveMainUI:WaitForChild("DistanceCounter")
+
+-- live race stats ui
+local RaceHUD : ScreenGui = PlayerGui:WaitForChild("RaceHUD")
+local RaceHUDMainFrame: Frame = RaceHUD:WaitForChild("MainFrame")
+local globalView: Frame = RaceHUDMainFrame:WaitForChild("GlobalView")
+local strokeTemplate: UIStroke = globalView:WaitForChild("Templates"):WaitForChild("UIStroke")
+local playerIndicatorTemplate: ImageLabel = globalView:WaitForChild("Templates"):WaitForChild("Template")
+local localView: Frame = RaceHUDMainFrame:WaitForChild("LocalView")
+local progressFrameFill: Frame = localView:WaitForChild("Progress"):WaitForChild("Fill")
+local progressHeadshotImage: ImageLabel = progressFrameFill:WaitForChild("Frame"):WaitForChild("ImageLabel")
 
 -- Track cancel button UI
 local trackCancelUI: ScreenGui = PlayerGui:WaitForChild("UI_CancelTrackButton")
@@ -32,8 +55,8 @@ local closeButton: TextButton = resultsFrame:WaitForChild("TextButton")
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
 
--- Reference to InitUI module for debounce reset
-local InitUI = nil
+-- Reference to UIController for debounce reset
+local UIController = nil
 
 -- Camera settings
 local DEFAULT_FOV = 70
@@ -56,6 +79,11 @@ local TIME_EPSILON = 0.001 -- Epsilon for floating point time comparison
 local SPEED_FACTOR_DIVISOR = 10 -- Divisor for speed factor calculation
 local MAX_SPEED_FACTOR = 20 -- Maximum speed factor for responsiveness
 
+-- World frame colors
+local COLOR_OWNED = Color3.fromRGB(46, 204, 113) -- Green for owned worlds
+local COLOR_NOT_OWNED = Color3.fromRGB(100, 100, 100) -- Gray for not owned worlds
+local COLOR_CURRENT = Color3.fromRGB(52, 152, 219) -- Blue for current/latest unlocked world
+
 local TrackController = Knit.CreateController({
 	Name = "TrackController",
 })
@@ -76,6 +104,11 @@ local ElapsedTime = 0
 local DistanceTraveled = 0
 local LapCount = 0
 local WorldUnlocked = false
+
+-- Player indicators on globalView
+local PlayerIndicators: { [number]: ImageLabel } = {}
+local PlayerHeadshotCache: { [number]: string } = {}
+local PlayerLapsFolder: Folder = nil
 
 -- Helper function for logging
 local function Log(message: string)
@@ -488,6 +521,15 @@ local function OnTrackStarted(trackData: {
 	CurrentWorldName = trackData.worldName or "Main"
 	distanceCounter.Visible = true
 	
+	-- Toggle view visibility: localView visible, globalView hidden during race
+	localView.Visible = true
+	globalView.Visible = false
+	
+	-- Set player headshot on progress bar with placeholder fallback
+	local headshotContent = SafeGetHeadshot(player.UserId, Enum.ThumbnailSize.Size100x100)
+	progressHeadshotImage.Image = headshotContent
+	progressHeadshotImage.ImageTransparency = 0
+	
 	-- Initialize client-side movement state
 	CurrentAngle = trackData.startAngle
 	ElapsedTime = 0
@@ -495,7 +537,16 @@ local function OnTrackStarted(trackData: {
 	LapCount = 0
 	WorldUnlocked = false
 	
+	-- Reset progress bar
+	progressFrameFill.Size = UDim2.new(1, 0, 0, 0)
+	
 	Log(string.format("Track started at %s, total distance: %.2f, initialSpeed: %.2f", trackData.gateName, trackData.totalDistance, trackData.initialSpeed or 0))
+	
+	-- Notify PetController that track run has started (pets should follow, not collect stars)
+	local PetController = Knit.GetController("PetController")
+	if PetController then
+		PetController:SetOnTrack(true)
+	end
 	
 	-- Fade out the loading screen now that server has acknowledged the request
 	local LoadingScreenController = Knit.GetController("LoadingScreenController")
@@ -589,6 +640,13 @@ local function OnTrackStarted(trackData: {
 		-- Check for lap completion
 		local startAngle = TrackData.startAngle
 		local lapThreshold = startAngle + (2 * math.pi * (LapCount + 1))
+		
+		-- Calculate lap progress percentage (0 to 1)
+		local lapStartAngle = startAngle + (2 * math.pi * LapCount)
+		local angleIntoCurrentLap = CurrentAngle - lapStartAngle
+		local lapPercentage = math.clamp(angleIntoCurrentLap / (2 * math.pi), 0, 1)
+		progressFrameFill.Size = UDim2.new(1, 0, lapPercentage, 0)
+		
 		if CurrentAngle >= lapThreshold then
 			LapCount = LapCount + 1
 			local NotifController = Knit.GetController("NotificationController")
@@ -662,6 +720,16 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	IsOnTrack = false
 	TrackData = nil
 	
+	-- Toggle view visibility: globalView visible, localView hidden when race ends
+	localView.Visible = false
+	globalView.Visible = true
+	
+	-- Notify PetController that track run has ended (pets can resume normal behavior)
+	local PetController = Knit.GetController("PetController")
+	if PetController then
+		PetController:SetOnTrack(false)
+	end
+	
 	-- Unbind the movement loop (in case it's still running)
 	pcall(function()
 		RunService:UnbindFromRenderStep(RENDER_STEP_BINDING)
@@ -729,9 +797,9 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 		distanceCounter.Visible = false
 	end
 	
-	-- Reset InitUI debounce so player can request a new run
-	if InitUI and InitUI.ResetTrackDebounce then
-		InitUI.ResetTrackDebounce()
+	-- Reset UIController debounce so player can request a new run
+	if UIController then
+		UIController:ResetTrackDebounce()
 	end
 	
 	-- Show notification with cash earned
@@ -743,7 +811,7 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 		NotificationController:ShowNotification(cashMessage, NotificationController.Category.Success, 3)
 	end
 	
-	-- Note: Run button visibility is now controlled by InitUI based on gate proximity
+	-- Note: Run button visibility is now controlled by RunButtonUIController based on gate proximity
 end
 
 -- Check if player is currently on track
@@ -762,6 +830,16 @@ function TrackController:StopTrack()
 	
 	IsOnTrack = false
 	TrackData = nil
+	
+	-- Toggle view visibility: globalView visible, localView hidden when race ends
+	localView.Visible = false
+	globalView.Visible = true
+	
+	-- Notify PetController that track run has ended
+	local PetController = Knit.GetController("PetController")
+	if PetController then
+		PetController:SetOnTrack(false)
+	end
 	
 	-- Unbind the movement loop
 	pcall(function()
@@ -796,18 +874,179 @@ function TrackController:StopTrack()
 	Log("Track stopped")
 end
 
+-- Update world frame colors in globalView based on unlocked worlds
+function TrackController:UpdateWorldFrameColors()
+	local data = UIController and UIController:GetData()
+	if not data then return end
+	
+	local unlockedWorlds = data.Progression and data.Progression.UnlockedWorlds or { "Main" }
+	
+	-- Find the latest unlocked world based on Stats.WorldOrder
+	local latestUnlockedWorld = "Main"
+	for i = #Stats.WorldOrder, 1, -1 do
+		local worldName = Stats.WorldOrder[i]
+		for _, unlockedWorld in ipairs(unlockedWorlds) do
+			if unlockedWorld == worldName then
+				latestUnlockedWorld = worldName
+				break
+			end
+		end
+		if latestUnlockedWorld ~= "Main" or Stats.WorldOrder[i] == "Main" then break end
+	end
+	
+	-- Update each world frame in globalView
+	for _, worldName in ipairs(Stats.WorldOrder) do
+		local worldFrame = globalView:FindFirstChild(worldName)
+		if worldFrame then
+			local isOwned = false
+			for _, unlockedWorld in ipairs(unlockedWorlds) do
+				if unlockedWorld == worldName then
+					isOwned = true
+					break
+				end
+			end
+			
+			-- Determine color and stroke visibility
+			if worldName == latestUnlockedWorld then
+				worldFrame.BackgroundColor3 = COLOR_CURRENT
+				local uiStroke = worldFrame:FindFirstChild("UIStroke")
+				if uiStroke then uiStroke:Destroy() end
+
+				local innerStroke = strokeTemplate:Clone()
+				if innerStroke then
+					innerStroke.Enabled = true
+					innerStroke.Parent = worldFrame
+				end
+				
+			elseif isOwned then
+				worldFrame.BackgroundColor3 = COLOR_OWNED
+				local uiStroke = worldFrame:FindFirstChild("UIStroke")
+				if uiStroke then
+					local innerStroke = uiStroke:FindFirstChild("UIStroke")
+					if innerStroke then
+						innerStroke:Destroy()
+					end
+				end
+			else
+				worldFrame.BackgroundColor3 = COLOR_NOT_OWNED
+				local uiStroke = worldFrame:FindFirstChild("UIStroke")
+				if uiStroke then
+					local innerStroke = uiStroke:FindFirstChild("UIStroke")
+					if innerStroke then
+						innerStroke:Destroy()
+					end
+				end
+			end
+		end
+	end
+end
+
+-- Get or create player indicator
+local function GetOrCreatePlayerIndicator(targetPlayer: Player): ImageLabel?
+	if PlayerIndicators[targetPlayer.UserId] then
+		return PlayerIndicators[targetPlayer.UserId]
+	end
+	
+	if not playerIndicatorTemplate then return nil end
+	
+	local indicator = playerIndicatorTemplate:Clone()
+	indicator.Name = "PlayerIndicator_" .. targetPlayer.UserId
+	indicator.Visible = true
+	indicator.Parent = globalView
+	
+	PlayerIndicators[targetPlayer.UserId] = indicator
+	
+	task.spawn(function()
+		local content = SafeGetHeadshot(targetPlayer.UserId, Enum.ThumbnailSize.Size48x48)
+		indicator.Image = content
+		indicator.ImageTransparency = 0
+		PlayerHeadshotCache[targetPlayer.UserId] = content
+	end)
+	
+	return indicator
+end
+
+-- Remove player indicator
+local function RemovePlayerIndicator(targetPlayer: Player)
+	local indicator = PlayerIndicators[targetPlayer.UserId]
+	if indicator then
+		indicator:Destroy()
+		PlayerIndicators[targetPlayer.UserId] = nil
+	end
+	PlayerHeadshotCache[targetPlayer.UserId] = nil
+end
+
+-- Get world frame Y position
+local function GetWorldFrameYPosition(worldName: string): number
+	local worldFrame = globalView:FindFirstChild(worldName)
+	if worldFrame then
+		return worldFrame.Position.Y.Scale
+	end
+	return 0
+end
+
+-- Update all player position indicators
+local function UpdatePlayerPositionIndicators()
+	if not PlayerLapsFolder then
+		PlayerLapsFolder = ReplicatedStorage:FindFirstChild("PlayerLaps")
+		if not PlayerLapsFolder then return end
+	end
+	
+	local currentPlayers = {}
+	for _, targetPlayer in ipairs(Players:GetPlayers()) do
+		currentPlayers[targetPlayer.UserId] = true
+		
+		local indicator = GetOrCreatePlayerIndicator(targetPlayer)
+		if not indicator then continue end
+		
+		local lapValue = PlayerLapsFolder:FindFirstChild(tostring(targetPlayer.UserId))
+		
+		local launchWorld = "Main"
+		local targetWorld = "Main"
+		local lapPercentage = 0
+		
+		if lapValue then
+			launchWorld = lapValue:GetAttribute("LaunchWorldName") or "Main"
+			targetWorld = lapValue:GetAttribute("TargetWorldName") or "Main"
+			lapPercentage = lapValue.Value or 0
+		else
+			local currentWorld = targetPlayer:GetAttribute("CurrentWorld")
+			if currentWorld then
+				launchWorld = currentWorld
+				targetWorld = currentWorld
+			end
+		end
+		
+		local launchY = GetWorldFrameYPosition(launchWorld)
+		local targetY = GetWorldFrameYPosition(targetWorld)
+		
+		local interpolatedY = launchY + (targetY - launchY) * lapPercentage
+		
+		indicator.Position = UDim2.new(
+			indicator.Position.X.Scale,
+			indicator.Position.X.Offset,
+			interpolatedY,
+			indicator.Position.Y.Offset
+		)
+	end
+	
+	for userId, indicator in pairs(PlayerIndicators) do
+		if not currentPlayers[userId] then
+			indicator:Destroy()
+			PlayerIndicators[userId] = nil
+			PlayerHeadshotCache[userId] = nil
+		end
+	end
+end
+
 -- Knit lifecycle
 function TrackController:KnitInit()
 	-- Controller initialization
 end
 
 function TrackController:KnitStart()
-	-- Get InitUI reference for debounce reset
-	local StarterPlayerScripts = Knit.Player:WaitForChild("PlayerScripts")
-	local initUIModule = StarterPlayerScripts:FindFirstChild("InitUI")
-	if initUIModule then
-		InitUI = require(initUIModule)
-	end
+	-- Get UIController reference for debounce reset
+	UIController = Knit.GetController("UIController")
 	
 	-- Listen for server signals
 	local TrackService = Knit.GetService("TrackService")
@@ -835,6 +1074,15 @@ function TrackController:KnitStart()
 	
 	-- Ensure cancel button is hidden initially
 	trackCancelButton.Visible = false
+	
+	-- Listen for data updates to refresh world frame colors
+	local DataService = Knit.GetService("DataService")
+	DataService.DataReady:Connect(function()
+		self:UpdateWorldFrameColors()
+	end)
+	
+	-- Update player position indicators on RenderStepped
+	RunService.RenderStepped:Connect(UpdatePlayerPositionIndicators)
 	
 	Log("TrackController started")
 end

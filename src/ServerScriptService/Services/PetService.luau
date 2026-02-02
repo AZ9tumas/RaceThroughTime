@@ -109,6 +109,7 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 	
 	-- Respawn if already spawned
 	if SpawnedPets[userId][petIndex] then
+		error("Respawning pet that is already spawned!", 3)
 		if SpawnedPets[userId][petIndex]:IsA("Model") then SpawnedPets[userId][petIndex]:Destroy() end
 		warn("Spawning again.")
 	end
@@ -959,6 +960,26 @@ end
 -- Client request for pet to collect a star (with range validation)
 function PetService.Client:RequestPetCollectStar(player: Player, starId: string, petPosition: Vector3): (boolean, string?)
 	return PetService:PetCollectStar(player, starId, petPosition)
+end
+
+function PetService.Client:RequestPetAttackBoss(player: Player): (boolean, string?)
+	return PetService:PetAttackBoss(player)
+end
+
+-- Handle pet attacking boss (damage 1 HP per attack)
+function PetService:PetAttackBoss(player: Player): (boolean, string?)
+	local BossService = Knit.GetService("BossService")
+	if not BossService then
+		return false, "BossService not available"
+	end
+	
+	if not BossService:IsBossFightActive() then
+		return false, "No boss fight active"
+	end
+	
+	-- Each pet attack does 1 damage
+	BossService:DamageBoss(1)
+	return true, nil
 end
 
 --[[

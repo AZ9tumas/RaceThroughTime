@@ -75,16 +75,60 @@ Stats.WorldCashRates = {
 	StoneAge = 180, -- 20% higher cash rate in StoneAge
 }
 
--- World unlock requirements (required distance traveled at once to unlock next world)
--- Players need to accumulate this much fuel throughout their gameplay
+-- Available bosses (single global boss system)
+Stats.BossList = { "ChickenBoss", "MoonBoss", "SunBoss" }
+Stats.Bosses = { 
+	ChickenBoss = { Name = "Chicken Boss", Health = 100 },
+	MoonBoss = { Name = "Moon Boss", Health = 200 },
+	SunBoss = { Name = "Sun Boss", Health = 300 },
+}
+
+function Stats.GetBossHealth(bossKey: string): number
+	local boss = Stats.Bosses[bossKey]
+	if boss then
+		return boss.Health or 100
+	end
+	return 100
+end
+
+-- Boss spawn requirement (stars needed to trigger boss fight)
+Stats.BossUnlockRequirement = { Stars = 2 }
+
+-- Default pet attack rate against bosses (attacks per second)
+Stats.DefaultPetAttackRate = 1 -- 1 attack per second
+
+-- World unlock requirements
+-- Players need to accumulate this much distance throughout their gameplay
+-- Format: { Distance = number, Rebirth = number? }
 Stats.WorldUnlockRequirements = {
 	-- Main is unlocked by default
-	StoneAge = 10510,        -- 10.51k distance to unlock StoneAge from Main
-	AncientEgypt = 110110,   -- 110.11k distance to unlock AncientEgypt from StoneAge
-	Medieval = 250000,       -- 250k distance to unlock Medieval from AncientEgypt
-	Industrial = 550000,     -- 550k distance to unlock Industrial from Medieval
-	Neon = 1500000,          -- 1.5M distance to unlock Neon from Industrial
+	StoneAge = { Distance = 10510 },
+	AncientEgypt = { Distance = 110110, Rebirth = 1 },
+	Medieval = { Distance = 250000, Rebirth = 2 },
+	Industrial = { Distance = 1250000, Rebirth = 5 },
+	Neon = { Distance = 5250000, Rebirth = 10 },
 }
+
+-- Get distance requirement for a world
+function Stats.GetWorldDistanceRequirement(worldName: string): number?
+	local req = Stats.WorldUnlockRequirements[worldName]
+	return req and req.Distance
+end
+
+-- Get rebirth requirement for a world (returns nil if no rebirth required)
+function Stats.GetWorldRebirthRequirement(worldName: string): number?
+	local req = Stats.WorldUnlockRequirements[worldName]
+	return req and req.Rebirth
+end
+
+-- Check if a player meets the unlock requirements for a world
+function Stats.MeetsWorldUnlockRequirements(worldName: string, distanceTraveled: number, playerRebirths: number): boolean
+	local req = Stats.WorldUnlockRequirements[worldName]
+	if not req then return false end
+	if distanceTraveled < req.Distance then return false end
+	if req.Rebirth and playerRebirths < req.Rebirth then return false end
+	return true
+end
 
 -- World progression order (for reference)
 Stats.WorldOrder = {
