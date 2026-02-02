@@ -64,19 +64,19 @@ function BossService:SpawnBoss()
 	for _, world in ipairs(workspace:GetChildren()) do
 		local spawnLocation = world:FindFirstChild("SpawnLocation")
 		if spawnLocation and spawnLocation:IsA("BasePart") then
-			local bossClone = bossModel:Clone()
+			local bossClone = bossModel:Clone() :: Model
 			bossClone.Name = bossKey
 			
 			AnchorAndDisableCollision(bossClone)
 			
 			if bossClone.PrimaryPart then
-				bossClone:SetPrimaryPartCFrame(spawnLocation.CFrame + Vector3.new(0, 5, 0))
+				bossClone:PivotTo(spawnLocation.CFrame + Vector3.new(0, bossClone.PrimaryPart.Size.Y / 2, 0))
 			elseif bossClone:FindFirstChild("HumanoidRootPart") then
-				bossClone.HumanoidRootPart.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+				bossClone.HumanoidRootPart.CFrame = spawnLocation.CFrame
 			else
 				local firstPart = bossClone:FindFirstChildWhichIsA("BasePart")
 				if firstPart then
-					firstPart.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+					firstPart.CFrame = spawnLocation.CFrame
 				end
 			end
 			

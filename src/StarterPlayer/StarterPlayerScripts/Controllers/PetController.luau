@@ -38,6 +38,7 @@ local PET_REFRESH_INTERVAL = 1.0
 -- Private state
 local Player = Players.LocalPlayer
 local PetService = nil
+local MainBossController = nil
 local IsInArena = false
 local IsOnTrack = false
 local IsBossFight = false
@@ -227,21 +228,30 @@ local function CollectStar(starId: string, petPos: Vector3)
 	end
 end
 
+local function RemoveDebugBeam(petModel: Model)
+	local beamData = DebugBeams[petModel]
+	if beamData then
+		if beamData.Beam then beamData.Beam:Destroy() end
+		if beamData.Attachment0 then beamData.Attachment0:Destroy() end
+		if beamData.Attachment1 then beamData.Attachment1:Destroy() end
+		DebugBeams[petModel] = nil
+	end
+end
+
 -- Update debug beam between pet and targeted star
 local function UpdateDebugBeam(petModel: Model, starPart: BasePart?)
+
+	if MainBossController:IsPlayerInArena() then
+		-- Don't show debug beams during boss fights
+		return RemoveDebugBeam(petModel)
+	end
+
 	local primaryPart = petModel.PrimaryPart
 	if not primaryPart then return end
 	
 	-- If no star target, remove existing beam
 	if not starPart then
-		local beamData = DebugBeams[petModel]
-		if beamData then
-			if beamData.Beam then beamData.Beam:Destroy() end
-			if beamData.Attachment0 then beamData.Attachment0:Destroy() end
-			if beamData.Attachment1 then beamData.Attachment1:Destroy() end
-			DebugBeams[petModel] = nil
-		end
-		return
+		return RemoveDebugBeam(petModel)
 	end
 	
 	local beamData = DebugBeams[petModel]
@@ -357,7 +367,7 @@ local function UpdatePet(petObj: {Player: Player, PetParams: any, PetModel: Mode
 	local roamRange = petParams.RoamRange or 150
 	
 	-- During boss fights, pets target and attack the boss
-	if IsBossFight then
+	if IsBossFight and MainBossController:IsPlayerInArena() then
 		PetTargets[petModel] = nil
 		
 		-- Find boss in current world
@@ -579,6 +589,8 @@ end
 
 function PetController:KnitStart()
 	PetService = Knit.GetService("PetService")
+
+	MainBossController = Knit.GetController("MainBossController")
 	
 	-- Initial pet refresh
 	RefreshPetObjects()

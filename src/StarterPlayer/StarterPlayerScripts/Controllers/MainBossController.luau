@@ -2,6 +2,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Knit = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Knit"))
@@ -80,6 +81,97 @@ function MainBossController:UpdateHealthDisplay()
 	
 	SetBarColor(COLOR_HEALTH_ACTIVE)
 	TweenBar(currentHealth / maxHealth)
+end
+
+local playerInArena = false
+local lastArenaPart = nil
+local originalArenaColor = nil
+local originalArenaMaterial = nil
+
+function MainBossController:IsPlayerInArena()
+	return playerInArena
+end
+
+function MainBossController:SetInArena(inArena: boolean, arenaPart: BasePart?)
+	if playerInArena == inArena and lastArenaPart == arenaPart then return end
+	
+	playerInArena = inArena
+	
+	if inArena and arenaPart then
+		if lastArenaPart and lastArenaPart ~= arenaPart then
+			-- Restore previous part if different
+			lastArenaPart.Material = originalArenaMaterial
+			lastArenaPart.Color = originalArenaColor
+		end
+		
+		if lastArenaPart ~= arenaPart then
+			lastArenaPart = arenaPart
+			originalArenaMaterial = arenaPart.Material
+			originalArenaColor = arenaPart.Color
+		end
+		
+		arenaPart.Material = Enum.Material.Neon
+		arenaPart.Color = Color3.fromRGB(255, 255, 0) -- Yellow
+	else
+		-- Restore
+		if lastArenaPart then
+			lastArenaPart.Material = originalArenaMaterial
+			lastArenaPart.Color = originalArenaColor
+			lastArenaPart = nil
+		end
+	end
+end
+
+local function CheckArenaOverlap()
+	if not MainBossController:IsBossFightActive() then
+		if playerInArena then
+			MainBossController:SetInArena(false)
+		end
+		return
+	end
+
+	local char = player.Character
+	if not char then return end
+	
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+	
+	local currentWorld = player:GetAttribute("CurrentWorld")
+	if not currentWorld then return end
+	
+	local worldFolder = workspace:FindFirstChild(currentWorld)
+	if not worldFolder then return end
+	
+	local statsFolder = ReplicatedStorage:FindFirstChild("Stats")
+	if not statsFolder then return end
+	
+	local currentBossVal = statsFolder:FindFirstChild("CurrentBoss")
+	local bossName = currentBossVal and currentBossVal.Value
+	
+	if not bossName or bossName == "" then return end
+	
+	local bossModel = worldFolder:FindFirstChild(bossName)
+	if not bossModel then return end
+	
+	local bossArena = bossModel:FindFirstChild("BossArena")
+	if not bossArena or not bossArena:IsA("BasePart") then return end
+	
+	-- Check bounds
+	-- "cylinder which has been flattened" - assume largest dimension is Diameter
+	local size = bossArena.Size
+	local diameter = math.max(size.X, size.Z)
+	local radius = diameter / 2
+	
+	local dist = (root.Position * Vector3.new(1,0,1) - bossArena.Position * Vector3.new(1,0,1)).Magnitude
+	
+	-- Vertical check - allow some height above/below
+	local vertDist = math.abs(root.Position.Y - bossArena.Position.Y)
+	
+	if dist <= radius and vertDist <= 20 then
+		MainBossController:SetInArena(true, bossArena)
+	else
+		MainBossController:SetInArena(false)
+	end
 end
 
 function MainBossController:UpdateUnlockProgress()
@@ -186,6 +278,8 @@ function MainBossController:KnitStart()
 		self:SetupBossFightListener()
 		self:UpdateUnlockProgress()
 	end)
+
+	RunService.RenderStepped:Connect(CheckArenaOverlap)
 end
 
 return MainBossController
