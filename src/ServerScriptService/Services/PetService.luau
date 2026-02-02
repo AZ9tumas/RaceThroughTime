@@ -1014,6 +1014,18 @@ function PetService:RespawnEquippedPets(player: Player)
 	Log(string.format("Respawned equipped pets for player %s", player.Name))
 end
 
+--[[
+	Get all spawned pet models for a player.
+	Returns a table of { [petIndex] = Model }
+	
+	@param player Player - The player whose pets to get
+	@return { [number]: Model } - Table of pet models keyed by pet index
+]]
+function PetService:GetSpawnedPets(player: Player): { [number]: Model }
+	local userId = player.UserId
+	return SpawnedPets[userId] or {}
+end
+
 -- Clean up when player leaves
 local function OnPlayerRemoving(player: Player)
 	local userId = player.UserId

@@ -290,6 +290,98 @@ local function CleanupBodyMovers(character: Model)
 	if distanceValue then distanceValue:Destroy() end
 end
 
+-- Pet weld constants (same as PetController's PET_FOLLOW_DISTANCE)
+local PET_FOLLOW_DISTANCE = 8
+local PET_FOLLOW_HEIGHT = 2
+
+-- Setup weld constraints to attach pets to the player during track run
+-- This ensures pets stay alongside the player without using body movers
+local function SetupPetWeldsForTrack(player: Player)
+	local character = player.Character
+	if not character then return end
+	
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+	
+	-- Get PetService and spawned pets
+	local PetService = Knit.GetService("PetService")
+	local spawnedPets = PetService:GetSpawnedPets(player)
+	
+	-- Counter for positioning pets in formation
+	local petCounter = 0
+	
+	for petIndex, petModel in pairs(spawnedPets) do
+		if petModel and petModel.PrimaryPart then
+			local primaryPart = petModel.PrimaryPart
+			petCounter = petCounter + 1
+			
+			-- Calculate the offset for this pet (same formula as PetController)
+			-- Use petIndex for the angle calculation to match client-side behavior
+			local offset = Vector3.new(
+				math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
+				PET_FOLLOW_HEIGHT,
+				math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
+			)
+			
+			-- Disable the pet's body movers during track run
+			local alignPos = primaryPart:FindFirstChild("PetAlignPosition")
+			local alignOri = primaryPart:FindFirstChild("PetAlignOrientation")
+			
+			if alignPos then
+				alignPos.Enabled = false
+			end
+			if alignOri then
+				alignOri.Enabled = false
+			end
+			
+			-- Position the pet at the correct offset from the player
+			local targetCFrame = rootPart.CFrame * CFrame.new(offset)
+			petModel:PivotTo(targetCFrame)
+			
+			-- Create a weld constraint to attach the pet to the player
+			local weld = Instance.new("WeldConstraint")
+			weld.Name = "TrackPetWeld"
+			weld.Part0 = rootPart
+			weld.Part1 = primaryPart
+			weld.Parent = primaryPart
+			
+			Log(string.format("Welded pet %d to player %s for track run", petIndex, player.Name))
+		end
+	end
+end
+
+-- Cleanup pet weld constraints when track run ends
+local function CleanupPetWeldsForTrack(player: Player)
+	-- Get PetService and spawned pets
+	local PetService = Knit.GetService("PetService")
+	local spawnedPets = PetService:GetSpawnedPets(player)
+	
+	for petIndex, petModel in pairs(spawnedPets) do
+		if petModel and petModel.PrimaryPart then
+			local primaryPart = petModel.PrimaryPart
+			
+			-- Remove the weld constraint
+			local weld = primaryPart:FindFirstChild("TrackPetWeld")
+			if weld then
+				weld:Destroy()
+			end
+			
+			-- Re-enable the pet's body movers
+			local alignPos = primaryPart:FindFirstChild("PetAlignPosition")
+			local alignOri = primaryPart:FindFirstChild("PetAlignOrientation")
+			
+			if alignPos then
+				alignPos.Enabled = true
+			end
+			if alignOri then
+				alignOri.Enabled = true
+			end
+			
+			Log(string.format("Unwelded pet %d from player %s after track run", petIndex, player.Name))
+		end
+	end
+end
+
 -- Check if a player is currently on the track
 function TrackService:IsPlayerOnTrack(player: Player): boolean
 	return PlayersOnTrack[player.UserId] ~= nil
@@ -313,6 +405,9 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 	if character then
 		CleanupBodyMovers(character)
 	end
+	
+	-- Cleanup pet weld constraints
+	CleanupPetWeldsForTrack(player)
 	
 	-- Validate client-provided distance against server-side maximum
 	-- The client cannot claim more distance than what's possible given the track parameters
@@ -536,6 +631,9 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		worldRadius = radius,
 	})
 	
+	-- Setup weld constraints to attach pets to the player during track run
+	SetupPetWeldsForTrack(player)
+	
 	-- Fire signal to client that track has started (client will handle movement and effects)
 	TrackService.Client.TrackStarted:Fire(player, {
 		gateName = closestGate,
@@ -577,6 +675,9 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 	if character then
 		CleanupBodyMovers(character)
 	end
+	
+	-- Cleanup pet weld constraints
+	CleanupPetWeldsForTrack(player)
 	
 	-- DO NOT reset fuel on cancellation
 	
@@ -634,6 +735,10 @@ local function OnPlayerRemoving(player: Player)
 	local character = player.Character
 	if character then
 		CleanupBodyMovers(character)
+	end
+	-- Cleanup pet weld constraints if player was on track
+	if PlayersOnTrack[player.UserId] then
+		CleanupPetWeldsForTrack(player)
 	end
 	PlayersOnTrack[player.UserId] = nil
 	PlayerRequestDebounce[player.UserId] = nil
