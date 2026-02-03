@@ -215,35 +215,19 @@ function Stats.CalculateSpeedFromFuel(fuel: number, worldName: string?): number
 	return totalSpeed
 end
 
--- Calculate the total distance a player can travel based on fuel and world
--- Uses CalculateSpeedFromFuel internally for speed calculation
--- @param fuel number - The current fuel amount
--- @param worldName string? - The world name (default: "Main")
--- @return number - The calculated total distance (floored to integer)
-function Stats.CalculateDistanceFromFuel(fuel: number, worldName: string?): number
-	local world = worldName or "Main"
-	local speed = Stats.CalculateSpeedFromFuel(fuel, world)
-	local fuelConsumptionRate = Stats.FuelConsumptionRate[world] or Stats.FuelConsumptionRate.Main
-	
-	-- Time = Fuel / FuelConsumptionRate
-	-- Distance = Speed * Time
-	local timeLeft = fuel / fuelConsumptionRate
-	local totalDistance = speed * timeLeft
-	
-	return math.floor(totalDistance)
-end
-
 -- Calculate track parameters with acceleration and 30s max time limit
 -- This calculates optimal speed and acceleration to cover required distance within max time
 -- @param fuel number - The current fuel amount
 -- @param worldName string? - The world name (default: "Main")
 -- @return table - { initialSpeed, acceleration, maxSpeed, totalTime, totalDistance }
-function Stats.CalculateTrackParameters(fuel: number, worldName: string?): { initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
+function Stats.CalculateTrackParameters(fuel: number, worldName: string?, launcherMultiplier: number): 
+	{ initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
 	local world = worldName or "Main"
 	local fuelConsumptionRate = Stats.FuelConsumptionRate[world] or Stats.FuelConsumptionRate.Main
 	
 	-- Calculate base values
 	local baseSpeedFromFuel = Stats.CalculateSpeedFromFuel(fuel, world)
+	-- amount of the time player can run for.
 	local baseTime = fuel / fuelConsumptionRate
 	
 	-- Cap time at MaxTrackTime (30 seconds)
@@ -251,6 +235,10 @@ function Stats.CalculateTrackParameters(fuel: number, worldName: string?): { ini
 	
 	-- Calculate distance that would be covered with base speed
 	local baseDistance = baseSpeedFromFuel * baseTime
+
+	-- readjust params based on launcher multiplier
+	-- since the multiplier increases distance, we need to adjust speed and time.
+	-- Time is non-negotiable since it's capped, thus we change speed and acceleration.
 	
 	-- Now we need to cover baseDistance in actualTime
 	-- Using kinematics: d = v0*t + 0.5*a*t^2
