@@ -105,6 +105,10 @@ local DistanceTraveled = 0
 local LapCount = 0
 local WorldUnlocked = false
 
+-- Pet follow constants (same as PetController and TrackService)
+local PET_FOLLOW_DISTANCE = 8
+local PET_FOLLOW_HEIGHT = 2
+
 -- Player indicators on globalView
 local PlayerIndicators: { [number]: ImageLabel } = {}
 local PlayerHeadshotCache: { [number]: string } = {}
@@ -113,6 +117,66 @@ local PlayerLapsFolder: Folder = nil
 -- Helper function for logging
 local function Log(message: string)
 	--print(string.format("[TrackController]: %s", message))
+end
+
+-- Find all pet models in workspace that belong to the local player and are in track mode
+local function FindLocalPlayerTrackPets(): { Model }
+	local pets = {}
+	local localUserId = player.UserId
+	
+	for _, child in ipairs(Workspace:GetChildren()) do
+		if child:IsA("Model") and child.PrimaryPart then
+			local ownerUserId = child:GetAttribute("OwnerUserId")
+			local trackMode = child:GetAttribute("TrackMode")
+			
+			-- Only include pets that belong to local player and are in track mode
+			if ownerUserId == localUserId and trackMode == true then
+				table.insert(pets, child)
+			end
+		end
+	end
+	
+	return pets
+end
+
+-- Update pet positions during track run
+-- Pets move at the same position as the player with an offset
+local function UpdatePetPositionsDuringTrack(targetPosition: Vector3, targetCFrame: CFrame, physicalSpeed: number)
+	local pets = FindLocalPlayerTrackPets()
+	
+	for _, petModel in ipairs(pets) do
+		local primaryPart = petModel.PrimaryPart
+		if not primaryPart then continue end
+		
+		local petIndex = petModel:GetAttribute("PetIndex") or 1
+		local alignPos = primaryPart:FindFirstChild("PetAlignPosition")
+		local alignOri = primaryPart:FindFirstChild("PetAlignOrientation")
+		
+		if alignPos and alignOri then
+			-- Calculate offset for this pet (same formula as SetPetToFollowPlayer)
+			local offset = Vector3.new(
+				math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
+				PET_FOLLOW_HEIGHT,
+				math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
+			)
+			
+			-- Apply offset relative to player's orientation
+			local petTargetCFrame = targetCFrame * CFrame.new(offset)
+			
+			-- Dynamically adjust responsiveness based on speed (same as player)
+			local baseResponsiveness = 50
+			local speedFactor = math.clamp(physicalSpeed / 10, 1, 20)
+			local dynamicResponsiveness = baseResponsiveness + (speedFactor * 10)
+			local dynamicMaxVelocity = math.max(500, physicalSpeed * 2)
+			
+			alignPos.Responsiveness = dynamicResponsiveness
+			alignPos.MaxVelocity = dynamicMaxVelocity
+			
+			-- Update body mover targets
+			alignPos.Position = petTargetCFrame.Position
+			alignOri.CFrame = petTargetCFrame
+		end
+	end
 end
 
 -- Get the world folder from workspace
@@ -708,6 +772,9 @@ local function OnTrackStarted(trackData: {
 		-- Update body mover targets
 		alignPosition.Position = targetPosition
 		alignOrientation.CFrame = targetCFrame
+		
+		-- Update pet positions alongside player (using same position/orientation and speed)
+		UpdatePetPositionsDuringTrack(targetPosition, targetCFrame, physicalSpeed)
 	end)
 end
 
