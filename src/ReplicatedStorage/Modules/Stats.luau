@@ -92,7 +92,7 @@ function Stats.GetBossHealth(bossKey: string): number
 end
 
 -- Boss spawn requirement (stars needed to trigger boss fight)
-Stats.BossUnlockRequirement = { Stars = 2 }
+Stats.BossUnlockRequirement = { Stars = 250 }
 
 -- Default pet attack rate against bosses (attacks per second)
 Stats.DefaultPetAttackRate = 1 -- 1 attack per second

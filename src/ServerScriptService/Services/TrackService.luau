@@ -245,6 +245,7 @@ local function SetupBodyMovers(character: Model): (AlignPosition?, AlignOrientat
 		alignPosition.MaxVelocity = 500
 		alignPosition.Responsiveness = 50
 		alignPosition.Parent = rootPart
+		alignPosition.RigidityEnabled = false
 	end
 	
 	-- Create AlignOrientation for smooth rotation
@@ -258,6 +259,7 @@ local function SetupBodyMovers(character: Model): (AlignPosition?, AlignOrientat
 		alignOrientation.MaxAngularVelocity = 50
 		alignOrientation.Responsiveness = 50
 		alignOrientation.Parent = rootPart
+		alignOrientation.RigidityEnabled = false
 	end
 	
 	-- Create NumberValue for distance tracking (client reads this for visual feedback)
@@ -338,8 +340,8 @@ local function SetupPetWeldsForTrack(player: Player)
 			-- Create a weld constraint to attach the pet to the player
 			local weld = Instance.new("WeldConstraint")
 			weld.Name = "TrackPetWeld"
-			weld.Part0 = rootPart
-			weld.Part1 = primaryPart
+			--weld.Part0 = rootPart
+			--weld.Part1 = primaryPart
 			weld.Parent = primaryPart
 			
 			Log(string.format("Welded pet %d to player %s for track run", petIndex, player.Name))
