@@ -41,7 +41,7 @@ Stats.MaxTrackTime = 20
 
 -- Maximum physical speed limit (for body movers and lap detection)
 -- Calculated speed can exceed this for stats/distance tracking, but physical movement is capped
-Stats.MaxPhysicalSpeed = 180
+Stats.MaxPhysicalSpeed = 150
 
 -- Base acceleration for track movement (studs/sec²)
 Stats.BaseAcceleration = 20
