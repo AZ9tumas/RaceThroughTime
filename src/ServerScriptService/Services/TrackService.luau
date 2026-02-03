@@ -767,6 +767,8 @@ local function OnPlayerRemoving(player: Player)
 	if PlayersOnTrack[player.UserId] then
 		CleanupPetBodyMoversForTrack(player)
 	end
+	-- Extra safety: ensure pet body mover settings are cleaned up even if player wasn't on track
+	OriginalPetBodyMoverSettings[player.UserId] = nil
 	PlayersOnTrack[player.UserId] = nil
 	PlayerRequestDebounce[player.UserId] = nil
 	Log(string.format("Cleared track data for player %s", player.Name))
