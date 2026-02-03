@@ -27,6 +27,7 @@ local MULTIPLIER_GROWTH_RATE = 1.523
 local Player = Players.LocalPlayer
 local LauncherService = nil
 local DataService = nil
+local NotificationController = nil
 local CurrentWorldName = "Main"
 
 -- UI references (cached per world)
@@ -36,6 +37,11 @@ local TargetMultiplierLabel = nil
 local PercentageLabel = nil
 local ProgressLabel = nil
 local ProgressFrame = nil
+
+-- Touch connections (cached per world for cleanup)
+local CurrentBaseTouchConnection = nil
+local UpgradeDebounce = false
+local UPGRADE_DEBOUNCE_TIME = 1 -- Seconds between upgrade attempts
 
 -- Helper function for logging
 local function Log(message: string)
@@ -58,6 +64,66 @@ local function GetLauncherZone(worldName: string): Folder?
 		return nil
 	end
 	return worldFolder:FindFirstChild("LauncherZone")
+end
+
+-- Handle touch on CurrentBase to upgrade launcher
+local function OnCurrentBaseTouched(hit: BasePart)
+	-- Check if it's the local player's character
+	local character = Player.Character
+	if not character then return end
+	
+	local humanoid = character:FindFirstChild("Humanoid")
+	if not humanoid then return end
+	
+	-- Check if the hit part belongs to the player's character
+	if not hit:IsDescendantOf(character) then return end
+	
+	-- Debounce to prevent spam
+	if UpgradeDebounce then return end
+	UpgradeDebounce = true
+	
+	-- Request upgrade from server
+	if LauncherService then
+		local success, errorMsg, _resultData = LauncherService:RequestUpgrade()
+		
+		-- If failed and no notification was sent by server, show client-side notification
+		if not success and NotificationController then
+			-- Server already sends notifications, but we can add additional feedback if needed
+			Log(string.format("Upgrade failed: %s", errorMsg or "Unknown error"))
+		end
+	end
+	
+	-- Reset debounce after delay
+	task.delay(UPGRADE_DEBOUNCE_TIME, function()
+		UpgradeDebounce = false
+	end)
+end
+
+-- Setup touch event for CurrentBase in the launcher zone
+local function SetupCurrentBaseTouch(worldName: string)
+	-- Disconnect existing connection if any
+	if CurrentBaseTouchConnection then
+		CurrentBaseTouchConnection:Disconnect()
+		CurrentBaseTouchConnection = nil
+	end
+	
+	local launcherZone = GetLauncherZone(worldName)
+	if not launcherZone then
+		Log(string.format("LauncherZone not found in world %s for touch setup", worldName))
+		return false
+	end
+	
+	-- Find CurrentBase part
+	local currentBase = launcherZone:FindFirstChild("CurrentBase")
+	if not currentBase or not currentBase:IsA("BasePart") then
+		Log(string.format("CurrentBase not found in LauncherZone for world %s", worldName))
+		return false
+	end
+	
+	-- Connect touch event
+	CurrentBaseTouchConnection = currentBase.Touched:Connect(OnCurrentBaseTouched)
+	Log(string.format("Setup CurrentBase touch for world %s", worldName))
+	return true
 end
 
 -- Cache UI references for the current world
@@ -101,6 +167,9 @@ local function CacheUIReferences(worldName: string)
 			end
 		end
 	end
+	
+	-- Setup touch event for CurrentBase
+	SetupCurrentBaseTouch(worldName)
 	
 	Log(string.format("Cached UI references for world %s", worldName))
 	return true
@@ -213,6 +282,7 @@ end
 function LauncherController:KnitStart()
 	LauncherService = Knit.GetService("LauncherService")
 	DataService = Knit.GetService("DataService")
+	NotificationController = Knit.GetController("NotificationController")
 	
 	-- Get initial world
 	CurrentWorldName = GetCurrentWorld()
