@@ -469,6 +469,16 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 		end)
 	end
 	
+	-- Update MaxDistanceTraveled if this run beat the previous record
+	DataService:Update(player, "Stats", function(stats)
+		local currentMax = stats.MaxDistanceTraveled or 0
+		if distanceTraveled > currentMax then
+			stats.MaxDistanceTraveled = distanceTraveled
+			Log(string.format("Player %s set new max distance record: %.2f (previous: %.2f)", player.Name, distanceTraveled, currentMax))
+		end
+		return stats
+	end)
+	
 	-- Calculate percentage to next world
 	local WorldService = Knit.GetService("WorldService")
 	local nextWorld = WorldService:GetNextWorld(worldName)

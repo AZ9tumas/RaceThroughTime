@@ -26,6 +26,8 @@ local Template = {
 		Rebirths = 0,
 		Fuel = 0, -- Starting fuel for players
 		Stars = 0,  -- Total star equivalents collected (used to calculate fuel)
+		LauncherLevel = 1, -- Launcher level for fuel-to-distance multiplier
+		MaxDistanceTraveled = 0, -- Maximum distance ever traveled in a single track run
 	},
 	Progression = {
 		CurrentWorld = "Main",
