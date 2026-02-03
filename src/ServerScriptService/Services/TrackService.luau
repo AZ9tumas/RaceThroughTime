@@ -290,13 +290,16 @@ local function CleanupBodyMovers(character: Model)
 	if distanceValue then distanceValue:Destroy() end
 end
 
--- Pet weld constants (same as PetController's PET_FOLLOW_DISTANCE)
+-- Pet track constants (same as PetController's PET_FOLLOW_DISTANCE)
 local PET_FOLLOW_DISTANCE = 8
 local PET_FOLLOW_HEIGHT = 2
 
--- Setup weld constraints to attach pets to the player during track run
--- This ensures pets stay alongside the player without using body movers
-local function SetupPetWeldsForTrack(player: Player)
+-- Store original pet body mover settings to restore after track run
+local OriginalPetBodyMoverSettings = {} -- [Player.UserId] = { [petIndex] = { alignPos settings, alignOri settings } }
+
+-- Setup pet body movers for track run with same settings as player's track body movers
+-- This ensures pets can keep up with the player during high-speed track runs
+local function SetupPetBodyMoversForTrack(player: Player)
 	local character = player.Character
 	if not character then return end
 	
@@ -307,76 +310,103 @@ local function SetupPetWeldsForTrack(player: Player)
 	local PetService = Knit.GetService("PetService")
 	local spawnedPets = PetService:GetSpawnedPets(player)
 	
-	for petIndex, petModel in pairs(spawnedPets) do
-		if petModel and petModel.PrimaryPart then
-			local primaryPart = petModel.PrimaryPart
-			
-			-- Calculate the offset for this pet (same formula as PetController)
-			-- Use petIndex for the angle calculation to match client-side behavior
-			-- PetIndex is the inventory index, which is consistent between server and client
-			local offset = Vector3.new(
-				math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
-				PET_FOLLOW_HEIGHT,
-				math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
-			)
-			
-			-- Disable the pet's body movers during track run
-			local alignPos = primaryPart:FindFirstChild("PetAlignPosition")
-			local alignOri = primaryPart:FindFirstChild("PetAlignOrientation")
-			
-			if alignPos then
-				alignPos.Enabled = false
-			end
-			if alignOri then
-				alignOri.Enabled = false
-			end
-			
-			-- Position the pet at the correct offset from the player
-			local targetCFrame = rootPart.CFrame * CFrame.new(offset)
-			petModel:PivotTo(targetCFrame)
-			
-			-- Create a weld constraint to attach the pet to the player
-			local weld = Instance.new("WeldConstraint")
-			weld.Name = "TrackPetWeld"
-			weld.Part0 = rootPart
-			weld.Part1 = primaryPart
-			weld.Parent = primaryPart
-			
-			Log(string.format("Welded pet %d to player %s for track run", petIndex, player.Name))
-		end
-	end
-end
-
--- Cleanup pet weld constraints when track run ends
-local function CleanupPetWeldsForTrack(player: Player)
-	-- Get PetService and spawned pets
-	local PetService = Knit.GetService("PetService")
-	local spawnedPets = PetService:GetSpawnedPets(player)
+	-- Initialize storage for original settings
+	OriginalPetBodyMoverSettings[player.UserId] = {}
 	
 	for petIndex, petModel in pairs(spawnedPets) do
 		if petModel and petModel.PrimaryPart then
 			local primaryPart = petModel.PrimaryPart
 			
-			-- Remove the weld constraint
-			local weld = primaryPart:FindFirstChild("TrackPetWeld")
-			if weld then
-				weld:Destroy()
-			end
-			
-			-- Re-enable the pet's body movers
+			-- Get pet's body movers
 			local alignPos = primaryPart:FindFirstChild("PetAlignPosition")
 			local alignOri = primaryPart:FindFirstChild("PetAlignOrientation")
 			
-			if alignPos then
-				alignPos.Enabled = true
+			if alignPos and alignOri then
+				-- Store original settings to restore later
+				OriginalPetBodyMoverSettings[player.UserId][petIndex] = {
+					alignPos = {
+						MaxForce = alignPos.MaxForce,
+						MaxVelocity = alignPos.MaxVelocity,
+						Responsiveness = alignPos.Responsiveness,
+					},
+					alignOri = {
+						MaxTorque = alignOri.MaxTorque,
+						MaxAngularVelocity = alignOri.MaxAngularVelocity,
+						Responsiveness = alignOri.Responsiveness,
+					},
+				}
+				
+				-- Configure with same high-performance settings as player's track body movers
+				alignPos.MaxForce = 100000
+				alignPos.MaxVelocity = 500
+				alignPos.Responsiveness = 50
+				
+				alignOri.MaxTorque = 100000
+				alignOri.MaxAngularVelocity = 50
+				alignOri.Responsiveness = 50
+				
+				-- Mark this pet as being in track mode (client will read this attribute)
+				petModel:SetAttribute("TrackMode", true)
+				
+				-- Calculate initial offset and position the pet
+				local offset = Vector3.new(
+					math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
+					PET_FOLLOW_HEIGHT,
+					math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
+				)
+				local targetCFrame = rootPart.CFrame * CFrame.new(offset)
+				alignPos.Position = targetCFrame.Position
+				alignOri.CFrame = targetCFrame
+				
+				Log(string.format("Configured pet %d body movers for track run (player %s)", petIndex, player.Name))
 			end
-			if alignOri then
-				alignOri.Enabled = true
-			end
-			
-			Log(string.format("Unwelded pet %d from player %s after track run", petIndex, player.Name))
 		end
 	end
+end
+
+-- Restore pet body movers to original settings after track run ends
+local function CleanupPetBodyMoversForTrack(player: Player)
+	-- Get PetService and spawned pets
+	local PetService = Knit.GetService("PetService")
+	local spawnedPets = PetService:GetSpawnedPets(player)
+	
+	local originalSettings = OriginalPetBodyMoverSettings[player.UserId]
+	
+	for petIndex, petModel in pairs(spawnedPets) do
+		if petModel and petModel.PrimaryPart then
+			local primaryPart = petModel.PrimaryPart
+			
+			-- Get pet's body movers
+			local alignPos = primaryPart:FindFirstChild("PetAlignPosition")
+			local alignOri = primaryPart:FindFirstChild("PetAlignOrientation")
+			
+			-- Restore original settings if we have them
+			if originalSettings and originalSettings[petIndex] then
+				local savedPos = originalSettings[petIndex].alignPos
+				local savedOri = originalSettings[petIndex].alignOri
+				
+				if alignPos and savedPos then
+					alignPos.MaxForce = savedPos.MaxForce
+					alignPos.MaxVelocity = savedPos.MaxVelocity
+					alignPos.Responsiveness = savedPos.Responsiveness
+				end
+				
+				if alignOri and savedOri then
+					alignOri.MaxTorque = savedOri.MaxTorque
+					alignOri.MaxAngularVelocity = savedOri.MaxAngularVelocity
+					alignOri.Responsiveness = savedOri.Responsiveness
+				end
+			end
+			
+			-- Remove track mode attribute
+			petModel:SetAttribute("TrackMode", nil)
+			
+			Log(string.format("Restored pet %d body movers after track run (player %s)", petIndex, player.Name))
+		end
+	end
+	
+	-- Clean up stored settings
+	OriginalPetBodyMoverSettings[player.UserId] = nil
 end
 
 -- Check if a player is currently on the track
@@ -403,8 +433,8 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 		CleanupBodyMovers(character)
 	end
 	
-	-- Cleanup pet weld constraints
-	CleanupPetWeldsForTrack(player)
+	-- Cleanup pet body movers
+	CleanupPetBodyMoversForTrack(player)
 	
 	-- Validate client-provided distance against server-side maximum
 	-- The client cannot claim more distance than what's possible given the track parameters
@@ -628,8 +658,8 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 		worldRadius = radius,
 	})
 	
-	-- Setup weld constraints to attach pets to the player during track run
-	SetupPetWeldsForTrack(player)
+	-- Setup pet body movers for track run with same settings as player
+	SetupPetBodyMoversForTrack(player)
 	
 	-- Fire signal to client that track has started (client will handle movement and effects)
 	TrackService.Client.TrackStarted:Fire(player, {
@@ -673,8 +703,8 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 		CleanupBodyMovers(character)
 	end
 	
-	-- Cleanup pet weld constraints
-	CleanupPetWeldsForTrack(player)
+	-- Cleanup pet body movers
+	CleanupPetBodyMoversForTrack(player)
 	
 	-- DO NOT reset fuel on cancellation
 	
@@ -733,9 +763,9 @@ local function OnPlayerRemoving(player: Player)
 	if character then
 		CleanupBodyMovers(character)
 	end
-	-- Cleanup pet weld constraints if player was on track
+	-- Cleanup pet body movers if player was on track
 	if PlayersOnTrack[player.UserId] then
-		CleanupPetWeldsForTrack(player)
+		CleanupPetBodyMoversForTrack(player)
 	end
 	PlayersOnTrack[player.UserId] = nil
 	PlayerRequestDebounce[player.UserId] = nil
