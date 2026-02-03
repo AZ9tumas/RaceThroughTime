@@ -19,6 +19,10 @@ local LauncherController = Knit.CreateController({
 	Name = "LauncherController",
 })
 
+-- Launcher multiplier constants (must match LauncherService)
+local BASE_MULTIPLIER = 1.1
+local MULTIPLIER_GROWTH_RATE = 1.523
+
 -- Private state
 local Player = Players.LocalPlayer
 local LauncherService = nil
@@ -141,14 +145,14 @@ function LauncherController:UpdateLauncherUI()
 	end
 	
 	local level = launcherInfo.Level or 1
-	local multiplier = launcherInfo.Multiplier or 1.1
+	local multiplier = launcherInfo.Multiplier or BASE_MULTIPLIER
 	local maxDistance = launcherInfo.MaxDistance or 0
 	local nextRequirement = launcherInfo.NextRequirement or 1000
 	local progress = launcherInfo.Progress or 0
 	
 	-- Calculate target level multiplier
 	local targetLevel = level + 1
-	local targetMultiplier = 1.1 * math.pow(1.523, targetLevel - 1)
+	local targetMultiplier = BASE_MULTIPLIER * math.pow(MULTIPLIER_GROWTH_RATE, targetLevel - 1)
 	
 	-- Update Current section UI
 	if CurrentLevelLabel and CurrentLevelLabel:IsA("TextLabel") then
@@ -228,7 +232,7 @@ function LauncherController:KnitStart()
 	end)
 	
 	-- Listen for launcher upgrades
-	LauncherService.LauncherUpgraded:Connect(function(resultData)
+	LauncherService.LauncherUpgraded:Connect(function(_resultData)
 		self:UpdateLauncherUI()
 	end)
 	
