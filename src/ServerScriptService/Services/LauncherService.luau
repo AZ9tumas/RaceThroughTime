@@ -20,6 +20,7 @@ local LauncherService = Knit.CreateService({
 	Name = "LauncherService",
 	Client = {
 		LauncherUpgraded = Knit.CreateSignal(), -- Signal to notify client when launcher is upgraded
+		UpdateLauncherClient = Knit.CreateSignal(), -- Signal to notify client to update launcher UI
 	},
 })
 
@@ -220,6 +221,17 @@ function LauncherService:GetPlayerMultiplier(player: Player): number
 	
 	local level = stats.LauncherLevel or 1
 	return self:GetMultiplier(level)
+end
+
+--[[
+	Fire UpdateLauncherClient signal to update the client's launcher UI.
+	Called by DataService after any successful data update.
+	
+	@param player Player - The player to update
+]]
+function LauncherService:FireUpdateLauncherClient(player: Player)
+	local launcherInfo = self:GetLauncherInfo(player)
+	self.Client.UpdateLauncherClient:Fire(player, launcherInfo)
 end
 
 -- Client request to check if can upgrade

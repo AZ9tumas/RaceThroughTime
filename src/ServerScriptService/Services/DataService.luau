@@ -466,6 +466,13 @@ function DataService:FireDataReady(player: Player): boolean
 	end
 	
 	self.Client.DataReady:Fire(player, dataToSend)
+	
+	-- Also fire UpdateLauncherClient to update launcher UI
+	local LauncherService = Knit.GetService("LauncherService")
+	if LauncherService then
+		LauncherService:FireUpdateLauncherClient(player)
+	end
+	
 	return true
 end
 

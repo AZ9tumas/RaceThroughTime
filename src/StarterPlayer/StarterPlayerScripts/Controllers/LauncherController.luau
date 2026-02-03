@@ -27,7 +27,6 @@ local MULTIPLIER_GROWTH_RATE = 1.523
 local Player = Players.LocalPlayer
 local LauncherService = nil
 local DataService = nil
-local TrackService = nil
 local CurrentWorldName = "Main"
 
 -- UI references (cached per world)
@@ -145,6 +144,16 @@ function LauncherController:UpdateLauncherUI()
 		return
 	end
 	
+	self:UpdateLauncherUIFromInfo(launcherInfo)
+end
+
+-- Update the launcher UI with provided launcher info (called from UpdateLauncherClient signal)
+function LauncherController:UpdateLauncherUIFromInfo(launcherInfo)
+	if not launcherInfo then
+		Log("No launcher info provided")
+		return
+	end
+	
 	local level = launcherInfo.Level or 1
 	local multiplier = launcherInfo.Multiplier or BASE_MULTIPLIER
 	local maxDistance = launcherInfo.MaxDistance or 0
@@ -204,28 +213,17 @@ end
 function LauncherController:KnitStart()
 	LauncherService = Knit.GetService("LauncherService")
 	DataService = Knit.GetService("DataService")
-	TrackService = Knit.GetService("TrackService")
 	
 	-- Get initial world
 	CurrentWorldName = GetCurrentWorld()
 	CacheUIReferences(CurrentWorldName)
 	
-	-- Listen for DataReady to update UI
-	DataService.DataReady:Connect(function(newData)
-		-- Check if world changed
-		if newData and newData.Progression and newData.Progression.CurrentWorld then
-			local newWorld = newData.Progression.CurrentWorld
-			if newWorld ~= CurrentWorldName then
-				self:OnWorldChanged(newWorld)
-			else
-				self:UpdateLauncherUI()
-			end
-		else
-			self:UpdateLauncherUI()
-		end
+	-- Listen for UpdateLauncherClient signal from server (fires after any data update)
+	LauncherService.UpdateLauncherClient:Connect(function(launcherInfo)
+		self:UpdateLauncherUIFromInfo(launcherInfo)
 	end)
 	
-	-- Listen for world change attribute
+	-- Listen for world change attribute to re-cache UI references
 	Player:GetAttributeChangedSignal("CurrentWorld"):Connect(function()
 		local newWorld = Player:GetAttribute("CurrentWorld")
 		if newWorld and newWorld ~= CurrentWorldName then
@@ -233,17 +231,9 @@ function LauncherController:KnitStart()
 		end
 	end)
 	
-	-- Listen for launcher upgrades
+	-- Listen for launcher upgrades (still useful for immediate feedback)
 	LauncherService.LauncherUpgraded:Connect(function(_resultData)
 		self:UpdateLauncherUI()
-	end)
-	
-	-- Listen for track run ended to update max distance display
-	TrackService.TrackEnded:Connect(function(_trackData)
-		-- Delay slightly to allow server to update MaxDistanceTraveled
-		task.delay(0.1, function()
-			self:UpdateLauncherUI()
-		end)
 	end)
 	
 	-- Initial UI update
