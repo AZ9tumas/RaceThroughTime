@@ -219,10 +219,12 @@ end
 -- This calculates optimal speed and acceleration to cover required distance within max time
 -- @param fuel number - The current fuel amount
 -- @param worldName string? - The world name (default: "Main")
+-- @param launcherMultiplier number - The launcher multiplier for distance (default: 1)
 -- @return table - { initialSpeed, acceleration, maxSpeed, totalTime, totalDistance }
 function Stats.CalculateTrackParameters(fuel: number, worldName: string?, launcherMultiplier: number): 
 	{ initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
 	local world = worldName or "Main"
+	local multiplier = launcherMultiplier or 1
 	local fuelConsumptionRate = Stats.FuelConsumptionRate[world] or Stats.FuelConsumptionRate.Main
 	
 	-- Calculate base values
@@ -236,11 +238,12 @@ function Stats.CalculateTrackParameters(fuel: number, worldName: string?, launch
 	-- Calculate distance that would be covered with base speed
 	local baseDistance = baseSpeedFromFuel * baseTime
 
-	-- readjust params based on launcher multiplier
-	-- since the multiplier increases distance, we need to adjust speed and time.
+	-- Apply launcher multiplier to increase distance
+	-- Since the multiplier increases distance, we need to adjust speed and acceleration.
 	-- Time is non-negotiable since it's capped, thus we change speed and acceleration.
+	local totalDistance = baseDistance * multiplier
 	
-	-- Now we need to cover baseDistance in actualTime
+	-- Now we need to cover totalDistance (with launcher multiplier applied) in actualTime
 	-- Using kinematics: d = v0*t + 0.5*a*t^2
 	-- If time is limited, we need to adjust acceleration to cover the distance
 	
@@ -248,20 +251,22 @@ function Stats.CalculateTrackParameters(fuel: number, worldName: string?, launch
 	
 	if actualTime >= baseTime then
 		-- No time limit hit, use base calculations with gentle acceleration
-		initialSpeed = baseSpeedFromFuel * 0.5 -- Start at 50% of final speed
-		acceleration = Stats.BaseAcceleration
-		maxSpeed = baseSpeedFromFuel
+		-- Scale speed by multiplier since we need to cover more distance in same time
+		local adjustedSpeed = baseSpeedFromFuel * multiplier
+		initialSpeed = adjustedSpeed * 0.5 -- Start at 50% of final speed
+		acceleration = Stats.BaseAcceleration * multiplier
+		maxSpeed = adjustedSpeed
 	else
 		-- Time is capped, need to adjust to cover distance in limited time
-		-- Average speed needed = distance / time
-		local avgSpeedNeeded = baseDistance / actualTime
+		-- Average speed needed = distance / time (using multiplied distance)
+		local avgSpeedNeeded = totalDistance / actualTime
 		
 		-- Start at 30% of average, accelerate to cover distance
 		initialSpeed = avgSpeedNeeded * 0.3
 		
 		-- With constant acceleration: d = v0*t + 0.5*a*t^2
 		-- Solve for a: a = 2*(d - v0*t) / t^2
-		acceleration = 2 * (baseDistance - initialSpeed * actualTime) / (actualTime * actualTime)
+		acceleration = 2 * (totalDistance - initialSpeed * actualTime) / (actualTime * actualTime)
 		
 		-- Cap acceleration to prevent unrealistic values
 		acceleration = math.max(acceleration, Stats.BaseAcceleration)
@@ -280,7 +285,7 @@ function Stats.CalculateTrackParameters(fuel: number, worldName: string?, launch
 		acceleration = acceleration,
 		maxSpeed = maxSpeed,
 		totalTime = actualTime,
-		totalDistance = baseDistance,
+		totalDistance = totalDistance,
 	}
 end
 

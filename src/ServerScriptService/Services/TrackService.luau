@@ -141,6 +141,7 @@ end
 local function CalculateTrackParameters(player: Player, worldName: string):
 	{ initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
 	local DataService = Knit.GetService("DataService")
+	local LauncherService = Knit.GetService("LauncherService")
 	local playerData = DataService:Get(player, "Stats")
 	
 	if not playerData then
@@ -154,7 +155,8 @@ local function CalculateTrackParameters(player: Player, worldName: string):
 	end
 	
 	local fuel = playerData.Fuel or 0
-	local trackParams = Stats.CalculateTrackParameters(fuel, worldName)
+	local launcherMultiplier = LauncherService:GetPlayerMultiplier(player)
+	local trackParams = Stats.CalculateTrackParameters(fuel, worldName, launcherMultiplier)
 	
 	-- Apply rebirth speed multiplier
 	local rebirthLevel = playerData.Rebirths or 0
