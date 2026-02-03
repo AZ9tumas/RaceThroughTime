@@ -146,6 +146,9 @@ function LauncherService:UpgradeLevel(player: Player): (boolean, string?, any?)
 		)
 	end
 	
+	-- Fire UpdateLauncherClient to update the 3D UI immediately
+	self:FireUpdateLauncherClient(player)
+	
 	-- Prepare result data
 	local resultData = {
 		PreviousLevel = currentLevel,
