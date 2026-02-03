@@ -479,6 +479,9 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 		return stats
 	end)
 	
+	-- Fire DataReady to update client with new MaxDistanceTraveled
+	DataService:FireDataReady(player)
+	
 	-- Calculate percentage to next world
 	local WorldService = Knit.GetService("WorldService")
 	local nextWorld = WorldService:GetNextWorld(worldName)

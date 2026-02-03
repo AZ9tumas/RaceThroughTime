@@ -27,6 +27,7 @@ local MULTIPLIER_GROWTH_RATE = 1.523
 local Player = Players.LocalPlayer
 local LauncherService = nil
 local DataService = nil
+local TrackService = nil
 local CurrentWorldName = "Main"
 
 -- UI references (cached per world)
@@ -203,6 +204,7 @@ end
 function LauncherController:KnitStart()
 	LauncherService = Knit.GetService("LauncherService")
 	DataService = Knit.GetService("DataService")
+	TrackService = Knit.GetService("TrackService")
 	
 	-- Get initial world
 	CurrentWorldName = GetCurrentWorld()
@@ -234,6 +236,14 @@ function LauncherController:KnitStart()
 	-- Listen for launcher upgrades
 	LauncherService.LauncherUpgraded:Connect(function(_resultData)
 		self:UpdateLauncherUI()
+	end)
+	
+	-- Listen for track run ended to update max distance display
+	TrackService.TrackEnded:Connect(function(_trackData)
+		-- Delay slightly to allow server to update MaxDistanceTraveled
+		task.delay(0.1, function()
+			self:UpdateLauncherUI()
+		end)
 	end)
 	
 	-- Initial UI update
