@@ -313,6 +313,35 @@ function UIFramesController:DisableFrames(disabled: boolean)
 	end
 end
 
+function UIFramesController:DisableFramesWithExceptions(disabled: boolean, exceptions: { FrameName })
+	State.FramesDisabled = disabled
+	
+	local exceptionsSet: { [FrameName]: boolean } = {}
+	for _, frameName in ipairs(exceptions) do
+		exceptionsSet[frameName] = true
+	end
+	
+	if disabled then
+		for frameName, entry in pairs(MainFrames) do
+			if not exceptionsSet[frameName] then
+				SetFrameVisibleImmediate(entry, false)
+			end
+		end
+		State.CurrentOpenFrame = nil
+		
+		for _, exceptionFrameName in ipairs(exceptions) do
+			local exceptionEntry = MainFrames[exceptionFrameName]
+			if exceptionEntry then
+				SetFrameVisible(exceptionEntry, true, true, exceptionFrameName)
+			end
+		end
+	else
+		if not State.IsRaceActive then
+			ShowRaceHUD()
+		end
+	end
+end
+
 function UIFramesController:IsDisabled(): boolean
 	return State.FramesDisabled
 end
@@ -533,6 +562,9 @@ function UIFramesController:KnitInit()
 	for _, entry in pairs(MainFrames) do
 		self:SetupButtonAnimationsInFrame(entry.Frame)
 	end
+	
+	local leftPanel = mainUI:WaitForChild("LeftPanel")
+	self:SetupButtonAnimationsInFrame(leftPanel)
 end
 
 function UIFramesController:KnitStart()

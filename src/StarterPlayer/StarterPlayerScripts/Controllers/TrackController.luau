@@ -639,9 +639,9 @@ local function OnTrackStarted(trackData: {
 	-- Show cancel button during track run
 	trackCancelButton.Visible = true
 	
-	-- Disable all other UI frames during track run
+	-- Disable all other UI frames during track run (except RaceHUD)
 	if UIFramesController then
-		UIFramesController:DisableFrames(true)
+		UIFramesController:DisableFramesWithExceptions(true, {"RaceHUD"})
 	end
 	
 	-- Show notification
@@ -838,7 +838,7 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	
 	-- Re-enable all UI frames after track run ends
 	if UIFramesController then
-		UIFramesController:DisableFrames(false)
+		UIFramesController:DisableFramesWithExceptions(false, {})
 	end
 
 	print(trackData)
