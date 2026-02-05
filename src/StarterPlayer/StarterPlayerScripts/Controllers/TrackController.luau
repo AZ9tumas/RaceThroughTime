@@ -975,6 +975,23 @@ function TrackController:UpdateWorldFrameColors()
 		end
 		if latestUnlockedWorld ~= "Main" or Stats.WorldOrder[i] == "Main" then break end
 	end
+
+	-- next world info
+	local nextWorldIndex = table.find(Stats.WorldOrder, latestUnlockedWorld) + 1
+	local nextworldname = Stats.WorldOrder[nextWorldIndex]
+	local nextWorld = Stats.WorldOrder[nextWorldIndex] and Stats.WorldUnlockRequirements[nextworldname] or {Rebirth = 0}
+	local worldProgress: Frame = globalView.Parent:FindFirstChild("WorldProgress")
+	local rebirths: TextLabel = worldProgress:WaitForChild("Rebirths")
+	warn(data.Stats.Rebirths, nextWorld.Rebirth)
+
+	rebirths.Text = data.Stats.Rebirths .. "/" .. nextWorld.Rebirth
+	worldProgress.WorldName.Text = nextworldname or "MAX"
+
+	if nextWorld then
+		worldProgress.Visible = true
+	else
+		worldProgress.Visible = false
+	end
 	
 	-- Update each world frame in globalView
 	for _, worldName in ipairs(Stats.WorldOrder) do
