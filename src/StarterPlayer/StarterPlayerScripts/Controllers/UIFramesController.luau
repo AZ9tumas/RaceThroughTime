@@ -19,10 +19,12 @@ export type FrameName =
 	"TradeMain" |
 	"RaceHUD"
 
+export type AnimationType = "None" | "SlideBottom" | "SlideLeft"
+
 export type FrameEntry = {
 	Frame: Frame,
 	ScreenGui: ScreenGui?,
-	IsRaceHUD: boolean,
+	AnimationType: AnimationType,
 	OriginalPosition: UDim2?,
 }
 
@@ -48,13 +50,16 @@ export type ButtonAnimationConfig = {
 
 local TWEEN_INFO_SLIDE_IN = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local TWEEN_INFO_SLIDE_OUT = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+local TWEEN_INFO_SLIDE_LEFT_IN = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TWEEN_INFO_SLIDE_LEFT_OUT = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local TWEEN_INFO_BUTTON = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local BUTTON_SCALE_NORMAL = 1
 local BUTTON_SCALE_HOVER = 1.1
 local BUTTON_SCALE_PRESSED = 0.9
 
-local SLIDE_OUT_POSITION = UDim2.fromScale(0.5, 1.5)
+local SLIDE_OUT_POSITION_BOTTOM = UDim2.fromScale(0.5, 1.5)
+local SLIDE_OUT_POSITION_RIGHT = UDim2.fromScale(1.5, 0.5)
 
 local UIFramesController = Knit.CreateController({
 	Name = "UIFramesController",
@@ -87,19 +92,45 @@ local ButtonConfig: ButtonAnimationConfig = {
 
 local RegisteredButtons: { [GuiButton]: { Connections: { RBXScriptConnection } } } = {}
 
-local function SlideIn(frame: Frame, originalPosition: UDim2)
-	frame.Position = SLIDE_OUT_POSITION
+local function IsRaceHUDFrame(frameName: string): boolean
+	return string.find(frameName, "RaceHUD") ~= nil
+end
+
+local function SlideInBottom(frame: Frame, originalPosition: UDim2)
+	frame.Position = SLIDE_OUT_POSITION_BOTTOM
 	frame.Visible = true
 	local tween = TweenService:Create(frame, TWEEN_INFO_SLIDE_IN, { Position = originalPosition })
 	tween:Play()
 	return tween
 end
 
-local function SlideOut(frame: Frame, callback: (() -> ())?)
-	local tween = TweenService:Create(frame, TWEEN_INFO_SLIDE_OUT, { Position = SLIDE_OUT_POSITION })
+local function SlideOutBottom(frame: Frame, callback: (() -> ())?)
+	local tween = TweenService:Create(frame, TWEEN_INFO_SLIDE_OUT, { Position = SLIDE_OUT_POSITION_BOTTOM })
 	tween:Play()
 	tween.Completed:Connect(function()
 		if frame.Position.Y.Scale >= 1.4 then
+			frame.Visible = false
+		end
+		if callback then
+			callback()
+		end
+	end)
+	return tween
+end
+
+local function SlideInLeft(frame: Frame, originalPosition: UDim2)
+	frame.Position = SLIDE_OUT_POSITION_RIGHT
+	frame.Visible = true
+	local tween = TweenService:Create(frame, TWEEN_INFO_SLIDE_LEFT_IN, { Position = originalPosition })
+	tween:Play()
+	return tween
+end
+
+local function SlideOutRight(frame: Frame, callback: (() -> ())?)
+	local tween = TweenService:Create(frame, TWEEN_INFO_SLIDE_LEFT_OUT, { Position = SLIDE_OUT_POSITION_RIGHT })
+	tween:Play()
+	tween.Completed:Connect(function()
+		if frame.Position.X.Scale >= 1.4 then
 			frame.Visible = false
 		end
 		if callback then
@@ -114,21 +145,33 @@ local function SetFrameVisible(entry: FrameEntry, visible: boolean, animate: boo
 		entry.ScreenGui.Enabled = visible or (animate and AnimConfig.UseSlideAnimation)
 	end
 	
-	if animate and AnimConfig.UseSlideAnimation and entry.OriginalPosition and frameName then
+	local animType = entry.AnimationType
+	
+	if animate and AnimConfig.UseSlideAnimation and entry.OriginalPosition and frameName and animType ~= "None" then
 		if visible then
 			State.AnimatingFrames[frameName] = true
-			local tween = SlideIn(entry.Frame, entry.OriginalPosition)
+			local tween
+			if animType == "SlideLeft" then
+				tween = SlideInLeft(entry.Frame, entry.OriginalPosition)
+			else
+				tween = SlideInBottom(entry.Frame, entry.OriginalPosition)
+			end
 			tween.Completed:Connect(function()
 				State.AnimatingFrames[frameName] = nil
 			end)
 		else
 			State.AnimatingFrames[frameName] = true
-			SlideOut(entry.Frame, function()
+			local slideOutCallback = function()
 				State.AnimatingFrames[frameName] = nil
 				if entry.ScreenGui then
 					entry.ScreenGui.Enabled = false
 				end
-			end)
+			end
+			if animType == "SlideLeft" then
+				SlideOutRight(entry.Frame, slideOutCallback)
+			else
+				SlideOutBottom(entry.Frame, slideOutCallback)
+			end
 		end
 	else
 		entry.Frame.Visible = visible
@@ -144,7 +187,7 @@ end
 
 local function HideAllMainFrames(animate: boolean?)
 	for frameName, entry in pairs(MainFrames) do
-		if not entry.IsRaceHUD then
+		if not IsRaceHUDFrame(frameName) then
 			if animate then
 				SetFrameVisible(entry, false, true, frameName)
 			else
@@ -157,14 +200,14 @@ end
 local function ShowRaceHUD()
 	local raceHUDEntry = MainFrames["RaceHUD"]
 	if raceHUDEntry then
-		SetFrameVisibleImmediate(raceHUDEntry, true)
+		SetFrameVisible(raceHUDEntry, true, true, "RaceHUD")
 	end
 end
 
 local function HideRaceHUD()
 	local raceHUDEntry = MainFrames["RaceHUD"]
 	if raceHUDEntry then
-		SetFrameVisibleImmediate(raceHUDEntry, false)
+		SetFrameVisible(raceHUDEntry, false, true, "RaceHUD")
 	end
 end
 
@@ -372,6 +415,21 @@ function UIFramesController:IsSlideAnimationsEnabled(): boolean
 	return AnimConfig.UseSlideAnimation
 end
 
+function UIFramesController:SetFrameAnimationType(frameName: FrameName, animType: AnimationType)
+	local entry = MainFrames[frameName]
+	if entry then
+		entry.AnimationType = animType
+	end
+end
+
+function UIFramesController:GetFrameAnimationType(frameName: FrameName): AnimationType?
+	local entry = MainFrames[frameName]
+	if entry then
+		return entry.AnimationType
+	end
+	return nil
+end
+
 function UIFramesController:KnitInit()
 	local mainUI = PlayerGui:WaitForChild("RaceThroughTime_UI")
 	local uiShop = PlayerGui:WaitForChild("UI_Shop")
@@ -388,7 +446,7 @@ function UIFramesController:KnitInit()
 	MainFrames["Shop"] = {
 		Frame = shopFrame,
 		ScreenGui = uiShop,
-		IsRaceHUD = false,
+		AnimationType = "SlideBottom" :: AnimationType,
 		OriginalPosition = shopFrame.Position,
 	}
 	
@@ -396,7 +454,7 @@ function UIFramesController:KnitInit()
 	MainFrames["Inventory"] = {
 		Frame = inventoryFrame,
 		ScreenGui = uiInventory,
-		IsRaceHUD = false,
+		AnimationType = "SlideBottom" :: AnimationType,
 		OriginalPosition = inventoryFrame.Position,
 	}
 	
@@ -404,7 +462,7 @@ function UIFramesController:KnitInit()
 	MainFrames["PetModal"] = {
 		Frame = petModalFrame,
 		ScreenGui = uiPetModal,
-		IsRaceHUD = false,
+		AnimationType = "SlideBottom" :: AnimationType,
 		OriginalPosition = petModalFrame.Position,
 	}
 	
@@ -412,7 +470,7 @@ function UIFramesController:KnitInit()
 	MainFrames["Merge"] = {
 		Frame = mergeFrame,
 		ScreenGui = uiMerge,
-		IsRaceHUD = false,
+		AnimationType = "SlideBottom" :: AnimationType,
 		OriginalPosition = mergeFrame.Position,
 	}
 	
@@ -420,7 +478,7 @@ function UIFramesController:KnitInit()
 	MainFrames["Settings"] = {
 		Frame = settingsFrame,
 		ScreenGui = uiSettings,
-		IsRaceHUD = false,
+		AnimationType = "SlideBottom" :: AnimationType,
 		OriginalPosition = settingsFrame.Position,
 	}
 	
@@ -428,7 +486,7 @@ function UIFramesController:KnitInit()
 	MainFrames["DailyRewards"] = {
 		Frame = dailyFrame,
 		ScreenGui = nil,
-		IsRaceHUD = false,
+		AnimationType = "SlideBottom" :: AnimationType,
 		OriginalPosition = dailyFrame.Position,
 	}
 	
@@ -436,7 +494,7 @@ function UIFramesController:KnitInit()
 	MainFrames["Rebirth"] = {
 		Frame = rebirthFrame,
 		ScreenGui = nil,
-		IsRaceHUD = false,
+		AnimationType = "SlideBottom" :: AnimationType,
 		OriginalPosition = rebirthFrame.Position,
 	}
 	
@@ -444,7 +502,7 @@ function UIFramesController:KnitInit()
 	MainFrames["World"] = {
 		Frame = worldFrame,
 		ScreenGui = nil,
-		IsRaceHUD = false,
+		AnimationType = "SlideBottom" :: AnimationType,
 		OriginalPosition = worldFrame.Position,
 	}
 	
@@ -452,7 +510,7 @@ function UIFramesController:KnitInit()
 	MainFrames["TradePlayerList"] = {
 		Frame = tradePlayerListFrame,
 		ScreenGui = nil,
-		IsRaceHUD = false,
+		AnimationType = "SlideBottom" :: AnimationType,
 		OriginalPosition = tradePlayerListFrame.Position,
 	}
 	
@@ -460,7 +518,7 @@ function UIFramesController:KnitInit()
 	MainFrames["TradeMain"] = {
 		Frame = tradeMainFrame,
 		ScreenGui = nil,
-		IsRaceHUD = false,
+		AnimationType = "SlideBottom" :: AnimationType,
 		OriginalPosition = tradeMainFrame.Position,
 	}
 	
@@ -468,7 +526,7 @@ function UIFramesController:KnitInit()
 	MainFrames["RaceHUD"] = {
 		Frame = raceHUDFrame,
 		ScreenGui = raceHUD,
-		IsRaceHUD = true,
+		AnimationType = "SlideLeft" :: AnimationType,
 		OriginalPosition = raceHUDFrame.Position,
 	}
 	
