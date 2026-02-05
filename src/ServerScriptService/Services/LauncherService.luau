@@ -37,9 +37,7 @@ end
 	@return number - The multiplier value
 ]]
 function LauncherService:GetMultiplier(level: number): number
-	if level < 1 then
-		level = 1
-	end
+	if level == 1 then return 1 end
 	return 1.1 * math.pow(1.523, level - 1)
 end
 
@@ -146,9 +144,6 @@ function LauncherService:UpgradeLevel(player: Player): (boolean, string?, any?)
 		)
 	end
 	
-	-- Fire UpdateLauncherClient to update the 3D UI immediately
-	self:FireUpdateLauncherClient(player)
-	
 	-- Prepare result data
 	local resultData = {
 		PreviousLevel = currentLevel,
@@ -160,6 +155,9 @@ function LauncherService:UpgradeLevel(player: Player): (boolean, string?, any?)
 	
 	-- Fire signal to client
 	self.Client.LauncherUpgraded:Fire(player, resultData)
+
+	-- Fire UpdateLauncherClient to update the 3D UI immediately
+	self:FireUpdateLauncherClient(player)
 	
 	return true, nil, resultData
 end

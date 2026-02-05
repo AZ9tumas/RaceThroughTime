@@ -209,6 +209,9 @@ local function TryResolveSession(player: Player)
 		sessionPromise.resolve()
 		sessionPromise.resolve = nil -- Prevent double resolution
 
+		local LauncherService = Knit.GetService("LauncherService")
+		LauncherService:FireUpdateLauncherClient(player)
+
 		DataService:Update(player, "Currencies", function(c) c.Cash += 1000 return c end)
 	end
 end

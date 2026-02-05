@@ -499,7 +499,9 @@ end
 local function UpdateDistanceDisplay(distance: number, totalDistance: number)
 	if distanceCounter then
 		local percentage = math.clamp((distance / totalDistance) * 100, 0, 100)
-		distanceCounter.Text = string.format("%.0f / %.0f (%.1f%%)", distance, totalDistance, percentage)
+		local distStr = UIController and UIController:TruncateNumber(distance) or string.format("%.1f", distance)
+		local totalDistStr = UIController and UIController:TruncateNumber(totalDistance) or string.format("%.1f", totalDistance)
+		distanceCounter.Text = string.format("%s / %s (%.1f%%)", distStr, totalDistStr, percentage)
 	end
 end
 
@@ -639,8 +641,9 @@ local function OnTrackStarted(trackData: {
 	-- Show notification
 	local NotificationController = Knit.GetController("NotificationController")
 	if NotificationController then
+		local totalDistStr = UIController and UIController:TruncateNumber(trackData.totalDistance) or string.format("%.0f", trackData.totalDistance)
 		NotificationController:ShowNotification(
-			"Track Run Started! Distance: " .. math.floor(trackData.totalDistance),
+			"Track Run Started! Distance: " .. totalDistStr,
 			NotificationController.Category.Alert,
 			3
 		)
@@ -835,7 +838,7 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	
 	-- Set distance value text
 	if distanceValueLabel then
-		distanceValueLabel.Text = string.format("%.0f", distanceTraveled)
+		distanceValueLabel.Text = UIController and UIController:TruncateNumber(distanceTraveled) or string.format("%.0f", distanceTraveled)
 	end
 	
 	-- Set green fill width based on percentage (scale X from 0 to 1)
@@ -872,8 +875,9 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	-- Show notification with cash earned
 	local NotificationController = Knit.GetController("NotificationController")
 	if NotificationController then
+		local cashStr = trackData.cashEarned and (UIController and UIController:TruncateNumber(trackData.cashEarned) or string.format("%.0f", trackData.cashEarned)) or "0"
 		local cashMessage = trackData.cashEarned and trackData.cashEarned > 0 
-			and string.format("Track Run Complete! +$%.0f", trackData.cashEarned)
+			and string.format("Track Run Complete! +$%s", cashStr)
 			or "Track Run Complete!"
 		NotificationController:ShowNotification(cashMessage, NotificationController.Category.Success, 3)
 	end

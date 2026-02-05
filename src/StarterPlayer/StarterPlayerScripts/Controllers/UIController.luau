@@ -175,6 +175,7 @@ function UIController:ResetTrackDebounce()
 end
 
 function UIController:TruncateNumber(n: number): string
+	if (n <= 1000) then return string.format("%.0f", n) end
 	if n >= 1e12 then
 		return string.format("%.2fT", n / 1e12)
 	elseif n >= 1e9 then

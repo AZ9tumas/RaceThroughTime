@@ -25,7 +25,7 @@ export type Pet = {
 -- Player star collection radius (studs) - player can collect stars within this distance
 Stats.MaxStarCollectionPlayerRadius = 30
 Stats.MinStarCollectionPlayerRadius = 20
-Stats.BaseSpeed = 50 -- base track speed
+Stats.BaseSpeed = 35 -- base track speed
 
 -- pet max limits
 Stats.MaxPetSpeed = 35
@@ -41,7 +41,7 @@ Stats.MaxTrackTime = 20
 
 -- Maximum physical speed limit (for body movers and lap detection)
 -- Calculated speed can exceed this for stats/distance tracking, but physical movement is capped
-Stats.MaxPhysicalSpeed = 150
+Stats.MaxPhysicalSpeed = 130
 
 -- Base acceleration for track movement (studs/sec²)
 Stats.BaseAcceleration = 20
@@ -66,8 +66,8 @@ Stats.ArenaRadius = {
 }
 
 Stats.FuelConsumptionRate = {
-	Main = 150, -- Fuel consumed per second on the Main world
-	StoneAge = 200, -- Slightly higher fuel consumption in StoneAge
+	Main = 1, -- Fuel consumed per second on the Main world
+	StoneAge = 1, -- Slightly higher fuel consumption in StoneAge
 }
 
 Stats.WorldCashRates = {
@@ -102,7 +102,7 @@ Stats.DefaultPetAttackRate = 1 -- 1 attack per second
 -- Format: { Distance = number, Rebirth = number? }
 Stats.WorldUnlockRequirements = {
 	-- Main is unlocked by default
-	StoneAge = { Distance = 10510 },
+	StoneAge = { Distance = 10510, Rebirth = 1 },
 	AncientEgypt = { Distance = 110110, Rebirth = 1 },
 	Medieval = { Distance = 250000, Rebirth = 2 },
 	Industrial = { Distance = 1250000, Rebirth = 5 },
@@ -224,59 +224,46 @@ end
 function Stats.CalculateTrackParameters(fuel: number, worldName: string?, launcherMultiplier: number): 
 	{ initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
 	local world = worldName or "Main"
-	local multiplier = launcherMultiplier or 1
 	local fuelConsumptionRate = Stats.FuelConsumptionRate[world] or Stats.FuelConsumptionRate.Main
 	
-	-- Calculate base values
-	local baseSpeedFromFuel = Stats.CalculateSpeedFromFuel(fuel, world)
-	-- amount of the time player can run for.
-	local baseTime = fuel / fuelConsumptionRate
-	
-	-- Cap time at MaxTrackTime (30 seconds)
-	local actualTime = math.min(baseTime, Stats.MaxTrackTime)
-	
-	-- Calculate distance that would be covered with base speed
-	local baseDistance = baseSpeedFromFuel * baseTime
+	-- New distance calculation: distance = fuel * multipliers
+	local statMultipliers = Stats.CalculateMultipliers()
+	local totalDistance = fuel * statMultipliers * (launcherMultiplier or 1)
 
-	-- Apply launcher multiplier to increase distance
-	-- Since the multiplier increases distance, we need to adjust speed and acceleration.
-	-- Time is non-negotiable since it's capped, thus we change speed and acceleration.
-	local totalDistance = baseDistance * multiplier
+	-- amount of the time player can run for.
+	local baseTime = totalDistance / Stats.BaseSpeed
 	
-	-- Now we need to cover totalDistance (with launcher multiplier applied) in actualTime
+	-- Cap time at MaxTrackTime (20 seconds)
+	local actualTime = math.min(baseTime, Stats.MaxTrackTime)
+	-- Now we need to cover totalDistance in actualTime
 	-- Using kinematics: d = v0*t + 0.5*a*t^2
-	-- If time is limited, we need to adjust acceleration to cover the distance
 	
 	local initialSpeed, acceleration, maxSpeed
 	
-	if actualTime >= baseTime then
-		-- No time limit hit, use base calculations with gentle acceleration
-		-- Scale speed by multiplier since we need to cover more distance in same time
-		local adjustedSpeed = baseSpeedFromFuel * multiplier
-		initialSpeed = adjustedSpeed * 0.5 -- Start at 50% of final speed
-		acceleration = Stats.BaseAcceleration * multiplier
-		maxSpeed = adjustedSpeed
+	if actualTime <= 0 then
+		initialSpeed = 0
+		acceleration = 0
+		maxSpeed = 0
 	else
-		-- Time is capped, need to adjust to cover distance in limited time
-		-- Average speed needed = distance / time (using multiplied distance)
+		-- Average speed needed = distance / time
 		local avgSpeedNeeded = totalDistance / actualTime
 		
 		-- Start at 30% of average, accelerate to cover distance
-		initialSpeed = avgSpeedNeeded * 0.3
+		initialSpeed = math.max(avgSpeedNeeded * 0.3, Stats.BaseSpeed)
 		
 		-- With constant acceleration: d = v0*t + 0.5*a*t^2
 		-- Solve for a: a = 2*(d - v0*t) / t^2
 		acceleration = 2 * (totalDistance - initialSpeed * actualTime) / (actualTime * actualTime)
 		
 		-- Cap acceleration to prevent unrealistic values
-		acceleration = math.max(acceleration, Stats.BaseAcceleration)
+		acceleration = math.max(acceleration, 0)
 		
 		-- Max speed = v0 + a*t
 		maxSpeed = initialSpeed + acceleration * actualTime
 	end
 	
 	-- Ensure minimum values
-	initialSpeed = math.max(initialSpeed, Stats.BaseSpeed)
+	initialSpeed = math.max(initialSpeed, 0)
 	acceleration = math.max(acceleration, 0)
 	maxSpeed = math.max(maxSpeed, initialSpeed)
 	
