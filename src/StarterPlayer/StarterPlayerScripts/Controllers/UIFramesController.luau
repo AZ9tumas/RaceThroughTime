@@ -2,6 +2,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local Knit = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Knit"))
 
@@ -22,19 +23,38 @@ export type FrameEntry = {
 	Frame: Frame,
 	ScreenGui: ScreenGui?,
 	IsRaceHUD: boolean,
+	OriginalPosition: UDim2?,
 }
 
 export type ControllerState = {
 	CurrentOpenFrame: FrameName?,
 	FramesDisabled: boolean,
 	IsRaceActive: boolean,
+	AnimatingFrames: { [FrameName]: boolean },
 }
 
 export type AnimationConfig = {
-	FadeInTime: number,
-	FadeOutTime: number,
-	UseAnimation: boolean,
+	SlideInTime: number,
+	SlideOutTime: number,
+	UseSlideAnimation: boolean,
 }
+
+export type ButtonAnimationConfig = {
+	ScaleNormal: number,
+	ScaleHover: number,
+	ScalePressed: number,
+	TweenTime: number,
+}
+
+local TWEEN_INFO_SLIDE_IN = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local TWEEN_INFO_SLIDE_OUT = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+local TWEEN_INFO_BUTTON = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local BUTTON_SCALE_NORMAL = 1
+local BUTTON_SCALE_HOVER = 1.1
+local BUTTON_SCALE_PRESSED = 0.9
+
+local SLIDE_OUT_POSITION = UDim2.fromScale(0.5, 1.5)
 
 local UIFramesController = Knit.CreateController({
 	Name = "UIFramesController",
@@ -49,25 +69,87 @@ local State: ControllerState = {
 	CurrentOpenFrame = nil,
 	FramesDisabled = false,
 	IsRaceActive = false,
+	AnimatingFrames = {},
 }
 
 local AnimConfig: AnimationConfig = {
-	FadeInTime = 0.2,
-	FadeOutTime = 0.15,
-	UseAnimation = false,
+	SlideInTime = 0.3,
+	SlideOutTime = 0.25,
+	UseSlideAnimation = true,
 }
 
-local function SetFrameVisible(entry: FrameEntry, visible: boolean)
+local ButtonConfig: ButtonAnimationConfig = {
+	ScaleNormal = BUTTON_SCALE_NORMAL,
+	ScaleHover = BUTTON_SCALE_HOVER,
+	ScalePressed = BUTTON_SCALE_PRESSED,
+	TweenTime = 0.2,
+}
+
+local RegisteredButtons: { [GuiButton]: { Connections: { RBXScriptConnection } } } = {}
+
+local function SlideIn(frame: Frame, originalPosition: UDim2)
+	frame.Position = SLIDE_OUT_POSITION
+	frame.Visible = true
+	local tween = TweenService:Create(frame, TWEEN_INFO_SLIDE_IN, { Position = originalPosition })
+	tween:Play()
+	return tween
+end
+
+local function SlideOut(frame: Frame, callback: (() -> ())?)
+	local tween = TweenService:Create(frame, TWEEN_INFO_SLIDE_OUT, { Position = SLIDE_OUT_POSITION })
+	tween:Play()
+	tween.Completed:Connect(function()
+		if frame.Position.Y.Scale >= 1.4 then
+			frame.Visible = false
+		end
+		if callback then
+			callback()
+		end
+	end)
+	return tween
+end
+
+local function SetFrameVisible(entry: FrameEntry, visible: boolean, animate: boolean?, frameName: FrameName?)
+	if entry.ScreenGui then
+		entry.ScreenGui.Enabled = visible or (animate and AnimConfig.UseSlideAnimation)
+	end
+	
+	if animate and AnimConfig.UseSlideAnimation and entry.OriginalPosition and frameName then
+		if visible then
+			State.AnimatingFrames[frameName] = true
+			local tween = SlideIn(entry.Frame, entry.OriginalPosition)
+			tween.Completed:Connect(function()
+				State.AnimatingFrames[frameName] = nil
+			end)
+		else
+			State.AnimatingFrames[frameName] = true
+			SlideOut(entry.Frame, function()
+				State.AnimatingFrames[frameName] = nil
+				if entry.ScreenGui then
+					entry.ScreenGui.Enabled = false
+				end
+			end)
+		end
+	else
+		entry.Frame.Visible = visible
+	end
+end
+
+local function SetFrameVisibleImmediate(entry: FrameEntry, visible: boolean)
 	if entry.ScreenGui then
 		entry.ScreenGui.Enabled = visible
 	end
 	entry.Frame.Visible = visible
 end
 
-local function HideAllMainFrames()
+local function HideAllMainFrames(animate: boolean?)
 	for frameName, entry in pairs(MainFrames) do
 		if not entry.IsRaceHUD then
-			SetFrameVisible(entry, false)
+			if animate then
+				SetFrameVisible(entry, false, true, frameName)
+			else
+				SetFrameVisibleImmediate(entry, false)
+			end
 		end
 	end
 end
@@ -75,19 +157,23 @@ end
 local function ShowRaceHUD()
 	local raceHUDEntry = MainFrames["RaceHUD"]
 	if raceHUDEntry then
-		SetFrameVisible(raceHUDEntry, true)
+		SetFrameVisibleImmediate(raceHUDEntry, true)
 	end
 end
 
 local function HideRaceHUD()
 	local raceHUDEntry = MainFrames["RaceHUD"]
 	if raceHUDEntry then
-		SetFrameVisible(raceHUDEntry, false)
+		SetFrameVisibleImmediate(raceHUDEntry, false)
 	end
 end
 
 function UIFramesController:OpenFrame(frameName: FrameName): boolean
 	if State.FramesDisabled then
+		return false
+	end
+	
+	if State.AnimatingFrames[frameName] then
 		return false
 	end
 	
@@ -101,10 +187,10 @@ function UIFramesController:OpenFrame(frameName: FrameName): boolean
 		return true
 	end
 	
-	HideAllMainFrames()
+	HideAllMainFrames(false)
 	HideRaceHUD()
 	
-	SetFrameVisible(entry, true)
+	SetFrameVisible(entry, true, true, frameName)
 	State.CurrentOpenFrame = frameName
 	
 	return true
@@ -116,7 +202,11 @@ function UIFramesController:CloseFrame(frameName: FrameName): boolean
 		return false
 	end
 	
-	SetFrameVisible(entry, false)
+	if State.AnimatingFrames[frameName] then
+		return false
+	end
+	
+	SetFrameVisible(entry, false, true, frameName)
 	
 	if State.CurrentOpenFrame == frameName then
 		State.CurrentOpenFrame = nil
@@ -136,7 +226,7 @@ function UIFramesController:CloseCurrentFrame()
 end
 
 function UIFramesController:CloseAllFrames()
-	HideAllMainFrames()
+	HideAllMainFrames(true)
 	State.CurrentOpenFrame = nil
 	
 	if not State.FramesDisabled and not State.IsRaceActive then
@@ -170,7 +260,7 @@ function UIFramesController:DisableFrames(disabled: boolean)
 	State.FramesDisabled = disabled
 	
 	if disabled then
-		HideAllMainFrames()
+		HideAllMainFrames(false)
 		HideRaceHUD()
 		State.CurrentOpenFrame = nil
 	else
@@ -188,7 +278,7 @@ function UIFramesController:SetRaceActive(active: boolean)
 	State.IsRaceActive = active
 	
 	if active then
-		HideAllMainFrames()
+		HideAllMainFrames(false)
 		State.CurrentOpenFrame = nil
 	else
 		if not State.FramesDisabled then
@@ -213,6 +303,75 @@ function UIFramesController:GetAnimationConfig(): AnimationConfig
 	return AnimConfig
 end
 
+function UIFramesController:SetButtonAnimationConfig(config: ButtonAnimationConfig)
+	ButtonConfig = config
+end
+
+function UIFramesController:GetButtonAnimationConfig(): ButtonAnimationConfig
+	return ButtonConfig
+end
+
+function UIFramesController:SetupButtonAnimation(button: GuiButton)
+	if RegisteredButtons[button] then
+		return
+	end
+	
+	local uiScale = button:FindFirstChildOfClass("UIScale")
+	if not uiScale then
+		uiScale = Instance.new("UIScale")
+		uiScale.Parent = button
+	end
+	
+	local connections: { RBXScriptConnection } = {}
+	
+	table.insert(connections, button.MouseEnter:Connect(function()
+		TweenService:Create(uiScale, TWEEN_INFO_BUTTON, { Scale = ButtonConfig.ScaleHover }):Play()
+	end))
+	
+	table.insert(connections, button.MouseLeave:Connect(function()
+		TweenService:Create(uiScale, TWEEN_INFO_BUTTON, { Scale = ButtonConfig.ScaleNormal }):Play()
+	end))
+	
+	table.insert(connections, button.MouseButton1Down:Connect(function()
+		TweenService:Create(uiScale, TWEEN_INFO_BUTTON, { Scale = ButtonConfig.ScalePressed }):Play()
+	end))
+	
+	table.insert(connections, button.MouseButton1Up:Connect(function()
+		TweenService:Create(uiScale, TWEEN_INFO_BUTTON, { Scale = ButtonConfig.ScaleHover }):Play()
+	end))
+	
+	RegisteredButtons[button] = { Connections = connections }
+end
+
+function UIFramesController:RemoveButtonAnimation(button: GuiButton)
+	local entry = RegisteredButtons[button]
+	if not entry then
+		return
+	end
+	
+	for _, connection in ipairs(entry.Connections) do
+		connection:Disconnect()
+	end
+	
+	RegisteredButtons[button] = nil
+end
+
+function UIFramesController:SetupButtonAnimationsInFrame(frame: Frame)
+	for _, descendant in ipairs(frame:GetDescendants()) do
+		if descendant:IsA("GuiButton") then
+			self:SetupButtonAnimation(descendant)
+		end
+	end
+end
+
+function UIFramesController:EnableSlideAnimations(enabled: boolean)
+	AnimConfig.UseSlideAnimation = enabled
+end
+
+function UIFramesController:IsSlideAnimationsEnabled(): boolean
+	return AnimConfig.UseSlideAnimation
+end
+
 function UIFramesController:KnitInit()
 	local mainUI = PlayerGui:WaitForChild("RaceThroughTime_UI")
 	local uiShop = PlayerGui:WaitForChild("UI_Shop")
@@ -225,71 +384,97 @@ function UIFramesController:KnitInit()
 	local raceHUD = PlayerGui:WaitForChild("RaceHUD")
 	local otherFrames = mainUI:WaitForChild("OtherFrames")
 	
+	local shopFrame = uiShop:WaitForChild("MainFrame")
 	MainFrames["Shop"] = {
-		Frame = uiShop:WaitForChild("MainFrame"),
+		Frame = shopFrame,
 		ScreenGui = uiShop,
 		IsRaceHUD = false,
+		OriginalPosition = shopFrame.Position,
 	}
 	
+	local inventoryFrame = uiInventory:WaitForChild("MainFrame")
 	MainFrames["Inventory"] = {
-		Frame = uiInventory:WaitForChild("MainFrame"),
+		Frame = inventoryFrame,
 		ScreenGui = uiInventory,
 		IsRaceHUD = false,
+		OriginalPosition = inventoryFrame.Position,
 	}
 	
+	local petModalFrame = uiPetModal:WaitForChild("DarkOverlay")
 	MainFrames["PetModal"] = {
-		Frame = uiPetModal:WaitForChild("DarkOverlay"),
+		Frame = petModalFrame,
 		ScreenGui = uiPetModal,
 		IsRaceHUD = false,
+		OriginalPosition = petModalFrame.Position,
 	}
 	
+	local mergeFrame = uiMerge:WaitForChild("MainFrame")
 	MainFrames["Merge"] = {
-		Frame = uiMerge:WaitForChild("MainFrame"),
+		Frame = mergeFrame,
 		ScreenGui = uiMerge,
 		IsRaceHUD = false,
+		OriginalPosition = mergeFrame.Position,
 	}
 	
+	local settingsFrame = uiSettings:WaitForChild("MainFrame")
 	MainFrames["Settings"] = {
-		Frame = uiSettings:WaitForChild("MainFrame"),
+		Frame = settingsFrame,
 		ScreenGui = uiSettings,
 		IsRaceHUD = false,
+		OriginalPosition = settingsFrame.Position,
 	}
 	
+	local dailyFrame = otherFrames:WaitForChild("DailyFrame")
 	MainFrames["DailyRewards"] = {
-		Frame = otherFrames:WaitForChild("DailyFrame"),
+		Frame = dailyFrame,
 		ScreenGui = nil,
 		IsRaceHUD = false,
+		OriginalPosition = dailyFrame.Position,
 	}
 	
+	local rebirthFrame = simulatorPopups:WaitForChild("RebirthMenu")
 	MainFrames["Rebirth"] = {
-		Frame = simulatorPopups:WaitForChild("RebirthMenu"),
+		Frame = rebirthFrame,
 		ScreenGui = nil,
 		IsRaceHUD = false,
+		OriginalPosition = rebirthFrame.Position,
 	}
 	
+	local worldFrame = simulatorPopups:WaitForChild("WorldMenu")
 	MainFrames["World"] = {
-		Frame = simulatorPopups:WaitForChild("WorldMenu"),
+		Frame = worldFrame,
 		ScreenGui = nil,
 		IsRaceHUD = false,
+		OriginalPosition = worldFrame.Position,
 	}
 	
+	local tradePlayerListFrame = tradingScreenGui:WaitForChild("PlayerListFrame")
 	MainFrames["TradePlayerList"] = {
-		Frame = tradingScreenGui:WaitForChild("PlayerListFrame"),
+		Frame = tradePlayerListFrame,
 		ScreenGui = nil,
 		IsRaceHUD = false,
+		OriginalPosition = tradePlayerListFrame.Position,
 	}
 	
+	local tradeMainFrame = tradingScreenGui:WaitForChild("MainTradeFrame")
 	MainFrames["TradeMain"] = {
-		Frame = tradingScreenGui:WaitForChild("MainTradeFrame"),
+		Frame = tradeMainFrame,
 		ScreenGui = nil,
 		IsRaceHUD = false,
+		OriginalPosition = tradeMainFrame.Position,
 	}
 	
+	local raceHUDFrame = raceHUD:WaitForChild("MainFrame")
 	MainFrames["RaceHUD"] = {
-		Frame = raceHUD:WaitForChild("MainFrame"),
+		Frame = raceHUDFrame,
 		ScreenGui = raceHUD,
 		IsRaceHUD = true,
+		OriginalPosition = raceHUDFrame.Position,
 	}
+	
+	for _, entry in pairs(MainFrames) do
+		self:SetupButtonAnimationsInFrame(entry.Frame)
+	end
 end
 
 function UIFramesController:KnitStart()
