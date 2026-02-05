@@ -90,14 +90,20 @@ end
 function RebirthUIController:UpdateMenuVisibility()
 	local UIController = Knit.GetController("UIController")
 	local UIFramesController = Knit.GetController("UIFramesController")
-	local shouldShow = UIController:GetButtonPressed() or UIController:IsPlayerNearRebirthArea()
+	local shouldShow = UIController:IsPlayerNearRebirthArea()
+
+	if shouldShow and not UIFramesController:IsFrameOpen("Rebirth") then
+		UIFramesController:OpenFrame("Rebirth")
+		self:HandleRebirthFrame()
+	end
 	
+	--[[
 	if shouldShow and not UIFramesController:IsFrameOpen("Rebirth") then
 		UIFramesController:OpenFrame("Rebirth")
 		self:HandleRebirthFrame()
 	elseif not shouldShow and UIFramesController:IsFrameOpen("Rebirth") then
 		UIFramesController:CloseFrame("Rebirth")
-	end
+	end]]
 end
 
 function RebirthUIController:KnitInit()
