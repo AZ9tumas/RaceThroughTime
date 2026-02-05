@@ -61,6 +61,7 @@ TradeController.OnTradeCompleted = Signal.new()         -- (receivedPets: {})
 -- Private state
 local Player = Players.LocalPlayer
 local TradeService = nil
+local TradingEnabled = true -- Whether trading is enabled for this player
 
 -- Current trade state (synced with server)
 local CurrentTradeState = nil
@@ -73,6 +74,29 @@ local function ShowNotification(message: string, category: string?)
 		local cat = NotificationController.Category[category or "Default"] or NotificationController.Category.Default
 		NotificationController:ShowNotification(message, cat)
 	end
+end
+
+--[[
+	Set whether trading is enabled for this player.
+	
+	@param enabled boolean - Whether trading should be enabled
+]]
+function TradeController:SetTradingEnabled(enabled: boolean)
+	TradingEnabled = enabled
+	
+	-- Notify server of trading preference change
+	if TradeService then
+		TradeService:SetTradingEnabled(enabled)
+	end
+end
+
+--[[
+	Check if trading is enabled for this player.
+	
+	@return boolean
+]]
+function TradeController:IsTradingEnabled(): boolean
+	return TradingEnabled
 end
 
 --[[

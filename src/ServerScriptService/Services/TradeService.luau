@@ -72,9 +72,21 @@ local IncomingRequests: { [number]: { [number]: TradeRequest } } = {}
 -- Active trade sessions: [player.UserId] = TradeSession (both players point to same session)
 local ActiveTrades: { [number]: TradeSession } = {}
 
+-- Player trading preferences: [player.UserId] = boolean (true = enabled, false = disabled)
+local PlayerTradingEnabled: { [number]: boolean } = {}
+
 -- Helper function for logging
 local function Log(message: string)
 	print(string.format("[TradeService]: %s", message))
+end
+
+-- Check if a player has trading enabled
+local function IsTradingEnabledForPlayer(player: Player): boolean
+	-- Default to true if not set
+	if PlayerTradingEnabled[player.UserId] == nil then
+		return true
+	end
+	return PlayerTradingEnabled[player.UserId]
 end
 
 -- Check if a player is currently in an active trade
@@ -371,6 +383,16 @@ function TradeService:RequestTrade(player: Player, targetPlayer: Player): (boole
 	
 	if not targetPlayer:IsDescendantOf(Players) then
 		return false, "Target player is not in the game"
+	end
+	
+	-- Check if the requesting player has trading enabled
+	if not IsTradingEnabledForPlayer(player) then
+		return false, "You have trading disabled"
+	end
+	
+	-- Check if the target player has trading enabled
+	if not IsTradingEnabledForPlayer(targetPlayer) then
+		return false, "Target player has trading disabled"
 	end
 	
 	-- Check if either player is already in a trade
@@ -826,6 +848,21 @@ function TradeService.Client:GetPendingRequests(player: Player): { Player }
 	return TradeService:GetPendingRequests(player)
 end
 
+function TradeService.Client:SetTradingEnabled(player: Player, enabled: boolean)
+	return TradeService:SetTradingEnabled(player, enabled)
+end
+
+--[[
+	Set whether trading is enabled for a player.
+	
+	@param player Player - The player setting their preference
+	@param enabled boolean - Whether trading should be enabled
+]]
+function TradeService:SetTradingEnabled(player: Player, enabled: boolean)
+	PlayerTradingEnabled[player.UserId] = enabled
+	Log(string.format("%s set trading enabled: %s", player.Name, tostring(enabled)))
+end
+
 -- Clean up when player leaves
 local function OnPlayerRemoving(player: Player)
 	-- Cancel any outgoing requests
@@ -834,6 +871,9 @@ local function OnPlayerRemoving(player: Player)
 	-- Cancel all incoming requests
 	CancelAllIncomingRequests(player)
 	IncomingRequests[player.UserId] = nil
+	
+	-- Clean up trading preference
+	PlayerTradingEnabled[player.UserId] = nil
 	
 	-- End any active trade
 	local session = GetTradeSession(player)
