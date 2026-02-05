@@ -46,13 +46,14 @@ function RebirthUIController:HandleRebirthFrame()
 		multiplier = rebirthMenu.Frame.Multiplier,
 		status = rebirthMenu.Frame.Status,
 	}
-	local vals = {
+	
+	if nextLevel then
+		local vals = {
 		access = nextLevel.Bonus.WorldAccess or " --- ",
 		bonus = "+" .. nextLevel.Bonus.Gems .. " Gems",
 		multiplier = "+" .. ((nextLevel.Multiplier or 0) * 100) .. "% Multiplier",
 		status = nextLevel.KeepPets and "Keep Pets" or "Lose Pets",
 	}
-	if nextLevel then
 		local progress, remainingCash = rebirthStatsM.GetRebirthProgress(currentRebirthLevel, cashVal.Value)
 		progressBar.Size = UDim2.new(progress, 0, 1, 0)
 		progressText.Text = cash .. "/" .. TruncateNumber(nextLevel.CashRequired) .. " Cash"
