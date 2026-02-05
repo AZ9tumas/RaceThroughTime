@@ -57,6 +57,7 @@ local Stats = require(ReplicatedStorage.Modules.Stats)
 
 -- Reference to UIController for debounce reset
 local UIController = nil
+local UIFramesController = nil
 
 -- Camera settings
 local DEFAULT_FOV = 70
@@ -638,6 +639,11 @@ local function OnTrackStarted(trackData: {
 	-- Show cancel button during track run
 	trackCancelButton.Visible = true
 	
+	-- Disable all other UI frames during track run
+	if UIFramesController then
+		UIFramesController:DisableFrames(true)
+	end
+	
 	-- Show notification
 	local NotificationController = Knit.GetController("NotificationController")
 	if NotificationController then
@@ -829,6 +835,11 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	
 	-- Hide cancel button when track ends
 	trackCancelButton.Visible = false
+	
+	-- Re-enable all UI frames after track run ends
+	if UIFramesController then
+		UIFramesController:DisableFrames(false)
+	end
 
 	print(trackData)
 	
@@ -1118,6 +1129,7 @@ end
 function TrackController:KnitStart()
 	-- Get UIController reference for debounce reset
 	UIController = Knit.GetController("UIController")
+	UIFramesController = Knit.GetController("UIFramesController")
 	
 	-- Listen for server signals
 	local TrackService = Knit.GetService("TrackService")
@@ -1145,6 +1157,11 @@ function TrackController:KnitStart()
 	
 	-- Ensure cancel button is hidden initially
 	trackCancelButton.Visible = false
+	
+	-- Setup button animation for cancel button (hover/click effects)
+	if UIFramesController then
+		UIFramesController:SetupButtonAnimation(trackCancelButton)
+	end
 	
 	-- Listen for data updates to refresh world frame colors
 	local DataService = Knit.GetService("DataService")
