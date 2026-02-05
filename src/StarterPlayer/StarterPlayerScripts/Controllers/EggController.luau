@@ -19,6 +19,7 @@ local CurrentWorldName = "Main"
 local EggConnections: { [string]: { RBXScriptConnection } } = {}
 local AutoHatchActive: { [string]: boolean } = {}
 local IsHatching = false
+local IsSettingUp = false
 
 local MULTI_HATCH_COUNT = 4
 local AUTO_HATCH_DELAY = 0.5
@@ -94,7 +95,7 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 	end
 
 	for _, child in ipairs(contentFrame:GetChildren()) do
-		if child:IsA("Frame") and child.Name ~= "Template" and child ~= gridLayout then
+		if child:IsA("GuiObject") and child.Name ~= "Template" and child ~= gridLayout and not child:IsA("UIGridLayout") then
 			child:Destroy()
 		end
 	end
@@ -282,10 +283,16 @@ local function SetupEggStand(eggStandModel: Model, eggName: string)
 end
 
 local function SetupEggStandsForWorld(worldName: string)
+	if IsSettingUp then
+		return
+	end
+	IsSettingUp = true
+
 	ClearEggConnections()
 
 	local eggShopStands = GetEggShopStands(worldName)
 	if not eggShopStands then
+		IsSettingUp = false
 		return
 	end
 
@@ -295,6 +302,8 @@ local function SetupEggStandsForWorld(worldName: string)
 			SetupEggStand(child, eggName)
 		end
 	end
+
+	IsSettingUp = false
 end
 
 function EggController:UpdateEggUI()
