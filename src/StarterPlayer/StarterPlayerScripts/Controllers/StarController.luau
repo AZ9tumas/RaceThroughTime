@@ -315,6 +315,11 @@ local function CheckProximityCollection()
 					if result then
 						-- Clean up tween data on success
 						CleanupCollectionTween(starId)
+						-- Play star collect sound (player collection only)
+						local SoundController = Knit.GetController("SoundController")
+						if SoundController then
+							SoundController:PlayStarCollect()
+						end
 					else
 						-- Reset the star back to original position if collection failed
 						print("Collection failed")

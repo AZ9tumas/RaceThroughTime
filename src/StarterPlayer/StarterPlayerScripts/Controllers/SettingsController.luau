@@ -50,12 +50,20 @@ local function ApplyMusicSetting(enabled: boolean)
 			sound.Volume = enabled and sound:GetAttribute("OriginalVolume") or 0
 		end
 	end
+	local SoundController = Knit.GetController("SoundController")
+	if SoundController then
+		SoundController:SetMusicEnabled(enabled)
+	end
 end
 
 local function ApplySFXSetting(enabled: boolean)
 	local sfxGroup = SoundService:FindFirstChild("SFX")
 	if sfxGroup then
 		sfxGroup.Volume = enabled and 0.5 or 0
+	end
+	local SoundController = Knit.GetController("SoundController")
+	if SoundController then
+		SoundController:SetSFXEnabled(enabled)
 	end
 end
 
