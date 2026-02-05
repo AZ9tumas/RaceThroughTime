@@ -32,8 +32,7 @@ export type MergeSelection = {
 }
 
 export type MergeState = {
-	TargetPetID: string?,
-	TargetPetName: string?,
+	TierLevel: number?,
 	RequiredCopies: number,
 	SelectedCount: number,
 	SelectedPets: { [number]: MergeSelection },
@@ -107,8 +106,7 @@ local UI: UIComponents = {} :: UIComponents
 local State: ControllerState = {
 	SelectedPetData = nil,
 	Merge = {
-		TargetPetID = nil,
-		TargetPetName = nil,
+		TierLevel = nil,
 		RequiredCopies = 0,
 		SelectedCount = 0,
 		SelectedPets = {},
@@ -173,8 +171,7 @@ end
 
 local function ResetMergeState()
 	State.Merge = {
-		TargetPetID = nil,
-		TargetPetName = nil,
+		TierLevel = nil,
 		RequiredCopies = 0,
 		SelectedCount = 0,
 		SelectedPets = {},
@@ -261,30 +258,15 @@ local function SelectAllPets()
 	State.Debounce.SelectAll = false
 end
 
-local function GetMatchingPetsForMerge(targetPetID: string): { { Index: number, PetData: PetData } }
+local function GetMatchingPetsForMerge(tierLevel: number): { { Index: number, PetData: PetData } }
 	local controllers = GetControllers()
 	local data = controllers.UI:GetData()
 	local petInventory = data.Inventory.PetInventory
 	
-	local targetPet: PetData? = nil
-	local targetIndex: number? = nil
-	
-	for index, petData in ipairs(petInventory) do
-		if petData.ID == targetPetID then
-			targetPet = petData
-			targetIndex = index
-			break
-		end
-	end
-	
-	if not targetPet then
-		return {}
-	end
-	
 	local matchingPets: { { Index: number, PetData: PetData } } = {}
 	
 	for index, petData in ipairs(petInventory) do
-		if petData.TierLevel == targetPet.TierLevel then
+		if petData.TierLevel == tierLevel then
 			table.insert(matchingPets, {
 				Index = index,
 				PetData = {
@@ -364,25 +346,20 @@ function PetModalUIController:GetSelectedPetData(): PetData?
 	return State.SelectedPetData
 end
 
-function PetModalUIController:UpdateMergeUI(petID: string)
+function PetModalUIController:UpdateMergeUI(tierLevel: number)
 	local UIFramesController = Knit.GetController("UIFramesController")
 	ClearMergePetConnections()
 	ClearMergePetGrid()
 	ResetMergeState()
 	
-	State.Merge.TargetPetID = petID
+	State.Merge.TierLevel = tierLevel
+	State.Merge.RequiredCopies = PetMergeStats.GetCopiesRequired(tierLevel)
 	
-	local matchingPets = GetMatchingPetsForMerge(petID)
+	local matchingPets = GetMatchingPetsForMerge(tierLevel)
 	
 	if #matchingPets == 0 then
 		return
 	end
-	
-	local targetPet = matchingPets[1].PetData
-	State.Merge.TargetPetName = targetPet.Name
-	
-	local tierLevel = targetPet.TierLevel or targetPet.Level or 1
-	State.Merge.RequiredCopies = PetMergeStats.GetCopiesRequired(tierLevel)
 	
 	local gemCost = PetMergeStats.GetMergeCost(tierLevel)
 	UI.Merge.MergeButton.Text = "MERGE\n(" .. gemCost .. " GEMS)"
@@ -533,7 +510,8 @@ function PetModalUIController:KnitStart()
 			return
 		end
 		
-		self:UpdateMergeUI(State.SelectedPetData.ID)
+		local tierLevel = State.SelectedPetData.TierLevel or State.SelectedPetData.Level or 1
+		self:UpdateMergeUI(tierLevel)
 	end)
 	
 	Connections["MergeSelectAll"] = UI.Merge.SelectAllButton.MouseButton1Click:Connect(function()
@@ -541,7 +519,7 @@ function PetModalUIController:KnitStart()
 	end)
 	
 	Connections["MergeButton"] = UI.Merge.MergeButton.MouseButton1Click:Connect(function()
-		if not State.Merge.TargetPetID then
+		if not State.Merge.TierLevel then
 			return
 		end
 		
@@ -563,7 +541,7 @@ function PetModalUIController:KnitStart()
 		local selectedIndexes = GetSelectedPetIndexes()
 		local selectedIDs = GetSelectedPetIDs()
 		
-		services.Pet:RequestMergePets(State.Merge.TargetPetID, selectedIndexes, selectedIDs):andThen(function(success, errorMsg, resultData)
+		services.Pet:RequestMergePets(selectedIndexes, selectedIDs):andThen(function(success, errorMsg, resultData)
 			if success then
 				UIFramesController:CloseAllFrames()
 				
