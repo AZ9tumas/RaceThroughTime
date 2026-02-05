@@ -678,6 +678,10 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	-- Setup pet body movers for track run with same settings as player
 	SetupPetBodyMoversForTrack(player)
 	
+	-- Show loading screen (fade in) and keep it for 0.5s more after track officially begins
+	local LoadingScreenService = Knit.GetService("LoadingScreenService")
+	LoadingScreenService:ShowLoadingScreen(player, 0.5)
+	
 	-- Fire signal to client that track has started (client will handle movement and effects)
 	TrackService.Client.TrackStarted:Fire(player, {
 		gateName = closestGate,
