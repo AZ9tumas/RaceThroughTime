@@ -39,9 +39,17 @@ export type MergeState = {
 	SelectedPets: { [number]: MergeSelection },
 }
 
+export type DebounceState = {
+	PetSelection: boolean,
+	MergeExecution: boolean,
+	EquipAction: boolean,
+	SelectAll: boolean,
+}
+
 export type ControllerState = {
 	SelectedPetData: PetData?,
 	Merge: MergeState,
+	Debounce: DebounceState,
 }
 
 export type UIComponents = {
@@ -105,6 +113,12 @@ local State: ControllerState = {
 		SelectedCount = 0,
 		SelectedPets = {},
 	},
+	Debounce = {
+		PetSelection = false,
+		MergeExecution = false,
+		EquipAction = false,
+		SelectAll = false,
+	},
 }
 
 local Connections: { [string]: RBXScriptConnection } = {}
@@ -165,9 +179,18 @@ local function ResetMergeState()
 		SelectedCount = 0,
 		SelectedPets = {},
 	}
+	State.Debounce.MergeExecution = false
+	State.Debounce.PetSelection = false
+	State.Debounce.SelectAll = false
 end
 
 local function TogglePetSelection(petIndex: number, petID: string, petFrame: TextButton)
+	if State.Debounce.PetSelection then
+		return
+	end
+	
+	State.Debounce.PetSelection = true
+	
 	local existingSelection = State.Merge.SelectedPets[petIndex]
 	
 	if existingSelection then
@@ -186,6 +209,8 @@ local function TogglePetSelection(petIndex: number, petID: string, petFrame: Tex
 	end
 	
 	UpdateMergeCountLabel()
+	
+	State.Debounce.PetSelection = false
 end
 
 local function UpdateMergeGridSelection()
@@ -201,6 +226,12 @@ local function UpdateMergeGridSelection()
 end
 
 local function SelectAllPets()
+	if State.Debounce.SelectAll then
+		return
+	end
+	
+	State.Debounce.SelectAll = true
+	
 	State.Merge.SelectedPets = {}
 	State.Merge.SelectedCount = 0
 	
@@ -226,6 +257,8 @@ local function SelectAllPets()
 	
 	UpdateMergeGridSelection()
 	UpdateMergeCountLabel()
+	
+	State.Debounce.SelectAll = false
 end
 
 local function GetMatchingPetsForMerge(targetPetID: string): { { Index: number, PetData: PetData } }
@@ -435,6 +468,12 @@ function PetModalUIController:KnitStart()
 			return
 		end
 		
+		if State.Debounce.EquipAction then
+			return
+		end
+		
+		State.Debounce.EquipAction = true
+		
 		local data = controllers.UI:GetData()
 		
 		if State.SelectedPetData.Equipped then
@@ -459,6 +498,8 @@ function PetModalUIController:KnitStart()
 						3
 					)
 				end
+				
+				State.Debounce.EquipAction = false
 			end)
 		else
 			services.Pet:RequestEquipPet(State.SelectedPetData.ID):andThen(function(success, errorMsg)
@@ -479,6 +520,8 @@ function PetModalUIController:KnitStart()
 						3
 					)
 				end
+				
+				State.Debounce.EquipAction = false
 			end)
 		end
 	end)
@@ -501,6 +544,10 @@ function PetModalUIController:KnitStart()
 			return
 		end
 		
+		if State.Debounce.MergeExecution then
+			return
+		end
+		
 		if State.Merge.SelectedCount < State.Merge.RequiredCopies then
 			controllers.Notification:ShowNotification(
 				string.format("Need %d copies to merge, selected %d", State.Merge.RequiredCopies, State.Merge.SelectedCount),
@@ -509,6 +556,8 @@ function PetModalUIController:KnitStart()
 			)
 			return
 		end
+		
+		State.Debounce.MergeExecution = true
 		
 		local selectedIndexes = GetSelectedPetIndexes()
 		local selectedIDs = GetSelectedPetIDs()
@@ -534,6 +583,8 @@ function PetModalUIController:KnitStart()
 					3
 				)
 			end
+			
+			State.Debounce.MergeExecution = false
 		end)
 	end)
 	
