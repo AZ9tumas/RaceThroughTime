@@ -17,7 +17,7 @@ local ProfileStore = require(script.Parent.Parent.Modules.ProfileStore)
 -- Data Template
 local Template = {
 	Currencies = {
-		Cash = 1000,
+		Cash = 0,
 		Gems = 0,
 	},
 	Stats = {
@@ -187,17 +187,6 @@ local function TryResolveSession(player: Player)
 	
 	if profile and clientReady and sessionPromise and sessionPromise.resolve then
 		print(player, "Session Initialized")
-		
-		-- Give random pet for testing
-		local standardPet = statsM.Pets.StandardPet
-		if standardPet then
-			DataService:Update(player, "Inventory", function(inventory)
-				local newPet = table.clone(standardPet)
-				newPet.Multiplier = math.random(1, 50)
-				table.insert(inventory.PetInventory, newPet)
-				return inventory
-			end)
-		end
 
 		-- Initialize pets once when session is resolved
 		local PetService = Knit.GetService("PetService")
@@ -211,8 +200,6 @@ local function TryResolveSession(player: Player)
 
 		local LauncherService = Knit.GetService("LauncherService")
 		LauncherService:FireUpdateLauncherClient(player)
-
-		DataService:Update(player, "Currencies", function(c) c.Cash += 1000 return c end)
 	end
 end
 
