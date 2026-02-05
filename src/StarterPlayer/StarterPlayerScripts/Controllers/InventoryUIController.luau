@@ -88,7 +88,6 @@ function InventoryUIController:UpdatePetsInventory()
 		}
 		if petFrame:IsA("TextButton") then
 			petFrame.MouseButton1Click:Connect(function()
-				UIController:CloseAllFrames()
 				if PetModalUIController then
 					PetModalUIController:OpenPetModal(fullPetData)
 				end
@@ -99,20 +98,25 @@ function InventoryUIController:UpdatePetsInventory()
 end
 
 function InventoryUIController:ToggleInventory()
-	local UIController = Knit.GetController("UIController")
-	UIController:CloseAllFrames(inventoryMainFrame)
-	inventoryMainFrame.Visible = not inventoryMainFrame.Visible
-	if inventoryMainFrame.Visible then
+	local UIFramesController = Knit.GetController("UIFramesController")
+	local wasOpen = UIFramesController:IsFrameOpen("Inventory")
+	
+	if wasOpen then
+		UIFramesController:CloseFrame("Inventory")
+	else
+		UIFramesController:OpenFrame("Inventory")
 		self:UpdatePetsInventory()
 	end
 end
 
 function InventoryUIController:CloseInventory()
-	inventoryMainFrame.Visible = false
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:CloseFrame("Inventory")
 end
 
 function InventoryUIController:IsVisible(): boolean
-	return inventoryMainFrame.Visible
+	local UIFramesController = Knit.GetController("UIFramesController")
+	return UIFramesController:IsFrameOpen("Inventory")
 end
 
 function InventoryUIController:KnitInit()

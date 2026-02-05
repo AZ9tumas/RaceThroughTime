@@ -113,15 +113,13 @@ function SettingsController:ToggleSetting(key: string)
 end
 
 function SettingsController:ToggleSettingsMenu()
-	local UIController = Knit.GetController("UIController")
-	if UIController then
-		UIController:CloseAllFrames()
-	end
-	mainFrame.Visible = not mainFrame.Visible
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:ToggleFrame("Settings")
 end
 
 function SettingsController:CloseSettingsMenu()
-	mainFrame.Visible = false
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:CloseFrame("Settings")
 end
 
 function SettingsController:KnitInit()

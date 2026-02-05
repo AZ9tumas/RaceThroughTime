@@ -28,14 +28,13 @@ function ShopUIController:UpdateShopUI()
 end
 
 function ShopUIController:ToggleShop()
-	local UIController = Knit.GetController("UIController")
-	local wasVisible = shopMain.Visible
-	UIController:CloseAllFrames()
-	shopMain.Visible = not wasVisible
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:ToggleFrame("Shop")
 end
 
 function ShopUIController:CloseShop()
-	shopMain.Visible = false
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:CloseFrame("Shop")
 end
 
 function ShopUIController:KnitInit()
@@ -57,6 +56,7 @@ function ShopUIController:KnitStart()
 	local EggService = Knit.GetService("EggService")
 	local UIController = Knit.GetController("UIController")
 	local InventoryUIController = Knit.GetController("InventoryUIController")
+	local UIFramesController = Knit.GetController("UIFramesController")
 
 	_connections["ShopButton"] = shopButton.MouseButton1Click:Connect(function()
 		self:ToggleShop()
@@ -70,8 +70,8 @@ function ShopUIController:KnitStart()
 		if EggHatchAnimation.IsPlaying() then
 			return
 		end
+		UIFramesController:DisableFrames(true)
 		eggviewport.Parent.Visible = true
-		shopMain.Visible = false
 		EggHatchAnimation.PlayHatch(
 			eggviewport,
 			"StandardEgg",
@@ -93,6 +93,7 @@ function ShopUIController:KnitStart()
 					end)
 				end
 				eggviewport.Parent.Visible = false
+				UIFramesController:DisableFrames(false)
 			end
 		)
 	end)

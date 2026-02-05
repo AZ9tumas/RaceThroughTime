@@ -347,14 +347,16 @@ local function GetSelectedPetIDs(): { string }
 end
 
 function PetModalUIController:OpenPetModal(petData: PetData)
+	local UIFramesController = Knit.GetController("UIFramesController")
 	State.SelectedPetData = petData
 	UI.PetModal.Multiplier.Text = string.format("x%.1f Multiplier", petData.Multiplier or 1.0)
 	UpdateEquipButtonAppearance(petData.Equipped or false)
-	UI.PetModal.DarkOverlay.Visible = true
+	UIFramesController:OpenFrame("PetModal")
 end
 
 function PetModalUIController:ClosePetModal()
-	UI.PetModal.DarkOverlay.Visible = false
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:CloseFrame("PetModal")
 	State.SelectedPetData = nil
 end
 
@@ -363,6 +365,7 @@ function PetModalUIController:GetSelectedPetData(): PetData?
 end
 
 function PetModalUIController:UpdateMergeUI(petID: string)
+	local UIFramesController = Knit.GetController("UIFramesController")
 	ClearMergePetConnections()
 	ClearMergePetGrid()
 	ResetMergeState()
@@ -397,13 +400,12 @@ function PetModalUIController:UpdateMergeUI(petID: string)
 		petFrame.Parent = UI.Merge.PetGrid
 	end
 	
-	UI.Merge.ScreenGui.Enabled = true
-	UI.Merge.MainFrame.Visible = true
+	UIFramesController:OpenFrame("Merge")
 end
 
 function PetModalUIController:CloseMergeUI()
-	UI.Merge.ScreenGui.Enabled = false
-	UI.Merge.MainFrame.Visible = false
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:CloseFrame("Merge")
 	ClearMergePetConnections()
 	ResetMergeState()
 end
@@ -455,12 +457,12 @@ end
 function PetModalUIController:KnitStart()
 	local services = GetServices()
 	local controllers = GetControllers()
-	local inventoryMainFrame = controllers.UI:GetUIReferences().InventoryUI:WaitForChild("MainFrame")
+	local UIFramesController = Knit.GetController("UIFramesController")
 	
 	Connections["PetModalClose"] = UI.PetModal.CloseButton.MouseButton1Click:Connect(function()
-		UI.PetModal.DarkOverlay.Visible = false
-		State.SelectedPetData = nil
-		inventoryMainFrame.Visible = true
+		self:ClosePetModal()
+		UIFramesController:OpenFrame("Inventory")
+		controllers.Inventory:UpdatePetsInventory()
 	end)
 	
 	Connections["PetModalEquip"] = UI.PetModal.EquipButton.MouseButton1Click:Connect(function()
@@ -532,7 +534,6 @@ function PetModalUIController:KnitStart()
 		end
 		
 		self:UpdateMergeUI(State.SelectedPetData.ID)
-		UI.PetModal.DarkOverlay.Visible = false
 	end)
 	
 	Connections["MergeSelectAll"] = UI.Merge.SelectAllButton.MouseButton1Click:Connect(function()
@@ -564,9 +565,7 @@ function PetModalUIController:KnitStart()
 		
 		services.Pet:RequestMergePets(State.Merge.TargetPetID, selectedIndexes, selectedIDs):andThen(function(success, errorMsg, resultData)
 			if success then
-				UI.Merge.ScreenGui.Enabled = false
-				UI.Merge.MainFrame.Visible = false
-				UI.PetModal.DarkOverlay.Visible = false
+				UIFramesController:CloseAllFrames()
 				
 				controllers.Notification:ShowNotification(
 					"Merge successful! Pet upgraded to " .. (resultData and resultData.TierName or "higher tier"),

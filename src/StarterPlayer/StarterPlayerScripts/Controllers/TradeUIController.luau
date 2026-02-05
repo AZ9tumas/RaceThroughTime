@@ -236,12 +236,9 @@ local function UpdateRemoteTradePets()
 end
 
 function TradeUIController:ShowTradeUI(otherPlayer: Player)
-	local UIController = Knit.GetController("UIController")
-	UIController:CloseAllFrames()
-	playerListUI.PlayerListFrame.Visible = false
-	incomingRequestUI.IncomingRequestFrame.Visible = false
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:OpenFrame("TradeMain")
 	tradeOfferedPets = {}
-	mainTradeUI.MainTradeFrame.Visible = true
 	local petsFrame = mainTradeUI.RemoteFrame:FindFirstChild("Pets")
 	if petsFrame then
 		local playerLabel = petsFrame:FindFirstChild("Player")
@@ -256,7 +253,8 @@ function TradeUIController:ShowTradeUI(otherPlayer: Player)
 end
 
 function TradeUIController:HideTradeUI()
-	mainTradeUI.MainTradeFrame.Visible = false
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:CloseFrame("TradeMain")
 	ClearTradePetConnections()
 	tradeOfferedPets = {}
 end
@@ -296,11 +294,13 @@ function TradeUIController:UpdatePlayerList()
 end
 
 function TradeUIController:TogglePlayerList()
-	local UIController = Knit.GetController("UIController")
-	local wasVisible = playerListUI.PlayerListFrame.Visible
-	UIController:CloseAllFrames()
-	playerListUI.PlayerListFrame.Visible = not wasVisible
-	if playerListUI.PlayerListFrame.Visible then
+	local UIFramesController = Knit.GetController("UIFramesController")
+	local wasOpen = UIFramesController:IsFrameOpen("TradePlayerList")
+	
+	if wasOpen then
+		UIFramesController:CloseFrame("TradePlayerList")
+	else
+		UIFramesController:OpenFrame("TradePlayerList")
 		self:UpdatePlayerList()
 	end
 end

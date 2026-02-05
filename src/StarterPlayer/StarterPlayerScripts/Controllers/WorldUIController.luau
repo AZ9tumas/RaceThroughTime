@@ -59,11 +59,20 @@ end
 
 function WorldUIController:UpdateMenuVisibility()
 	local UIController = Knit.GetController("UIController")
-	worldMenu.Visible = UIController:IsPlayerNearWorldPad()
+	local UIFramesController = Knit.GetController("UIFramesController")
+	local shouldShow = UIController:IsPlayerNearWorldPad()
+	
+	if shouldShow and not UIFramesController:IsFrameOpen("World") then
+		UIFramesController:OpenFrame("World")
+		self:UpdateWorlds()
+	elseif not shouldShow and UIFramesController:IsFrameOpen("World") then
+		UIFramesController:CloseFrame("World")
+	end
 end
 
 function WorldUIController:CloseWorldMenu()
-	worldMenu.Visible = false
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:CloseFrame("World")
 end
 
 function WorldUIController:KnitInit()
