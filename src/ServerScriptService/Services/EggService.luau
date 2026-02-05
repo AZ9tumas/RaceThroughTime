@@ -190,6 +190,42 @@ function EggService.Client:RequestPurchaseEgg(player: Player, eggType: string): 
 	return EggService:PurchaseEgg(player, eggType)
 end
 
+-- Client request to purchase multiple eggs at once
+function EggService.Client:RequestPurchaseMultipleEggs(player: Player, eggType: string, count: number): (number, { any })
+	local purchasedCount = 0
+	local pets = {}
+	
+	count = math.min(count, 10)
+	
+	for _ = 1, count do
+		local success, _errorMsg, petInfo = EggService:PurchaseEgg(player, eggType)
+		if success and petInfo then
+			purchasedCount = purchasedCount + 1
+			table.insert(pets, petInfo)
+		else
+			break
+		end
+	end
+	
+	return purchasedCount, pets
+end
+
+-- Get egg information for display
+function EggService.Client:GetEggInfo(player: Player, eggType: string): { Cost: number, Currency: string, Pets: { { Pet: string, Probability: number } } }?
+	local eggConfig = Stats.Eggs[eggType]
+	if not eggConfig then
+		return nil
+	end
+	
+	return {
+		Cost = eggConfig.Cost,
+		Currency = eggConfig.Currency,
+		Tier = eggConfig.Tier,
+		World = eggConfig.World,
+		Pets = eggConfig.Pets,
+	}
+end
+
 -- Knit lifecycle
 function EggService:KnitInit()
 	Log("EggService initialized")
