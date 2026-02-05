@@ -134,6 +134,15 @@ function CurrencyUIController:KnitInit()
 end
 
 function CurrencyUIController:KnitStart()
+	local DataService = Knit.GetService("DataService")
+
+	DataService.DataReady:Connect(function(data)
+		local UIController = Knit.GetController("UIController")
+		if UIController then
+			UIController:SetData(data)
+		end
+		self:UpdateFromLeaderstats()
+	end)
 end
 
 return CurrencyUIController

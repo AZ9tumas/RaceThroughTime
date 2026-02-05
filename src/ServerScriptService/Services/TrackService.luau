@@ -481,9 +481,6 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 		return stats
 	end)
 	
-	-- Fire DataReady to update client with new MaxDistanceTraveled
-	DataService:FireDataReady(player)
-	
 	-- Calculate percentage to next world
 	local WorldService = Knit.GetService("WorldService")
 	local nextWorld = WorldService:GetNextWorld(worldName)
@@ -550,6 +547,8 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 			end
 		end
 	end
+
+	DataService:FireDataReady(player)
 end
 
 -- Remove player from track (alias for EndTrackRun)
@@ -742,6 +741,9 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 		cashEarned = 0,
 		cancelled = true,
 	})
+
+	local DataService = Knit.GetService("DataService")
+	DataService:FireDataReady(player)
 	
 	return true, nil, {
 		distanceTraveled = distanceTraveled,
@@ -774,6 +776,9 @@ function TrackService.Client:RequestTrackEnd(player: Player, distanceTraveled: n
 	
 	-- Call EndTrackRun with the client-provided distance (validated inside)
 	TrackService:EndTrackRun(player, distanceTraveled, worldUnlocked)
+	
+	local DataService = Knit.GetService("DataService")
+	DataService:FireDataReady(player)
 	
 	return true, nil
 end
