@@ -102,11 +102,11 @@ Stats.DefaultPetAttackRate = 1 -- 1 attack per second
 -- Format: { Distance = number, Rebirth = number? }
 Stats.WorldUnlockRequirements = {
 	-- Main is unlocked by default
-	StoneAge = { Distance = 10510, Rebirth = 1 },
-	AncientEgypt = { Distance = 110110, Rebirth = 2 },
-	Medieval = { Distance = 250000, Rebirth = 2 },
-	Industrial = { Distance = 1250000, Rebirth = 5 },
-	Neon = { Distance = 5250000, Rebirth = 10 },
+	StoneAge = { Distance = 100510, Rebirth = 1 },
+	AncientEgypt = { Distance = 510110, Rebirth = 2 },
+	Medieval = { Distance = 1250000, Rebirth = 5 },
+	Industrial = { Distance = 5250000, Rebirth = 7 },
+	Neon = { Distance = 105250000, Rebirth = 10 },
 }
 
 -- Get distance requirement for a world
@@ -179,7 +179,7 @@ Stats.StarConfig = {
 }
 
 -- Track/Gate configuration
-Stats.GateProximityDistance = 10 -- studs - distance player must be from gate to start track
+Stats.GateProximityDistance = 30 -- studs - distance player must be from gate to start track
 Stats.MaxGateIndex = 3 -- Gates are numbered 0 to MaxGateIndex (0, 1, 2, 3)
 
 -- Calculate multipliers from pets, rebirths, and boosts

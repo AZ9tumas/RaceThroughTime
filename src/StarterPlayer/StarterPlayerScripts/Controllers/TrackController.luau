@@ -1159,12 +1159,14 @@ function TrackController:KnitStart()
 		Log(string.format("Early world unlock! New world: %s, distance: %.2f", unlockData.newWorld or "unknown", unlockData.distanceTraveled or 0))
 		
 		-- Show notification
-		local NotificationService = Knit.GetService("NotificationService")
-		NotificationService:SendNotification(
-			"🌍 World Unlocked!",
-			NotificationService.Category.Success,
-			3
-		)
+		local NotificationController = Knit.GetController("NotificationController")
+		if NotificationController then
+			NotificationController:ShowNotification(
+				"🌍 World Unlocked!",
+				NotificationController.Category.Success,
+				3
+			)
+		end
 		
 		-- The TrackEnded signal will also be fired, which will handle cleanup
 	end)

@@ -376,31 +376,20 @@ function DataService:GetProfile(player: Player)
 	return PlayerProfiles[player]
 end
 
--- Valid world names that exist in the game configuration
-local VALID_WORLDS = { "Main", "StoneAge" } -- Add more worlds here as they are added to the game
-
--- Get the player's current world (defaults to "Main" if not set or invalid)
+-- Get the player's current world (defaults to nil)
 function DataService:GetPlayerWorld(player: Player): string
 	local profile = PlayerProfiles[player]
 	if not profile then
-		return "Main"
+		return nil
 	end
 	
 	local progression = profile.Data.Progression
 	if not progression or not progression.CurrentWorld then
-		return "Main"
+		return nil
 	end
 	
 	-- Validate that the world name exists in game configuration
-	local worldName = progression.CurrentWorld
-	for _, validWorld in ipairs(VALID_WORLDS) do
-		if worldName == validWorld then
-			return worldName
-		end
-	end
-	
-	-- Invalid world, return default
-	return "Main"
+	return progression.CurrentWorld
 end
 
 -- Deep copy helper function for creating read-only data copies

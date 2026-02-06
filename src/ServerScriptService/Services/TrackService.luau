@@ -488,7 +488,32 @@ end
 -- Handle early world unlock during track run (simplified - reuses cancel track run)
 local function HandleEarlyWorldUnlock(player: Player, trackData, nextWorld: string, estimatedDistance: number)
 	Log(string.format("Player %s early world unlock! Distance: %.2f, new world: %s", player.Name, estimatedDistance, nextWorld))
+
+	-- Fire early world unlock signal to client (for client-side handling)
+	TrackService.Client.EarlyWorldUnlock:Fire(player, {
+		distanceTraveled = estimatedDistance,
+		newWorld = nextWorld,
+	})
+
+	-- Teleport player to new world
+	local WorldService = Knit.GetService("WorldService")
+	WorldService:GiveWorldToPlayer(player, nextWorld)
 	
+	-- Reuse the cancel track run logic to clean up the track run
+	TrackService.Client:CancelTrackRun(player)
+
+	-- Open up the white frame (Loading screen handler) here for 1s
+	local LoadingScreenService = Knit.GetService("LoadingScreenService")
+	LoadingScreenService:ShowLoadingScreen(player, 2.5)
+
+	warn("Here.")
+
+	WorldService:TeleportPlayerToWorld(player, nextWorld)
+
+	task.delay(1.5, function()
+		LoadingScreenService:HideLoadingScreen(player)
+	end)
+
 	-- Send notification about world unlock first
 	local NotificationService = Knit.GetService("NotificationService")
 	NotificationService:SendNotification(
@@ -498,26 +523,9 @@ local function HandleEarlyWorldUnlock(player: Player, trackData, nextWorld: stri
 		5
 	)
 	
-	-- Fire early world unlock signal to client (for client-side handling)
-	TrackService.Client.EarlyWorldUnlock:Fire(player, {
-		distanceTraveled = estimatedDistance,
-		newWorld = nextWorld,
-	})
-	
-	-- Reuse the cancel track run logic to clean up the track run
-	TrackService.Client:CancelTrackRun(player)
-	
-	-- Teleport player to new world (this also unlocks the world)
-	local WorldService = Knit.GetService("WorldService")
-	WorldService:GiveWorldToPlayer(player, nextWorld)
-	
-	-- Start stars in new world after a short delay
-	task.delay(1, function()
-		if player and player:IsDescendantOf(Players) then
-			local StarService = Knit.GetService("StarService")
-			StarService:Start(player)
-		end
-	end)
+	-- Update client data
+	local DataService = Knit.GetService("DataService")
+	DataService:FireDataReady(player)
 end
 
 -- Check if a player is currently on the track
@@ -697,6 +705,8 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	-- Get player's current world and data
 	local DataService = Knit.GetService("DataService")
 	local worldName = DataService:GetPlayerWorld(player)
+
+	warn("WORLD : ", worldName)
 	
 	-- Get world-specific stats
 	local fuelConsumptionRate = Stats.FuelConsumptionRate[worldName] or Stats.FuelConsumptionRate.Main
@@ -711,6 +721,7 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	
 	-- Find the closest gate and check proximity
 	local closestGate, gatePosition, gateDistance = FindClosestGate(playerPosition, worldName)
+	warn(closestGate, gatePosition, gateDistance)
 	if not closestGate or not gatePosition then
 		return false, "No gates found"
 	end
