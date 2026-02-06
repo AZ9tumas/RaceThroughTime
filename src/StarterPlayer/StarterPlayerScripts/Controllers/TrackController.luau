@@ -1153,6 +1153,21 @@ function TrackController:KnitStart()
 	
 	TrackService.TrackStarted:Connect(OnTrackStarted)
 	TrackService.TrackEnded:Connect(OnTrackEnded)
+	
+	-- Listen for early world unlock during track run
+	TrackService.EarlyWorldUnlock:Connect(function(unlockData)
+		Log(string.format("Early world unlock! New world: %s, distance: %.2f", unlockData.newWorld or "unknown", unlockData.distanceTraveled or 0))
+		
+		-- Show notification
+		local NotificationService = Knit.GetService("NotificationService")
+		NotificationService:SendNotification(
+			"🌍 World Unlocked!",
+			NotificationService.Category.Success,
+			3
+		)
+		
+		-- The TrackEnded signal will also be fired, which will handle cleanup
+	end)
 
 	closeButton.MouseButton1Click:Connect(function()
 		resultsFrame.Parent.Visible = false
