@@ -387,12 +387,12 @@ function TradeService:RequestTrade(player: Player, targetPlayer: Player): (boole
 	
 	-- Check if the requesting player has trading enabled
 	if not IsTradingEnabledForPlayer(player) then
-		return false, "You have trading disabled"
+		return false, "Trading is disabled, change this in settings"
 	end
 	
 	-- Check if the target player has trading enabled
 	if not IsTradingEnabledForPlayer(targetPlayer) then
-		return false, "Target player has trading disabled"
+		return false, "That player has disabled trading"
 	end
 	
 	-- Check if either player is already in a trade

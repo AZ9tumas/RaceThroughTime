@@ -365,12 +365,25 @@ local function OnTradeStarted(otherPlayer: Player)
 	-- Clear pending requests since we're now in a trade
 	PendingRequests = {}
 	
+	-- Disable frames during trade (no exceptions)
+	local UIFramesController = Knit.GetController("UIFramesController")
+	if UIFramesController then
+		UIFramesController:DisableFrames(true)
+	end
+	
 	ShowNotification(string.format("Trade started with %s", otherPlayer.Name), "Success")
 	TradeController.OnTradeStarted:Fire(otherPlayer)
 end
 
 local function OnTradeEnded(reason: string)
 	CurrentTradeState = nil
+	
+	-- Re-enable frames when trade ends
+	local UIFramesController = Knit.GetController("UIFramesController")
+	if UIFramesController then
+		UIFramesController:DisableFrames(false)
+	end
+	
 	TradeController.OnTradeEnded:Fire(reason)
 end
 
@@ -424,6 +437,12 @@ end
 
 local function OnTradeCompleted(receivedPets: any)
 	CurrentTradeState = nil
+	
+	-- Re-enable frames when trade completes
+	local UIFramesController = Knit.GetController("UIFramesController")
+	if UIFramesController then
+		UIFramesController:DisableFrames(false)
+	end
 	
 	local petCount = receivedPets and #receivedPets or 0
 	if petCount > 0 then
