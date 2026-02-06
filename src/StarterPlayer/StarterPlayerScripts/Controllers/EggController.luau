@@ -75,39 +75,29 @@ local function FormatPercentage(probability: number): string
 end
 
 local function UpdateBillboardAdornees(worldName: string)
-	local eggShopStands = GetEggShopStands(worldName)
+	local worldFolder = Workspace:FindFirstChild(worldName)
+	if not worldFolder then
+		return
+	end
+	
+	local eggShopStands = worldFolder:FindFirstChild("EggShop_Stands")
 	if not eggShopStands then
 		return
 	end
-
-	local eggRootsByName: { [string]: BasePart } = {}
-	for _, child in ipairs(eggShopStands:GetChildren()) do
-		if child:IsA("Model") then
-			local eggName = child.Name
-			local eggRoot = child:FindFirstChild("EggRoot")
-			if eggRoot and eggRoot:IsA("BasePart") then
-				eggRootsByName[eggName] = eggRoot
-				eggRootsByName[eggName:lower()] = eggRoot
-			end
-		end
+	
+	local standardEgg = eggShopStands:FindFirstChild("StandardEgg")
+	if not standardEgg then
+		return
 	end
-
-	for _, gui in ipairs(PlayerGui:GetChildren()) do
-		if gui:IsA("BillboardGui") then
-			local guiName = gui.Name
-			local matchedEggRoot: BasePart? = nil
-
-			for eggName, eggRoot in pairs(eggRootsByName) do
-				if guiName:lower():find(eggName:lower()) then
-					matchedEggRoot = eggRoot
-					break
-				end
-			end
-
-			if matchedEggRoot then
-				gui.Adornee = matchedEggRoot
-			end
-		end
+	
+	local eggRoot = standardEgg:FindFirstChild("EggRoot")
+	if not eggRoot then
+		return
+	end
+	
+	local uiHatchBoard = PlayerGui:FindFirstChild("UI_HatchBoard")
+	if uiHatchBoard and uiHatchBoard:IsA("BillboardGui") then
+		uiHatchBoard.Adornee = eggRoot
 	end
 end
 
