@@ -24,12 +24,17 @@ function SettingsService.Client:UpdateSetting(player, settingKey: string, value:
 	end
 	local DataService = Knit.GetService("DataService")
 	DataService:Update(player, "Meta", function(meta)
+		meta = meta or {}
 		if not meta.Settings then
 			meta.Settings = {}
 		end
 		meta.Settings[settingKey] = value
 		return meta
 	end)
+	
+	-- Fire data ready to update client
+	DataService:FireDataReady(player)
+	
 	return true, nil
 end
 

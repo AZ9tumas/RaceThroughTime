@@ -146,16 +146,24 @@ end
 
 function SettingsController:KnitStart()
 	local UIController = Knit.GetController("UIController")
-	local data = UIController:GetData()
-	if data and data.Meta and data.Meta.Settings then
-		for key, value in pairs(data.Meta.Settings) do
-			if localSettings[key] ~= nil then
-				localSettings[key] = value
+	local DataService = Knit.GetService("DataService")
+
+	local function updateSettings(data)
+		if data and data.Meta and data.Meta.Settings then
+			for key, value in pairs(data.Meta.Settings) do
+				if localSettings[key] ~= nil then
+					localSettings[key] = value
+				end
 			end
 		end
+		UpdateAllButtons()
+		ApplyAllSettings()
 	end
-	UpdateAllButtons()
-	ApplyAllSettings()
+
+	DataService.DataReady:Connect(updateSettings)
+
+	local data = UIController:GetData()
+	updateSettings(data)
 
 	_connections["SettingsButton"] = settingsButton.MouseButton1Click:Connect(function()
 		self:ToggleSettingsMenu()
