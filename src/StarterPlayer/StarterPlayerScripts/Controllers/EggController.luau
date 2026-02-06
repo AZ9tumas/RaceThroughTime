@@ -80,27 +80,32 @@ local function UpdateBillboardAdornees(worldName: string)
 		return
 	end
 
+	local eggRootsByName: { [string]: BasePart } = {}
 	for _, child in ipairs(eggShopStands:GetChildren()) do
 		if child:IsA("Model") then
 			local eggName = child.Name
 			local eggRoot = child:FindFirstChild("EggRoot")
-			if eggRoot then
-				local billboardGui = PlayerGui:FindFirstChild(eggName .. "_HatchBoard")
-				if not billboardGui then
-					billboardGui = PlayerGui:FindFirstChild("EggHatchBoard_" .. eggName)
-				end
-				if not billboardGui then
-					for _, gui in ipairs(PlayerGui:GetChildren()) do
-						if gui:IsA("BillboardGui") and gui.Name:find(eggName) then
-							billboardGui = gui
-							break
-						end
-					end
-				end
+			if eggRoot and eggRoot:IsA("BasePart") then
+				eggRootsByName[eggName] = eggRoot
+				eggRootsByName[eggName:lower()] = eggRoot
+			end
+		end
+	end
 
-				if billboardGui and billboardGui:IsA("BillboardGui") then
-					billboardGui.Adornee = eggRoot
+	for _, gui in ipairs(PlayerGui:GetChildren()) do
+		if gui:IsA("BillboardGui") then
+			local guiName = gui.Name
+			local matchedEggRoot: BasePart? = nil
+
+			for eggName, eggRoot in pairs(eggRootsByName) do
+				if guiName:lower():find(eggName:lower()) then
+					matchedEggRoot = eggRoot
+					break
 				end
+			end
+
+			if matchedEggRoot then
+				gui.Adornee = matchedEggRoot
 			end
 		end
 	end
