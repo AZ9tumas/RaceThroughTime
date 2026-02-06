@@ -485,81 +485,11 @@ local function EstimateDistanceTraveled(trackData): number
 	end
 end
 
--- Handle early world unlock during track run
+-- Handle early world unlock during track run (simplified - reuses cancel track run)
 local function HandleEarlyWorldUnlock(player: Player, trackData, nextWorld: string, estimatedDistance: number)
-	local userId = player.UserId
-	local worldName = trackData.worldName
+	Log(string.format("Player %s early world unlock! Distance: %.2f, new world: %s", player.Name, estimatedDistance, nextWorld))
 	
-	-- Get rebirth cash multiplier
-	local DataService = Knit.GetService("DataService")
-	local playerStats = DataService:Get(player, "Stats")
-	local rebirthLevel = (playerStats and playerStats.Rebirths) or 0
-	local rebirthCashMultiplier = RebirthStats.CalculateTotalCashMultiplier(rebirthLevel)
-	
-	-- Calculate cash earned based on WorldCashRate (per 1000 distance) with rebirth multiplier
-	local cashRate = Stats.WorldCashRates[worldName] or Stats.WorldCashRates.Main
-	local baseCashEarned = (estimatedDistance / 1000) * cashRate
-	local cashEarned = math.floor(baseCashEarned * rebirthCashMultiplier)
-	
-	Log(string.format("Player %s early world unlock! Distance: %.2f, cash: %d, new world: %s", player.Name, estimatedDistance, cashEarned, nextWorld))
-	
-	-- Update cash immediately
-	if cashEarned > 0 then
-		DataService:Update(player, "Currencies", function(currencies)
-			currencies.Cash = (currencies.Cash or 0) + cashEarned
-			return currencies
-		end)
-	end
-	
-	-- Update MaxDistanceTraveled if this run beat the previous record
-	DataService:Update(player, "Stats", function(stats)
-		local currentMax = stats.MaxDistanceTraveled or 0
-		if estimatedDistance > currentMax then
-			stats.MaxDistanceTraveled = estimatedDistance
-		end
-		return stats
-	end)
-	
-	-- Clean up body movers
-	local character = player.Character
-	if character then
-		CleanupBodyMovers(character)
-	end
-	
-	-- Cleanup pet body movers
-	CleanupPetBodyMoversForTrack(player)
-	
-	-- Clear player from track
-	PlayersOnTrack[userId] = nil
-	
-	-- Stop lap tracking
-	local LapService = Knit.GetService("LapService")
-	LapService:StopTracking(player)
-	
-	-- Clear all stars
-	local StarService = Knit.GetService("StarService")
-	StarService:RemoveAllStarsForPlayer(player)
-	
-	-- Fire early world unlock signal to client
-	TrackService.Client.EarlyWorldUnlock:Fire(player, {
-		distanceTraveled = estimatedDistance,
-		cashEarned = cashEarned,
-		newWorld = nextWorld,
-	})
-	
-	-- Fire track ended signal to client (so it can clean up properly)
-	TrackService.Client.TrackEnded:Fire(player, {
-		distanceTraveled = estimatedDistance,
-		cashEarned = cashEarned,
-		earlyUnlock = true,
-		newWorld = nextWorld,
-	})
-	
-	-- Unlock the new world for the player (this also teleports and updates client data)
-	local WorldService = Knit.GetService("WorldService")
-	WorldService:GiveWorldToPlayer(player, nextWorld)
-	
-	-- Send notification about world unlock
+	-- Send notification about world unlock first
 	local NotificationService = Knit.GetService("NotificationService")
 	NotificationService:SendNotification(
 		player,
@@ -568,14 +498,26 @@ local function HandleEarlyWorldUnlock(player: Player, trackData, nextWorld: stri
 		5
 	)
 	
-	-- Start stars in new world
+	-- Fire early world unlock signal to client (for client-side handling)
+	TrackService.Client.EarlyWorldUnlock:Fire(player, {
+		distanceTraveled = estimatedDistance,
+		newWorld = nextWorld,
+	})
+	
+	-- Reuse the cancel track run logic to clean up the track run
+	TrackService.Client:CancelTrackRun(player)
+	
+	-- Teleport player to new world (this also unlocks the world)
+	local WorldService = Knit.GetService("WorldService")
+	WorldService:GiveWorldToPlayer(player, nextWorld)
+	
+	-- Start stars in new world after a short delay
 	task.delay(1, function()
 		if player and player:IsDescendantOf(Players) then
+			local StarService = Knit.GetService("StarService")
 			StarService:Start(player)
 		end
 	end)
-	
-	DataService:FireDataReady(player)
 end
 
 -- Check if a player is currently on the track
