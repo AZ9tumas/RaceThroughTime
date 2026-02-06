@@ -20,7 +20,6 @@ local CurrentWorldName = "Main"
 local EggConnections: { [string]: { RBXScriptConnection } } = {}
 local AutoHatchActive: { [string]: boolean } = {}
 local IsHatching = false
-local IsSettingUp = false
 
 local MULTI_HATCH_COUNT = 4
 local AUTO_HATCH_DELAY = 0.5
@@ -33,41 +32,12 @@ local function GetCurrentWorld(): string
 	return CurrentWorldName
 end
 
-local function GetEggShopStands(worldName: string): Folder?
-	local worldFolder = Workspace:FindFirstChild(worldName)
-	if not worldFolder then
-		return nil
-	end
-	return worldFolder:FindFirstChild("EggShop_Stands")
-end
-
 local function GetEggConfig(eggName: string): { Cost: number, Currency: string, Pets: { { Pet: string, Probability: number } } }?
 	return Stats.Eggs[eggName]
 end
 
 local function GetPetConfig(petName: string): { Name: string, Rarity: string? }?
 	return Stats.Pets[petName]
-end
-
-local function ClearEggConnections(eggName: string?)
-	if eggName then
-		local connections = EggConnections[eggName]
-		if connections then
-			for _, conn in ipairs(connections) do
-				conn:Disconnect()
-			end
-			EggConnections[eggName] = nil
-		end
-		AutoHatchActive[eggName] = false
-	else
-		for name, connections in pairs(EggConnections) do
-			for _, conn in ipairs(connections) do
-				conn:Disconnect()
-			end
-			EggConnections[name] = nil
-			AutoHatchActive[name] = false
-		end
-	end
 end
 
 local function FormatPercentage(probability: number): string
@@ -242,104 +212,72 @@ local function ToggleAutoHatch(eggName: string)
 	end
 end
 
-local function SetupEggStand(eggStandModel: Model, eggName: string)
-	ClearEggConnections(eggName)
-	EggConnections[eggName] = {}
-
-	local eggRoot = eggStandModel:FindFirstChild("EggRoot")
-	if not eggRoot then
-		return
-	end
-
-	local uiHatchBoard = eggRoot:FindFirstChild("UI_HatchBoard")
+local function SetupUIButtons()
+	local uiHatchBoard = PlayerGui:FindFirstChild("UI_HatchBoard")
 	if not uiHatchBoard then
 		return
 	end
-
+	
 	local container = uiHatchBoard:FindFirstChild("Container")
 	if not container then
 		return
 	end
-
+	
 	local mainBoard = container:FindFirstChild("MainBoard")
 	if not mainBoard then
 		return
 	end
-
+	
 	local actionButtons = mainBoard:FindFirstChild("ActionButtons")
 	if not actionButtons then
 		return
 	end
-
-	SetupPetTemplates(mainBoard, eggName)
-
+	
+	local eggName = "StandardEgg"
+	EggConnections[eggName] = {}
+	
 	local btnHatch = actionButtons:FindFirstChild("Btn_Hatch")
 	if btnHatch and btnHatch:IsA("TextButton") then
 		local conn = btnHatch.MouseButton1Click:Connect(function()
 			PurchaseSingleEgg(eggName)
 		end)
 		table.insert(EggConnections[eggName], conn)
-
+		
 		if UIFramesController then
 			UIFramesController:SetupButtonAnimation(btnHatch)
 		end
 	end
-
+	
 	local btnMulti = actionButtons:FindFirstChild("Btn_Multi")
 	if btnMulti and btnMulti:IsA("TextButton") then
 		local conn = btnMulti.MouseButton1Click:Connect(function()
 			PurchaseMultipleEggs(eggName, MULTI_HATCH_COUNT)
 		end)
 		table.insert(EggConnections[eggName], conn)
-
+		
 		if UIFramesController then
 			UIFramesController:SetupButtonAnimation(btnMulti)
 		end
 	end
-
+	
 	local btnAuto = actionButtons:FindFirstChild("Btn_Auto")
 	if btnAuto and btnAuto:IsA("TextButton") then
 		local conn = btnAuto.MouseButton1Click:Connect(function()
 			ToggleAutoHatch(eggName)
 		end)
 		table.insert(EggConnections[eggName], conn)
-
+		
 		if UIFramesController then
 			UIFramesController:SetupButtonAnimation(btnAuto)
 		end
 	end
-end
-
-local function SetupEggStandsForWorld(worldName: string)
-	if IsSettingUp then
-		return
-	end
-	IsSettingUp = true
-
-	ClearEggConnections()
-
-	UpdateBillboardAdornees(worldName)
-
-	local eggShopStands = GetEggShopStands(worldName)
-	if not eggShopStands then
-		IsSettingUp = false
-		return
-	end
-
-	for _, child in ipairs(eggShopStands:GetChildren()) do
-		if child:IsA("Model") then
-			local eggName = child.Name
-			SetupEggStand(child, eggName)
-		end
-	end
-
-	IsSettingUp = false
+	
+	SetupPetTemplates(mainBoard, eggName)
 end
 
 function EggController:UpdateEggUI()
 	local worldName = GetCurrentWorld()
 	UpdateBillboardAdornees(worldName)
-	SetupEggStandsForWorld(worldName)
 end
 
 function EggController:OnWorldChanged(newWorldName: string)
@@ -349,20 +287,20 @@ function EggController:OnWorldChanged(newWorldName: string)
 
 	CurrentWorldName = newWorldName
 	UpdateBillboardAdornees(newWorldName)
-	SetupEggStandsForWorld(newWorldName)
 end
 
 function EggController:KnitInit()
+	UIFramesController = Knit.GetController("UIFramesController")
+	SetupUIButtons()
 end
 
 function EggController:KnitStart()
 	EggService = Knit.GetService("EggService")
 	DataService = Knit.GetService("DataService")
 	NotificationController = Knit.GetController("NotificationController")
-	UIFramesController = Knit.GetController("UIFramesController")
 
 	CurrentWorldName = GetCurrentWorld()
-	SetupEggStandsForWorld(CurrentWorldName)
+	UpdateBillboardAdornees(CurrentWorldName)
 
 	DataService.DataReady:Connect(function(_newData)
 		self:UpdateEggUI()
