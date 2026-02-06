@@ -372,6 +372,8 @@ end
 	@return (boolean, string?) - Success status and error message if failed
 ]]
 function TradeService:RequestTrade(player: Player, targetPlayer: Player): (boolean, string?)
+	local NotificationService = Knit.GetService("NotificationService")
+	
 	-- Validate players
 	if not player or not targetPlayer then
 		return false, "Invalid players"
@@ -424,6 +426,9 @@ function TradeService:RequestTrade(player: Player, targetPlayer: Player): (boole
 	
 	-- Notify target player
 	TradeService.Client.TradeRequestReceived:Fire(targetPlayer, player)
+	
+	-- Send notifications (server handles all notifications)
+	NotificationService:SendNotification(player, string.format("Trade request sent to %s", targetPlayer.Name), NotificationService.Category.Success)
 	
 	Log(string.format("%s requested trade with %s", player.Name, targetPlayer.Name))
 	

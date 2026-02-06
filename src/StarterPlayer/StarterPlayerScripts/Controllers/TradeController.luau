@@ -101,6 +101,8 @@ end
 
 --[[
 	Request a trade with another player.
+	Client awaits server response, frames remain enabled until trade officially starts.
+	Server handles all notifications (success/failure).
 	
 	@param targetPlayer Player - The player to trade with
 	@return boolean - Whether the request was sent successfully
@@ -113,9 +115,9 @@ function TradeController:RequestTrade(targetPlayer: Player): boolean
 	
 	local success, errorMsg = TradeService:RequestTrade(targetPlayer)
 	
-	if success then
-		ShowNotification(string.format("Trade request sent to %s", targetPlayer.Name), "Success")
-	else
+	-- Server handles notifications for trade requests
+	-- Client only shows error if the request fails to send
+	if not success then
 		ShowNotification(errorMsg or "Failed to send trade request", "Error")
 	end
 	

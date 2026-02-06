@@ -294,7 +294,23 @@ function TradeUIController:UpdatePlayerList()
 end
 
 function TradeUIController:TogglePlayerList()
+	local TradeController = Knit.GetController("TradeController")
 	local UIFramesController = Knit.GetController("UIFramesController")
+	
+	-- If trade is in progress, show the TradeMain window instead of player list
+	-- This allows players to get back to the trade UI if they lost the window
+	if TradeController:IsInTrade() then
+		local isTradeMainOpen = UIFramesController:IsFrameOpen("TradeMain")
+		if not isTradeMainOpen then
+			local tradeState = TradeController:GetTradeState()
+			if tradeState and tradeState.OtherPlayer then
+				self:ShowTradeUI(tradeState.OtherPlayer)
+			end
+		end
+		return
+	end
+	
+	-- Normal behavior: toggle player list when not in trade
 	local wasOpen = UIFramesController:IsFrameOpen("TradePlayerList")
 	
 	if wasOpen then
