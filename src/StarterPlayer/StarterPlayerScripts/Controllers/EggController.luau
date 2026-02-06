@@ -10,6 +10,7 @@ local EggController = Knit.CreateController({
 })
 
 local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
 local EggService = nil
 local DataService = nil
 local NotificationController = nil
@@ -71,6 +72,38 @@ end
 
 local function FormatPercentage(probability: number): string
 	return string.format("%.1f%%", probability * 100)
+end
+
+local function UpdateBillboardAdornees(worldName: string)
+	local eggShopStands = GetEggShopStands(worldName)
+	if not eggShopStands then
+		return
+	end
+
+	for _, child in ipairs(eggShopStands:GetChildren()) do
+		if child:IsA("Model") then
+			local eggName = child.Name
+			local eggRoot = child:FindFirstChild("EggRoot")
+			if eggRoot then
+				local billboardGui = PlayerGui:FindFirstChild(eggName .. "_HatchBoard")
+				if not billboardGui then
+					billboardGui = PlayerGui:FindFirstChild("EggHatchBoard_" .. eggName)
+				end
+				if not billboardGui then
+					for _, gui in ipairs(PlayerGui:GetChildren()) do
+						if gui:IsA("BillboardGui") and gui.Name:find(eggName) then
+							billboardGui = gui
+							break
+						end
+					end
+				end
+
+				if billboardGui and billboardGui:IsA("BillboardGui") then
+					billboardGui.Adornee = eggRoot
+				end
+			end
+		end
+	end
 end
 
 local function SetupPetTemplates(mainBoard: Frame, eggName: string)
@@ -290,6 +323,8 @@ local function SetupEggStandsForWorld(worldName: string)
 
 	ClearEggConnections()
 
+	UpdateBillboardAdornees(worldName)
+
 	local eggShopStands = GetEggShopStands(worldName)
 	if not eggShopStands then
 		IsSettingUp = false
@@ -308,6 +343,7 @@ end
 
 function EggController:UpdateEggUI()
 	local worldName = GetCurrentWorld()
+	UpdateBillboardAdornees(worldName)
 	SetupEggStandsForWorld(worldName)
 end
 
@@ -317,6 +353,7 @@ function EggController:OnWorldChanged(newWorldName: string)
 	end
 
 	CurrentWorldName = newWorldName
+	UpdateBillboardAdornees(newWorldName)
 	SetupEggStandsForWorld(newWorldName)
 end
 
