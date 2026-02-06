@@ -92,33 +92,6 @@ local function IsPlayerInRange(): boolean
 	return distance <= AUTO_HATCH_RANGE
 end
 
-local function UpdateBillboardAdornees(worldName: string)
-	local worldFolder = Workspace:FindFirstChild(worldName)
-	if not worldFolder then
-		return
-	end
-	
-	local eggShopStands = worldFolder:FindFirstChild("EggShop_Stands")
-	if not eggShopStands then
-		return
-	end
-	
-	local standardEgg = eggShopStands:FindFirstChild("StandardEgg")
-	if not standardEgg then
-		return
-	end
-	
-	local eggRoot = standardEgg:FindFirstChild("EggRoot")
-	if not eggRoot then
-		return
-	end
-	
-	local uiHatchBoard = PlayerGui:FindFirstChild("UI_HatchBoard")
-	if uiHatchBoard and uiHatchBoard:IsA("BillboardGui") then
-		uiHatchBoard.Adornee = eggRoot
-	end
-end
-
 local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 	local eggConfig = GetEggConfig(eggName)
 	if not eggConfig or not eggConfig.Pets then
@@ -422,7 +395,6 @@ local function SetupUIButtons()
 	local btnHatch = actionButtons:FindFirstChild("Btn_Hatch")
 	if btnHatch and btnHatch:IsA("TextButton") then
 		local conn = btnHatch.MouseButton1Click:Connect(function()
-			print("hi")
 			PurchaseSingleEgg(eggName)
 		end)
 		table.insert(EggConnections[eggName], conn)
@@ -455,8 +427,6 @@ local function SetupUIButtons()
 			UIFramesController:SetupButtonAnimation(btnAuto)
 		end
 	end
-
-	warn("Buttons setup: ", EggConnections)
 	
 	SetupPetTemplates(mainBoard, eggName)
 end
