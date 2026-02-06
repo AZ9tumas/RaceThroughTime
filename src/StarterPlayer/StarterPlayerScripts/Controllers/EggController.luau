@@ -44,33 +44,6 @@ local function FormatPercentage(probability: number): string
 	return string.format("%.1f%%", probability * 100)
 end
 
-local function UpdateBillboardAdornees(worldName: string)
-	local worldFolder = Workspace:FindFirstChild(worldName)
-	if not worldFolder then
-		return
-	end
-	
-	local eggShopStands = worldFolder:FindFirstChild("EggShop_Stands")
-	if not eggShopStands then
-		return
-	end
-	
-	local standardEgg = eggShopStands:FindFirstChild("StandardEgg")
-	if not standardEgg then
-		return
-	end
-	
-	local eggRoot = standardEgg:FindFirstChild("EggRoot")
-	if not eggRoot then
-		return
-	end
-	
-	local uiHatchBoard = PlayerGui:FindFirstChild("UI_HatchBoard")
-	if uiHatchBoard and uiHatchBoard:IsA("BillboardGui") then
-		uiHatchBoard.Adornee = eggRoot
-	end
-end
-
 local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 	local eggConfig = GetEggConfig(eggName)
 	if not eggConfig or not eggConfig.Pets then
@@ -234,11 +207,18 @@ local function SetupUIButtons()
 	end
 	
 	local eggName = "StandardEgg"
-	EggConnections[eggName] = {}
+	EggConnections[eggName] = EggConnections[eggName] or {}
+
+	for i, _conn in pairs(EggConnections[eggName]) do
+		if _conn and _conn.Disconnect then
+			_conn:Disconnect()
+		end
+	end
 	
 	local btnHatch = actionButtons:FindFirstChild("Btn_Hatch")
 	if btnHatch and btnHatch:IsA("TextButton") then
 		local conn = btnHatch.MouseButton1Click:Connect(function()
+			print("hi")
 			PurchaseSingleEgg(eggName)
 		end)
 		table.insert(EggConnections[eggName], conn)
@@ -271,8 +251,39 @@ local function SetupUIButtons()
 			UIFramesController:SetupButtonAnimation(btnAuto)
 		end
 	end
+
+	warn("Buttons setup: ", EggConnections)
 	
 	SetupPetTemplates(mainBoard, eggName)
+end
+
+local function UpdateBillboardAdornees(worldName: string)
+	local worldFolder = Workspace:FindFirstChild(worldName)
+	if not worldFolder then
+		return
+	end
+	
+	local eggShopStands = worldFolder:FindFirstChild("EggShop_Stands")
+	if not eggShopStands then
+		return
+	end
+	
+	local standardEgg = eggShopStands:FindFirstChild("StandardEgg")
+	if not standardEgg then
+		return
+	end
+	
+	local eggRoot = standardEgg:FindFirstChild("EggRoot")
+	if not eggRoot then
+		return
+	end
+	
+	local uiHatchBoard = PlayerGui:FindFirstChild("UI_HatchBoard")
+	if uiHatchBoard and uiHatchBoard:IsA("BillboardGui") then
+		uiHatchBoard.Adornee = eggRoot
+	end
+
+	SetupUIButtons()
 end
 
 function EggController:UpdateEggUI()

@@ -148,7 +148,7 @@ function RebirthStats.CalculateTotalMultiplier(rebirthLevel: number): number
 		end
 	end
 	
-	return totalBonus
+	return totalBonus > 0 and 1 + totalBonus or 0
 end
 
 -- Get progress toward next rebirth
