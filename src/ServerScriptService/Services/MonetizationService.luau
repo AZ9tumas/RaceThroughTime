@@ -30,6 +30,8 @@ local function CheckAllGamePasses(player: Player)
 			PlayerGamePasses[userId][gamePassName] = false
 		end
 	end
+
+	print(PlayerGamePasses[userId], "monetization, assets")
 end
 
 function MonetizationService:HasGamePass(player: Player, gamePassName: string): boolean
@@ -49,6 +51,14 @@ end
 
 function MonetizationService.Client:HasGamePassClient(player: Player, gamePassName: string): boolean
 	return MonetizationService:HasGamePass(player, gamePassName)
+end
+
+function MonetizationService.Client:GetPlayerPasses(player: Player)
+	local userId = player.UserId
+	if not PlayerGamePasses[userId] then
+		CheckAllGamePasses(player)
+	end
+	return PlayerGamePasses[userId] or {}
 end
 
 function MonetizationService:KnitInit()
@@ -74,13 +84,11 @@ function MonetizationService:KnitInit()
 end
 
 function MonetizationService:KnitStart()
-	local DataService = Knit.GetService("DataService")
-	
-	DataService.DataReady:Connect(function(player)
-		if not PlayerGamePasses[player.UserId] then
-			CheckAllGamePasses(player)
-		end
-	end)
+	for _, player in ipairs(Players:GetPlayers()) do
+		task.spawn(CheckAllGamePasses, player)
+	end
+
+	Players.PlayerAdded:Connect(CheckAllGamePasses)
 end
 
 return MonetizationService

@@ -43,7 +43,7 @@ function InventoryUIController:UpdatePetsInventory()
 	local MonetizationController = Knit.GetController("MonetizationController")
 	local data = UIController:GetData()
 	local petInventory = data.Inventory.PetInventory
-	local equippedPets = data.Inventory.EquippedPets
+	local equippedPets = data.Inventory.EquippedPets or {}
 	local equippedSet = {}
 	for _, petIndex in ipairs(equippedPets) do
 		equippedSet[petIndex] = true
@@ -53,7 +53,7 @@ function InventoryUIController:UpdatePetsInventory()
 	if MonetizationController:HasGamePass(MonetizationController.Passes.ExtraPets) then
 		maxEquipped = maxEquipped + statsM.ExtraPetsBonus
 	end
-	inventoryPetCount.Count.Text = #petInventory .. "/" .. maxEquipped
+	inventoryPetCount.Count.Text = #equippedPets .. "/" .. maxEquipped
 	for index, petData in ipairs(petInventory) do
 		local petFrame = inventoryPetTemplate:Clone()
 		petFrame.Name = "Pet_" .. index
