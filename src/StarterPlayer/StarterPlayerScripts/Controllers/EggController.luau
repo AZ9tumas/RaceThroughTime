@@ -18,6 +18,7 @@ local NotificationController = nil
 local UIFramesController = nil
 local UIController = nil
 local InventoryUIController = nil
+local MonetizationController = nil
 
 local eggHatchScreenGui: ScreenGui = nil
 local eggHatchDimmer: Frame = nil
@@ -148,40 +149,65 @@ local function PurchaseSingleEgg(eggName: string)
 	if EggHatchAnimation.IsPlaying() then return end
 	
 	IsHatching = true
-	UIFramesController:DisableFrames(true)
-	eggviewport.Parent.Visible = true
 	
-	EggHatchAnimation.PlayHatch(
-		eggviewport,
-		eggName,
-		eggHatchDimmer,
-		eggHatchFlash,
-		function(animationSuccess)
-			if animationSuccess then
-				EggService:RequestPurchaseEgg(eggName):andThen(function(success, errorMsg, petInfo)
-					if success and petInfo then
-						local data = UIController:GetData()
-						if not data.Inventory.PetInventory then
-							data.Inventory.PetInventory = {}
-						end
-						table.insert(data.Inventory.PetInventory, petInfo)
-						if InventoryUIController then
-							InventoryUIController:UpdatePetsInventory()
-						end
-					elseif not success and NotificationController then
-						NotificationController:ShowNotification(
-							errorMsg or "Failed to purchase egg",
-							NotificationController.Category.Warning,
-							3
-						)
-					end
-				end)
+	local hasInstantHatch = MonetizationController and MonetizationController:HasInstantHatch()
+	
+	if hasInstantHatch then
+		EggService:RequestPurchaseEgg(eggName):andThen(function(success, errorMsg, petInfo)
+			if success and petInfo then
+				local data = UIController:GetData()
+				if not data.Inventory.PetInventory then
+					data.Inventory.PetInventory = {}
+				end
+				table.insert(data.Inventory.PetInventory, petInfo)
+				if InventoryUIController then
+					InventoryUIController:UpdatePetsInventory()
+				end
+			elseif not success and NotificationController then
+				NotificationController:ShowNotification(
+					errorMsg or "Failed to purchase egg",
+					NotificationController.Category.Warning,
+					3
+				)
 			end
-			eggviewport.Parent.Visible = false
-			UIFramesController:DisableFrames(false)
 			IsHatching = false
-		end
-	)
+		end)
+	else
+		UIFramesController:DisableFrames(true)
+		eggviewport.Parent.Visible = true
+		
+		EggHatchAnimation.PlayHatch(
+			eggviewport,
+			eggName,
+			eggHatchDimmer,
+			eggHatchFlash,
+			function(animationSuccess)
+				if animationSuccess then
+					EggService:RequestPurchaseEgg(eggName):andThen(function(success, errorMsg, petInfo)
+						if success and petInfo then
+							local data = UIController:GetData()
+							if not data.Inventory.PetInventory then
+								data.Inventory.PetInventory = {}
+							end
+							table.insert(data.Inventory.PetInventory, petInfo)
+							if InventoryUIController then
+								InventoryUIController:UpdatePetsInventory()
+							end
+						elseif not success and NotificationController then
+							NotificationController:ShowNotification(
+								errorMsg or "Failed to purchase egg",
+								NotificationController.Category.Warning,
+								3
+							)
+						end
+					end)
+				end
+				eggviewport.Parent.Visible = false
+				UIFramesController:DisableFrames(false)
+				IsHatching = false
+			end
+		)
+	end
 end
 
 local function PurchaseMultipleEggs(eggName: string, count: number)
@@ -191,6 +217,53 @@ local function PurchaseMultipleEggs(eggName: string, count: number)
 	IsHatching = true
 	local purchasedCount = 0
 	local currentIndex = 0
+	
+	local hasInstantHatch = MonetizationController and MonetizationController:HasInstantHatch()
+	
+	if hasInstantHatch then
+		local function PurchaseNextInstant()
+			currentIndex = currentIndex + 1
+			if currentIndex > count then
+				if purchasedCount > 0 and NotificationController then
+					NotificationController:ShowNotification(
+						string.format("Hatched %d eggs!", purchasedCount),
+						NotificationController.Category.Success,
+						3
+					)
+				end
+				IsHatching = false
+				return
+			end
+			
+			EggService:RequestPurchaseEgg(eggName):andThen(function(success, _errorMsg, petInfo)
+				if success and petInfo then
+					purchasedCount = purchasedCount + 1
+					local data = UIController:GetData()
+					if not data.Inventory.PetInventory then
+						data.Inventory.PetInventory = {}
+					end
+					table.insert(data.Inventory.PetInventory, petInfo)
+					if InventoryUIController then
+						InventoryUIController:UpdatePetsInventory()
+					end
+					task.wait(0.05)
+					PurchaseNextInstant()
+				else
+					if purchasedCount > 0 and NotificationController then
+						NotificationController:ShowNotification(
+							string.format("Hatched %d eggs!", purchasedCount),
+							NotificationController.Category.Success,
+							3
+						)
+					end
+					IsHatching = false
+				end
+			end)
+		end
+		
+		PurchaseNextInstant()
+		return
+	end
 	
 	local function HatchNext()
 		currentIndex = currentIndex + 1
@@ -273,6 +346,8 @@ local function StartAutoHatch(eggName: string)
 	end
 
 	AutoHatchActive[eggName] = true
+	
+	local hasInstantHatch = MonetizationController and MonetizationController:HasInstantHatch()
 
 	task.spawn(function()
 		while AutoHatchActive[eggName] do
@@ -288,54 +363,80 @@ local function StartAutoHatch(eggName: string)
 				break
 			end
 			
-			if IsHatching or EggHatchAnimation.IsPlaying() then
+			if IsHatching or (not hasInstantHatch and EggHatchAnimation.IsPlaying()) then
 				task.wait(AUTO_HATCH_DELAY)
 				continue
 			end
 
 			IsHatching = true
-			UIFramesController:DisableFrames(true)
-			eggviewport.Parent.Visible = true
-			
 			local continueAutoHatch = true
 			
-			EggHatchAnimation.PlayHatch(
-				eggviewport,
-				eggName,
-				eggHatchDimmer,
-				eggHatchFlash,
-				function(animationSuccess)
-					if animationSuccess then
-						EggService:RequestPurchaseEgg(eggName):andThen(function(success, _errorMsg, petInfo)
-							if success and petInfo then
-								local data = UIController:GetData()
-								if not data.Inventory.PetInventory then
-									data.Inventory.PetInventory = {}
-								end
-								table.insert(data.Inventory.PetInventory, petInfo)
-								if InventoryUIController then
-									InventoryUIController:UpdatePetsInventory()
-								end
-							else
-								continueAutoHatch = false
-								AutoHatchActive[eggName] = false
-								if NotificationController then
-									NotificationController:ShowNotification(
-										"Auto-hatch stopped: Not enough currency",
-										NotificationController.Category.Warning,
-										3
-									)
-								end
-							end
-						end)
+			if hasInstantHatch then
+				EggService:RequestPurchaseEgg(eggName):andThen(function(success, _errorMsg, petInfo)
+					if success and petInfo then
+						local data = UIController:GetData()
+						if not data.Inventory.PetInventory then
+							data.Inventory.PetInventory = {}
+						end
+						table.insert(data.Inventory.PetInventory, petInfo)
+						if InventoryUIController then
+							InventoryUIController:UpdatePetsInventory()
+						end
 					else
 						continueAutoHatch = false
+						AutoHatchActive[eggName] = false
+						if NotificationController then
+							NotificationController:ShowNotification(
+								"Auto-hatch stopped: Not enough currency",
+								NotificationController.Category.Warning,
+								3
+							)
+						end
 					end
-					eggviewport.Parent.Visible = false
-					UIFramesController:DisableFrames(false)
 					IsHatching = false
-				end
-			)
+				end)
+			else
+				UIFramesController:DisableFrames(true)
+				eggviewport.Parent.Visible = true
+				
+				EggHatchAnimation.PlayHatch(
+					eggviewport,
+					eggName,
+					eggHatchDimmer,
+					eggHatchFlash,
+					function(animationSuccess)
+						if animationSuccess then
+							EggService:RequestPurchaseEgg(eggName):andThen(function(success, _errorMsg, petInfo)
+								if success and petInfo then
+									local data = UIController:GetData()
+									if not data.Inventory.PetInventory then
+										data.Inventory.PetInventory = {}
+									end
+									table.insert(data.Inventory.PetInventory, petInfo)
+									if InventoryUIController then
+										InventoryUIController:UpdatePetsInventory()
+									end
+								else
+									continueAutoHatch = false
+									AutoHatchActive[eggName] = false
+									if NotificationController then
+										NotificationController:ShowNotification(
+											"Auto-hatch stopped: Not enough currency",
+											NotificationController.Category.Warning,
+											3
+										)
+									end
+								end
+							end)
+						else
+							continueAutoHatch = false
+						end
+						eggviewport.Parent.Visible = false
+						UIFramesController:DisableFrames(false)
+						IsHatching = false
+					end
+				)
+			end
 			
 			while IsHatching do
 				task.wait(0.1)
@@ -345,7 +446,7 @@ local function StartAutoHatch(eggName: string)
 				break
 			end
 
-			task.wait(AUTO_HATCH_DELAY)
+			task.wait(hasInstantHatch and 0.1 or AUTO_HATCH_DELAY)
 		end
 	end)
 end
@@ -478,6 +579,7 @@ function EggController:KnitInit()
 	UIFramesController = Knit.GetController("UIFramesController")
 	UIController = Knit.GetController("UIController")
 	InventoryUIController = Knit.GetController("InventoryUIController")
+	MonetizationController = Knit.GetController("MonetizationController")
 	
 	eggHatchScreenGui = PlayerGui:WaitForChild("EggHatchScreen")
 	eggHatchDimmer = eggHatchScreenGui:WaitForChild("Dimmer")

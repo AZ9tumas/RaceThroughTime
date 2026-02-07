@@ -44,6 +44,14 @@ function MonetizationService:GetStarsMultiplier(player: Player): number
 	return 1
 end
 
+function MonetizationService:HasInstantHatch(player: Player): boolean
+	return self:HasGamePass(player, "InstantHatch")
+end
+
+function MonetizationService.Client:HasGamePassClient(player: Player, gamePassName: string): boolean
+	return MonetizationService:HasGamePass(player, gamePassName)
+end
+
 function MonetizationService:KnitInit()
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamePassId, wasPurchased)
 		if wasPurchased then

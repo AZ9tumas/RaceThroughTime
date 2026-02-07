@@ -57,6 +57,7 @@ function ShopUIController:KnitStart()
 	local UIController = Knit.GetController("UIController")
 	local InventoryUIController = Knit.GetController("InventoryUIController")
 	local UIFramesController = Knit.GetController("UIFramesController")
+	local MonetizationController = Knit.GetController("MonetizationController")
 
 	_connections["ShopButton"] = shopButton.MouseButton1Click:Connect(function()
 		self:ToggleShop()
@@ -70,32 +71,50 @@ function ShopUIController:KnitStart()
 		if EggHatchAnimation.IsPlaying() then
 			return
 		end
-		UIFramesController:DisableFrames(true)
-		eggviewport.Parent.Visible = true
-		EggHatchAnimation.PlayHatch(
-			eggviewport,
-			"StandardEgg",
-			eggHatchDimmer,
-			eggHatchFlash,
-			function(animationSuccess)
-				if animationSuccess then
-					EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, petInfo)
-						if success and petInfo then
-							local data = UIController:GetData()
-							if not data.Inventory.PetInventory then
-								data.Inventory.PetInventory = {}
-							end
-							table.insert(data.Inventory.PetInventory, petInfo)
-							if InventoryUIController then
-								InventoryUIController:UpdatePetsInventory()
-							end
-						end
-					end)
+		
+		local hasInstantHatch = MonetizationController and MonetizationController:HasInstantHatch()
+		
+		if hasInstantHatch then
+			EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, petInfo)
+				if success and petInfo then
+					local data = UIController:GetData()
+					if not data.Inventory.PetInventory then
+						data.Inventory.PetInventory = {}
+					end
+					table.insert(data.Inventory.PetInventory, petInfo)
+					if InventoryUIController then
+						InventoryUIController:UpdatePetsInventory()
+					end
 				end
-				eggviewport.Parent.Visible = false
-				UIFramesController:DisableFrames(false)
-			end
-		)
+			end)
+		else
+			UIFramesController:DisableFrames(true)
+			eggviewport.Parent.Visible = true
+			EggHatchAnimation.PlayHatch(
+				eggviewport,
+				"StandardEgg",
+				eggHatchDimmer,
+				eggHatchFlash,
+				function(animationSuccess)
+					if animationSuccess then
+						EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, petInfo)
+							if success and petInfo then
+								local data = UIController:GetData()
+								if not data.Inventory.PetInventory then
+									data.Inventory.PetInventory = {}
+								end
+								table.insert(data.Inventory.PetInventory, petInfo)
+								if InventoryUIController then
+									InventoryUIController:UpdatePetsInventory()
+								end
+							end
+						end)
+					end
+					eggviewport.Parent.Visible = false
+					UIFramesController:DisableFrames(false)
+				end
+			)
+		end
 	end)
 end
 
