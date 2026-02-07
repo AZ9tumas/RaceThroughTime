@@ -1,4 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local GamePassIds = require(ReplicatedStorage.GamePassIds)
@@ -11,6 +13,7 @@ local MonetizationController = Knit.CreateController({
 MonetizationController.Passes = GamePassIds
 
 local MonetizationService
+local Player = Players.LocalPlayer
 
 function MonetizationController:HasGamePass(gamePassName: string): boolean
 	if not MonetizationService then
@@ -25,6 +28,13 @@ function MonetizationController:HasGamePass(gamePassName: string): boolean
 		return result
 	end
 	return false
+end
+
+function MonetizationController:PromptPurchase(gamePassName: string)
+	local gamePassId = GamePassIds[gamePassName]
+	if gamePassId then
+		MarketplaceService:PromptGamePassPurchase(Player, gamePassId)
+	end
 end
 
 function MonetizationController:KnitInit()
