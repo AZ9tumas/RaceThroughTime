@@ -1,10 +1,14 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local GamePassIds = require(ReplicatedStorage.GamePassIds)
 
 local MonetizationController = Knit.CreateController({
 	Name = "MonetizationController",
 })
+
+-- Expose Passes table for easy access
+MonetizationController.Passes = GamePassIds
 
 local MonetizationService
 
@@ -21,14 +25,6 @@ function MonetizationController:HasGamePass(gamePassName: string): boolean
 		return result
 	end
 	return false
-end
-
-function MonetizationController:HasInstantHatch(): boolean
-	return self:HasGamePass("InstantHatch")
-end
-
-function MonetizationController:HasDoubleStars(): boolean
-	return self:HasGamePass("DoubleStars")
 end
 
 function MonetizationController:KnitInit()

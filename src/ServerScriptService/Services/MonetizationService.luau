@@ -10,6 +10,9 @@ local MonetizationService = Knit.CreateService({
 	Client = {},
 })
 
+-- Expose Passes table for both server and client usage
+MonetizationService.Passes = GamePassIds
+
 local PlayerGamePasses = {}
 
 local function CheckAllGamePasses(player: Player)
@@ -42,10 +45,6 @@ function MonetizationService:GetStarsMultiplier(player: Player): number
 		return 2
 	end
 	return 1
-end
-
-function MonetizationService:HasInstantHatch(player: Player): boolean
-	return self:HasGamePass(player, "InstantHatch")
 end
 
 function MonetizationService.Client:HasGamePassClient(player: Player, gamePassName: string): boolean
