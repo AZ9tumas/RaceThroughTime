@@ -40,6 +40,7 @@ function InventoryUIController:UpdatePetsInventory()
 	end
 	local UIController = Knit.GetController("UIController")
 	local PetModalUIController = Knit.GetController("PetModalUIController")
+	local MonetizationController = Knit.GetController("MonetizationController")
 	local data = UIController:GetData()
 	local petInventory = data.Inventory.PetInventory
 	local equippedPets = data.Inventory.EquippedPets
@@ -47,7 +48,12 @@ function InventoryUIController:UpdatePetsInventory()
 	for _, petIndex in ipairs(equippedPets) do
 		equippedSet[petIndex] = true
 	end
-	inventoryPetCount.Count.Text = #petInventory .. "/3"
+	-- Calculate max equipped pets based on gamepass
+	local maxEquipped = statsM.MaxEquippedPets
+	if MonetizationController:HasGamePass(MonetizationController.Passes.ExtraPets) then
+		maxEquipped = maxEquipped + statsM.ExtraPetsBonus
+	end
+	inventoryPetCount.Count.Text = #petInventory .. "/" .. maxEquipped
 	for index, petData in ipairs(petInventory) do
 		local petFrame = inventoryPetTemplate:Clone()
 		petFrame.Name = "Pet_" .. index

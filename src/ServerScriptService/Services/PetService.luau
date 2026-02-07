@@ -355,9 +355,14 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 	end
 	
 	-- Check max equipped limit
+	local MonetizationService = Knit.GetService("MonetizationService")
+	local maxPets = Stats.MaxEquippedPets
+	if MonetizationService:HasGamePass(player, MonetizationService.Passes.ExtraPets) then
+		maxPets = maxPets + Stats.ExtraPetsBonus
+	end
 	local equippedCount = inventory.EquippedPets and #inventory.EquippedPets or 0
-	if equippedCount >= Stats.MaxEquippedPets then
-		NotificationService:SendNotification(player, string.format("Maximum %d pets can be equipped.", Stats.MaxEquippedPets), NotificationService.Category.Warning)
+	if equippedCount >= maxPets then
+		NotificationService:SendNotification(player, string.format("Maximum %d pets can be equipped.", maxPets), NotificationService.Category.Warning)
 		return false, "Max equipped"
 	end
 	

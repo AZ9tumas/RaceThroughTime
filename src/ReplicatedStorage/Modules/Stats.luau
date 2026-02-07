@@ -387,6 +387,9 @@ end
 -- Maximum number of pets that can be equipped at once
 Stats.MaxEquippedPets = 3
 
+-- Extra pets bonus from gamepass (added to MaxEquippedPets)
+Stats.ExtraPetsBonus = 3
+
 -- Calculate other bonuses (VIP, dev products, boosts, etc.)
 -- Returns 0 by default - to be extended with VIP and dev product bonuses
 -- @return number - Total other bonus (0 if no special bonuses active)
