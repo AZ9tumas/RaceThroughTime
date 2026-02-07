@@ -26,6 +26,7 @@ local PlayerStarsFolder = nil
 local ProximityCheckConnection = nil -- RenderStep connection for proximity checking
 local CollectionDebounce = {} -- [starId] = true (prevents double collection)
 local ActiveCollectionTweens = {} -- [starId] = { Tween: Tween, OriginalSize: Vector3, OriginalTransparency: number }
+local HasMagnetGamepass = false -- Cached Magnet gamepass ownership (checked once)
 
 -- Helper function for logging
 local function Log(message: string)
@@ -294,7 +295,8 @@ local function CheckProximityCollection()
 	if not rootPart then return end
 	
 	local playerPosition = rootPart.Position
-	local collectionRadius = Stats.MinStarCollectionPlayerRadius
+	-- Use Magnet range if gamepass owned, otherwise use base range
+	local collectionRadius = HasMagnetGamepass and Stats.MagnetStarRange or Stats.MinStarCollectionPlayerRadius
 	
 	-- Check each star for proximity
 	for starId, starData in pairs(SpawnedStars) do
@@ -348,6 +350,12 @@ function StarController:KnitStart()
 	StarService.SpawnStars:Connect(OnSpawnStars)
 	StarService.RemoveStar:Connect(OnRemoveStar)
 	StarService.RemoveAllStars:Connect(OnRemoveAllStars)
+
+	-- Check Magnet gamepass ownership once (cached to avoid repeated checks)
+	local MonetizationController = Knit.GetController("MonetizationController")
+	if MonetizationController then
+		HasMagnetGamepass = MonetizationController:HasGamePass(MonetizationController.Passes.Magnet)
+	end
 
 	-- Start proximity checking loop using Heartbeat (runs every frame)
 	ProximityCheckConnection = RunService.Heartbeat:Connect(CheckProximityCollection)

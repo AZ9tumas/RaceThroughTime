@@ -25,6 +25,9 @@ export type Pet = {
 -- Player star collection radius (studs) - player can collect stars within this distance
 Stats.MaxStarCollectionPlayerRadius = 30
 Stats.MinStarCollectionPlayerRadius = 20
+
+-- Magnet gamepass increased star range (15% more = 20 * 1.15 = 23)
+Stats.MagnetStarRange = 23
 Stats.BaseSpeed = 35 -- base track speed
 
 -- pet max limits
