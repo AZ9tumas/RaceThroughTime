@@ -298,7 +298,12 @@ function StarService:CollectStarServer(player: Player, starId: string): number?
 		return nil
 	end
 	
-	local starEquivalent = Stats.StarEquivalents[starInfo.StarName] or 0
+	local baseStarEquivalent = Stats.StarEquivalents[starInfo.StarName] or 0
+	
+	-- Apply 2x stars gamepass multiplier if owned
+	local MonetizationService = Knit.GetService("MonetizationService")
+	local starsMultiplier = MonetizationService:GetStarsMultiplier(player)
+	local starEquivalent = baseStarEquivalent * starsMultiplier
 	
 	-- Remove star from tracker
 	local starInfoList = UniversalTracker[userId]
@@ -371,7 +376,12 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 		}, 2)
 	else
 		-- Regular star - get the star equivalent value
-		local starEquivalent = Stats.StarEquivalents[starInfo.StarName] or 0
+		local baseStarEquivalent = Stats.StarEquivalents[starInfo.StarName] or 0
+		
+		-- Apply 2x stars gamepass multiplier if owned
+		local MonetizationService = Knit.GetService("MonetizationService")
+		local starsMultiplier = MonetizationService:GetStarsMultiplier(player)
+		local starEquivalent = baseStarEquivalent * starsMultiplier
 
 		-- Star collection verified - add star equivalents to player's Stars count
 		DataService:Update(player, "Stats", function(currentStats)
