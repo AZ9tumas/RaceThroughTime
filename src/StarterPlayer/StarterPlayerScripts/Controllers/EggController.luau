@@ -334,6 +334,16 @@ local function StartAutoHatch(eggName: string)
 		return
 	end
 	
+	-- Check if player owns AutoHatch gamepass
+	local hasAutoHatchPass = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.AutoHatch)
+	if not hasAutoHatchPass then
+		-- Prompt purchase
+		if MonetizationController then
+			MonetizationController:PromptPurchase("AutoHatch")
+		end
+		return
+	end
+	
 	if not IsPlayerInRange() then
 		if NotificationController then
 			NotificationController:ShowNotification(

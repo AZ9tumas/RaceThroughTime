@@ -14,9 +14,17 @@ MonetizationController.Passes = GamePassIds
 
 local MonetizationService
 local OwnedPasses = {}
+local Player = Players.LocalPlayer
 
 function MonetizationController:HasGamePass(gamePassName: string): boolean
 	return OwnedPasses[gamePassName] or false
+end
+
+function MonetizationController:PromptPurchase(gamePassName: string)
+	local gamePassId = GamePassIds[gamePassName]
+	if gamePassId then
+		MarketplaceService:PromptGamePassPurchase(Player, gamePassId)
+	end
 end
 
 function MonetizationController:KnitInit()

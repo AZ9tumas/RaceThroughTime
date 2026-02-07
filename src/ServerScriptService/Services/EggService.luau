@@ -226,6 +226,12 @@ function EggService.Client:GetEggInfo(player: Player, eggType: string): { Cost: 
 	}
 end
 
+-- Validate if player can use auto-hatch (requires AutoHatch gamepass)
+function EggService.Client:CanUseAutoHatch(player: Player): boolean
+	local MonetizationService = Knit.GetService("MonetizationService")
+	return MonetizationService:HasGamePass(player, "AutoHatch")
+end
+
 -- Knit lifecycle
 function EggService:KnitInit()
 	Log("EggService initialized")
