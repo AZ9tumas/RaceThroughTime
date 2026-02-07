@@ -300,6 +300,7 @@ function UIFramesController:GetCurrentOpenFrame(): FrameName?
 end
 
 function UIFramesController:DisableFrames(disabled: boolean)
+	warn("Disable frames")
 	State.FramesDisabled = disabled
 	
 	if disabled then
@@ -314,6 +315,7 @@ function UIFramesController:DisableFrames(disabled: boolean)
 end
 
 function UIFramesController:DisableFramesWithExceptions(disabled: boolean, exceptions: { FrameName })
+	warn("Disable frames with exceptions: " .. tostring(exceptions))
 	State.FramesDisabled = disabled
 	
 	local exceptionsSet: { [FrameName]: boolean } = {}

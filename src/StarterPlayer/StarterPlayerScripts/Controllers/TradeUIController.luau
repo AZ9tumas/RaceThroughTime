@@ -236,6 +236,7 @@ local function UpdateRemoteTradePets()
 end
 
 function TradeUIController:ShowTradeUI(otherPlayer: Player)
+	warn("Showing trade UI with " .. otherPlayer.Name)
 	local UIFramesController = Knit.GetController("UIFramesController")
 	UIFramesController:OpenFrame("TradeMain")
 	tradeOfferedPets = {}
@@ -299,15 +300,23 @@ function TradeUIController:TogglePlayerList()
 	
 	-- If trade is in progress, show the TradeMain window instead of player list
 	-- This allows players to get back to the trade UI if they lost the window
-	if TradeController:IsInTrade() then
+	local TradeService = Knit.GetService("TradeService")
+	
+	local isintrade: boolean = false
+	TradeService:IsInTrade(player):andThen(function(res: boolean)
+		isintrade = res
+	end)
+	
+	if isintrade then
+		--[[
 		local isTradeMainOpen = UIFramesController:IsFrameOpen("TradeMain")
 		if not isTradeMainOpen then
 			local tradeState = TradeController:GetTradeState()
 			if tradeState and tradeState.OtherPlayer then
 				self:ShowTradeUI(tradeState.OtherPlayer)
 			end
-		end
-		return
+		end]]
+		return TradeController:Cancel()
 	end
 	
 	-- Normal behavior: toggle player list when not in trade

@@ -82,11 +82,14 @@ end
 
 -- Check if a player has trading enabled
 local function IsTradingEnabledForPlayer(player: Player): boolean
+	local DataService = Knit.GetService("DataService")
+	local meta = DataService:Get(player, "Meta")
+	
 	-- Default to true if not set
-	if PlayerTradingEnabled[player.UserId] == nil then
-		return true
+	if meta and meta.Settings and meta.Settings.TradingEnabled ~= nil then
+		return meta.Settings.TradingEnabled
 	end
-	return PlayerTradingEnabled[player.UserId]
+	return true
 end
 
 -- Check if a player is currently in an active trade
@@ -649,7 +652,8 @@ function TradeService:LockIn(player: Player): (boolean, string?)
 	end
 	
 	local isP1 = IsPlayer1(session, player)
-	local alreadyLockedIn = isP1 and session.Player1LockedIn or session.Player2LockedIn
+	local alreadyLockedIn = session.Player1LockedIn
+	if not isP1 then alreadyLockedIn = session.Player2LockedIn end
 	
 	if alreadyLockedIn then
 		return false, "You have already locked in"
@@ -683,19 +687,24 @@ end
 ]]
 function TradeService:AcceptTrade(player: Player): (boolean, string?)
 	local session = GetTradeSession(player)
+	warn(session)
 	if not session then
+		warn("Not in trade")
 		return false, "You are not in a trade"
 	end
 	
 	-- Both players must be locked in before accepting
 	if not session.Player1LockedIn or not session.Player2LockedIn then
+		warn("Both players must lock in")
 		return false, "Both players must lock in before accepting"
 	end
 	
 	local isP1 = IsPlayer1(session, player)
-	local alreadyAccepted = isP1 and session.Player1Accepted or session.Player2Accepted
+	local alreadyAccepted = session.Player1Accepted
+	if not isP1 then alreadyAccepted = session.Player2Accepted end
 	
 	if alreadyAccepted then
+		warn("You have already accepted")
 		return false, "You have already accepted"
 	end
 	
@@ -808,7 +817,12 @@ end
 
 -- Client methods (called by client)
 function TradeService.Client:RequestTrade(player: Player, targetPlayer: Player): (boolean, string?)
-	return TradeService:RequestTrade(player, targetPlayer)
+	local stats, msg = TradeService:RequestTrade(player, targetPlayer)
+	local NotificationService = Knit.GetService("NotificationService")
+
+	if msg then
+		NotificationService:SendNotification(player, msg, NotificationService.Category[stats and "Success" or "Error"])
+	end
 end
 
 function TradeService.Client:AcceptTradeRequest(player: Player, fromPlayer: Player): (boolean, string?)
@@ -834,7 +848,10 @@ function TradeService.Client:LockIn(player: Player): (boolean, string?)
 end
 
 function TradeService.Client:AcceptTrade(player: Player): (boolean, string?)
-	return TradeService:AcceptTrade(player)
+	local status, msg = TradeService:AcceptTrade(player)
+	warn(status, msg)
+
+	return status, msg
 end
 
 function TradeService.Client:DeclineTrade(player: Player): (boolean, string?)
@@ -857,6 +874,10 @@ function TradeService.Client:SetTradingEnabled(player: Player, enabled: boolean)
 	return TradeService:SetTradingEnabled(player, enabled)
 end
 
+function TradeService.Client:IsInTrade(player: Player): boolean
+	return IsInTrade(player)
+end
+
 --[[
 	Set whether trading is enabled for a player.
 	
@@ -864,7 +885,16 @@ end
 	@param enabled boolean - Whether trading should be enabled
 ]]
 function TradeService:SetTradingEnabled(player: Player, enabled: boolean)
-	PlayerTradingEnabled[player.UserId] = enabled
+	local DataService = Knit.GetService("DataService")
+	DataService:Update(player, "Meta", function(meta)
+		meta = meta or {}
+		if not meta.Settings then
+			meta.Settings = {}
+		end
+		meta.Settings.TradingEnabled = enabled
+		return meta
+	end)
+	
 	Log(string.format("%s set trading enabled: %s", player.Name, tostring(enabled)))
 end
 

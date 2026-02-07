@@ -244,10 +244,15 @@ function TradeController:Accept(): boolean
 		return false
 	end
 	
-	local success, errorMsg = TradeService:AcceptTrade()
+	local success, errorMsg
+	TradeService:AcceptTrade():andThen(function(success_, errorMsg_)
+		success = success_
+		errorMsg = errorMsg_
+	end)
 	
 	if not success then
-		ShowNotification(errorMsg or "Failed to accept trade", "Error")
+		warn(success, errorMsg)
+		if errorMsg then ShowNotification(errorMsg, "Error") end
 	end
 	
 	return success
@@ -370,7 +375,7 @@ local function OnTradeStarted(otherPlayer: Player)
 	-- Disable frames during trade (no exceptions)
 	local UIFramesController = Knit.GetController("UIFramesController")
 	if UIFramesController then
-		UIFramesController:DisableFrames(true)
+		UIFramesController:DisableFramesWithExceptions(true, { "TradeMain" })
 	end
 	
 	ShowNotification(string.format("Trade started with %s", otherPlayer.Name), "Success")
