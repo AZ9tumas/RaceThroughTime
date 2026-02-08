@@ -78,6 +78,12 @@ function MonetizationService.Client:SetDebugGamePass(player: Player, gamePassNam
 		end
 		DebugOverrides[userId][gamePassName] = owned
 		print(string.format("[MonetizationService]: Debug override set for %s - %s = %s", player.Name, gamePassName, tostring(owned)))
+		
+		-- Fire DataReady to update client UI when gamepass ownership changes
+		local DataService = Knit.GetService("DataService")
+		if DataService then
+			DataService:FireDataReady(player)
+		end
 	end
 end
 
@@ -92,6 +98,12 @@ function MonetizationService:KnitInit()
 			for gamePassName, id in pairs(GamePassIds) do
 				if id == gamePassId then
 					PlayerGamePasses[userId][gamePassName] = true
+					
+					-- Fire DataReady to update client UI when gamepass is purchased
+					local DataService = Knit.GetService("DataService")
+					if DataService then
+						DataService:FireDataReady(player)
+					end
 					break
 				end
 			end
