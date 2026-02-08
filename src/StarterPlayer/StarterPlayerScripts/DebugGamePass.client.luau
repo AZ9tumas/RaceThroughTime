@@ -39,6 +39,7 @@ local function CreateDebugUI()
 	screenGui.Name = "DebugGamePassUI"
 	screenGui.ResetOnSpawn = false
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.DisplayOrder = 1000
 	screenGui.Parent = PlayerGui
 
 	-- Main Frame
@@ -48,6 +49,9 @@ local function CreateDebugUI()
 	mainFrame.Position = UDim2.new(1, -290, 0, 10)
 	mainFrame.BackgroundColor3 = UI_COLORS.Background
 	mainFrame.BorderSizePixel = 0
+	mainFrame.ZIndex = 1000
+	mainFrame.Active = true
+	mainFrame.Draggable = true
 	mainFrame.Parent = screenGui
 
 	-- Corner rounding
