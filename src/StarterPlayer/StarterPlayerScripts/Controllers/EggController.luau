@@ -150,7 +150,7 @@ local function PurchaseSingleEgg(eggName: string)
 	
 	IsHatching = true
 	
-	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.InstantHatch)
+	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass("InstantHatch")
 	
 	if hasInstantHatch then
 		EggService:RequestPurchaseEgg(eggName):andThen(function(success, errorMsg, petInfo)
@@ -218,7 +218,7 @@ local function PurchaseMultipleEggs(eggName: string, count: number)
 	local purchasedCount = 0
 	local currentIndex = 0
 	
-	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.InstantHatch)
+	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass("InstantHatch")
 	
 	if hasInstantHatch then
 		local function PurchaseNextInstant()
@@ -335,7 +335,7 @@ local function StartAutoHatch(eggName: string)
 	end
 	
 	-- Check if player owns AutoHatch gamepass
-	local hasAutoHatchPass = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.AutoHatch)
+	local hasAutoHatchPass = MonetizationController and MonetizationController:HasGamePass("AutoHatch")
 	if not hasAutoHatchPass then
 		-- Prompt purchase
 		if MonetizationController then
@@ -357,7 +357,7 @@ local function StartAutoHatch(eggName: string)
 
 	AutoHatchActive[eggName] = true
 	
-	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.InstantHatch)
+	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass("InstantHatch")
 
 	task.spawn(function()
 		while AutoHatchActive[eggName] do

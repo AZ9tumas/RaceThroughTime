@@ -72,7 +72,7 @@ function ShopUIController:KnitStart()
 			return
 		end
 		
-		local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.InstantHatch)
+		local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass("InstantHatch")
 		
 		if hasInstantHatch then
 			EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, petInfo)

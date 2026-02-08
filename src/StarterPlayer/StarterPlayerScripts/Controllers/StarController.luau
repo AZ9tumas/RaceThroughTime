@@ -300,7 +300,7 @@ local function CheckProximityCollection()
 	
 	local playerPosition = rootPart.Position
 	-- Use Magnet range if gamepass owned, otherwise use base range
-	local hasMagnet = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.Magnet)
+	local hasMagnet = MonetizationController and MonetizationController:HasGamePass("Magnet")
 	local collectionRadius = hasMagnet and Stats.MagnetStarRange or Stats.MinStarCollectionPlayerRadius
 	
 	-- Check each star for proximity
@@ -308,7 +308,7 @@ local function CheckProximityCollection()
 		if CollectionDebounce[starId] then continue end
 		
 		-- Skip VIP stars if player doesn't have VIP gamepass
-		local hasVIP = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.VIP)
+		local hasVIP = MonetizationController and MonetizationController:HasGamePass("VIP")
 		if starData.IsVIP and not hasVIP then
 			continue
 		end

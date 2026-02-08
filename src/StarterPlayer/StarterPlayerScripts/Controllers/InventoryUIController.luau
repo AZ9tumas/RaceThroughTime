@@ -19,6 +19,7 @@ local DefaultBackgroundColorNotSelected = Color3.fromRGB(20, 23, 28)
 local petsButton: TextButton
 local inventoryMainFrame: Frame
 local inventoryPetCount: TextLabel
+local inventoryItemCount: TextLabel
 local inventoryScrollingFrame: ScrollingFrame
 local inventoryPetTemplate: Frame
 local inventoryCloseButton: TextButton
@@ -50,7 +51,8 @@ function InventoryUIController:UpdatePetsInventory()
 	end
 	-- Calculate max equipped pets based on gamepass
 	local maxEquipped = statsM.MaxEquippedPets
-	if MonetizationController:HasGamePass(MonetizationController.Passes.ExtraPets) then
+	warn(MonetizationController:HasGamePass("ExtraPets"), "ExtraPets")
+	if MonetizationController:HasGamePass("ExtraPets") then
 		maxEquipped = maxEquipped + statsM.ExtraPetsBonus
 	end
 	inventoryPetCount.Count.Text = #equippedPets .. "/" .. maxEquipped
@@ -132,6 +134,7 @@ function InventoryUIController:KnitInit()
 	petsButton = leftPanel:WaitForChild("PetsButton")
 	inventoryMainFrame = uiInventory:WaitForChild("MainFrame")
 	inventoryPetCount = inventoryMainFrame:WaitForChild("PetCount")
+	inventoryItemCount = inventoryMainFrame:WaitForChild("ItemCount")
 	inventoryScrollingFrame = inventoryMainFrame:WaitForChild("ScrollingFrame")
 	inventoryPetTemplate = inventoryScrollingFrame:WaitForChild("UIGridLayout"):WaitForChild("Template")
 	inventoryCloseButton = inventoryMainFrame:WaitForChild("CloseButton")

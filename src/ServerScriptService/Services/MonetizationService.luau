@@ -40,8 +40,8 @@ function MonetizationService:HasGamePass(player: Player, gamePassName: string): 
 	local userId = player.UserId
 	
 	-- In Studio, check debug overrides first
-	if RunService:IsStudio() and DebugOverrides[userId] and DebugOverrides[userId][gamePassName] ~= nil then
-		return DebugOverrides[userId][gamePassName]
+	if RunService:IsStudio() and DebugOverrides[userId] then
+		return DebugOverrides[userId][gamePassName] or false
 	end
 	
 	if not PlayerGamePasses[userId] then
@@ -77,7 +77,7 @@ function MonetizationService.Client:SetDebugGamePass(player: Player, gamePassNam
 			DebugOverrides[userId] = {}
 		end
 		DebugOverrides[userId][gamePassName] = owned
-		print(string.format("[MonetizationService]: Debug override set for %s - %s = %s", player.Name, gamePassName, tostring(owned)))
+		print("[MonetizationService]: ", DebugOverrides)
 		
 		-- Fire DataReady to update client UI when gamepass ownership changes
 		local DataService = Knit.GetService("DataService")
@@ -85,6 +85,10 @@ function MonetizationService.Client:SetDebugGamePass(player: Player, gamePassNam
 			DataService:FireDataReady(player)
 		end
 	end
+end
+
+function MonetizationService.Client:IsStudio(player: Player)
+	return RunService:IsStudio()
 end
 
 function MonetizationService:KnitInit()

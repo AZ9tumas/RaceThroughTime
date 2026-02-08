@@ -272,6 +272,8 @@ function UIController:KnitStart()
 		local WorldUIController = Knit.GetController("WorldUIController")
 		local MainBossController = Knit.GetController("MainBossController")
 		local TrackController = Knit.GetController("TrackController")
+		local InventoryUIController = Knit.GetController("InventoryUIController")
+		if InventoryUIController then InventoryUIController:UpdatePetsInventory() end
 		if CurrencyUIController then CurrencyUIController:UpdateAllDisplays() end
 		if DailyRewardsUIController then DailyRewardsUIController:UpdateRewardsStatus() end
 		if ShopUIController then ShopUIController:UpdateShopUI() end
