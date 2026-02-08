@@ -366,6 +366,7 @@ end
 
 -- Find star info by ID in player's tracker (searches both regular and VIP trackers)
 -- Returns starInfo, index, and isVIP (true if found in VIP tracker)
+-- Returns nil, nil, nil if the star is not found in either tracker
 -- Note: Uses player's CurrentWorld attribute for world info if needed
 local function FindStarById(userId: number, starId: string):
 	({ Position: Vector3, ID: string, StarName: string, Index: number, IsVIP: boolean? }?, number?, boolean?)
