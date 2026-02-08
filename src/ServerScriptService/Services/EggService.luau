@@ -58,11 +58,20 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	-- Support both old format (single Pet) and new format (Pets array with probabilities)
 	if eggConfig.Pets and #eggConfig.Pets > 0 then
 		-- New format: select pet based on probability
+		-- Check if player has Luck gamepass for better probabilities
+		local MonetizationService = Knit.GetService("MonetizationService")
+		local hasLuck = MonetizationService:HasGamePass(player, "Luck")
+		
 		local random = math.random()
 		local cumulativeProbability = 0
 		
 		for _, petOption in ipairs(eggConfig.Pets) do
-			cumulativeProbability = cumulativeProbability + petOption.Probability
+			-- Use LuckProbability if player has Luck gamepass and it's defined
+			local probability = petOption.Probability
+			if hasLuck and petOption.LuckProbability then
+				probability = petOption.LuckProbability
+			end
+			cumulativeProbability = cumulativeProbability + probability
 			if random <= cumulativeProbability then
 				petType = petOption.Pet
 				break

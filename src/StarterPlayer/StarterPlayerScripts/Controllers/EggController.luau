@@ -114,6 +114,9 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 		return
 	end
 
+	-- Check if player has Luck gamepass for displaying updated probabilities
+	local hasLuck = MonetizationController and MonetizationController:HasGamePass("Luck")
+
 	for _, child in ipairs(contentFrame:GetChildren()) do
 		if child:IsA("GuiObject") and child.Name ~= "Template" and child ~= gridLayout and not child:IsA("UIGridLayout") then
 			child:Destroy()
@@ -122,7 +125,11 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 
 	for i, petOption in ipairs(eggConfig.Pets) do
 		local petName = petOption.Pet
+		-- Use LuckProbability if player has Luck gamepass and it's defined
 		local probability = petOption.Probability
+		if hasLuck and petOption.LuckProbability then
+			probability = petOption.LuckProbability
+		end
 		local petConfig = GetPetConfig(petName)
 
 		local newTemplate = template:Clone()
