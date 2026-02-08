@@ -327,8 +327,8 @@ Stats.Eggs = {
 		World = "Main",
 		-- Pets array contains possible pets with their spawn probabilities (must sum to 1.0)
 		Pets = {
-			{ Pet = "StandardPet", Probability = 0.70 }, -- 70% chance
-			{ Pet = "StandardPet", Probability = 0.30 }, -- 30% chance (same pet, for testing)
+			{ Pet = "StandardPet", Probability = 0.70, LuckProbability = 0.50, SuperLuckProbability = 0.25 }, -- 70% chance
+			{ Pet = "PremiumPet", Probability = 0.30, LuckProbability = 0.50, SuperLuckProbability = 0.75 }, -- 30% chance (same pet, for testing)
 		},
 	},
 }
