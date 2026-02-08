@@ -709,12 +709,11 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	warn("WORLD : ", worldName)
 	
 	-- Get world-specific stats
-	local fuelConsumptionRate = Stats.FuelConsumptionRate[worldName] or Stats.FuelConsumptionRate.Main
 	local radius = Stats.WorldRadius[worldName] or Stats.WorldRadius.Main
 
 	local fuel = DataService:Get(player, "Stats").Fuel
-	if fuel <= fuelConsumptionRate then 
-		return false, string.format("Not enough fuel, need at least %d fuel/sec", fuelConsumptionRate) 
+	if fuel <= 1 then
+		return false, string.format("Not enough fuel, need at least 1 fuel/sec")
 	end
 	
 	local playerPosition = rootPart.Position

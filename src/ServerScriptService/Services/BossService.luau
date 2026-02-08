@@ -24,11 +24,11 @@ end
 
 function BossService:SpawnBoss()
 	CurrentBossIndex = CurrentBossIndex + 1
-	if CurrentBossIndex > #Stats.BossList then
+	if CurrentBossIndex > #Stats.Bosses then
 		CurrentBossIndex = 1
 	end
 	
-	local bossKey = Stats.BossList[CurrentBossIndex]
+	local bossKey = next(Stats.Bosses, CurrentBossKey) or next(Stats.Bosses)
 	CurrentBossKey = bossKey
 	local bossInfo = Stats.Bosses[bossKey]
 	if not bossInfo then

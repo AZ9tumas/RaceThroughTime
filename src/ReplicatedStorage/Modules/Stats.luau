@@ -49,12 +49,6 @@ Stats.MaxPhysicalSpeed = 130
 -- Base acceleration for track movement (studs/sec²)
 Stats.BaseAcceleration = 20
 
--- World efficiency values for speed calculation
-Stats.WorldEfficiency = {
-	Main = 1,
-	StoneAge = 1.2, -- StoneAge has 20% higher efficiency than Main
-}
-
 -- World radius values for track movement (distance from center)
 Stats.WorldRadius = {
 	Main = 205,
@@ -68,18 +62,12 @@ Stats.ArenaRadius = {
 	StoneAge = 200,
 }
 
-Stats.FuelConsumptionRate = {
-	Main = 1, -- Fuel consumed per second on the Main world
-	StoneAge = 1, -- Slightly higher fuel consumption in StoneAge
-}
-
 Stats.WorldCashRates = {
 	Main = 150, -- Cash per 1000 distance
 	StoneAge = 180, -- 20% higher cash rate in StoneAge
 }
 
 -- Available bosses (single global boss system)
-Stats.BossList = { "ChickenBoss", "MoonBoss", "SunBoss" }
 Stats.Bosses = { 
 	ChickenBoss = { Name = "Chicken Boss", Health = 100 },
 	MoonBoss = { Name = "Moon Boss", Health = 200 },
@@ -209,10 +197,9 @@ end
 -- @return number - The calculated base speed component from fuel
 function Stats.CalculateSpeedFromFuel(fuel: number, worldName: string?): number
 	local baseSpeed = Stats.BaseSpeed
-	local worldEfficiency = Stats.WorldEfficiency[worldName or "Main"] or 1
 	local multipliers = Stats.CalculateMultipliers()
 	
-	local fuelComponent = math.pow(fuel, 0.3) * worldEfficiency
+	local fuelComponent = math.pow(fuel, 0.3)
 	local totalSpeed = (baseSpeed + fuelComponent) * multipliers
 	
 	return totalSpeed
@@ -227,7 +214,6 @@ end
 function Stats.CalculateTrackParameters(fuel: number, worldName: string?, launcherMultiplier: number): 
 	{ initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
 	local world = worldName or "Main"
-	local fuelConsumptionRate = Stats.FuelConsumptionRate[world] or Stats.FuelConsumptionRate.Main
 	
 	-- New distance calculation: distance = fuel * multipliers
 	local statMultipliers = Stats.CalculateMultipliers()
