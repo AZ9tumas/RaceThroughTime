@@ -56,6 +56,10 @@ function InventoryUIController:UpdatePetsInventory()
 		maxEquipped = maxEquipped + statsM.ExtraPetsBonus
 	end
 	inventoryPetCount.Count.Text = #equippedPets .. "/" .. maxEquipped
+	
+	-- Update inventory item count (total pets in inventory)
+	local maxInventory = statsM.MaxPetInventory
+	inventoryItemCount.Count.Text = #petInventory .. "/" .. maxInventory
 	for index, petData in ipairs(petInventory) do
 		local petFrame = inventoryPetTemplate:Clone()
 		petFrame.Name = "Pet_" .. index

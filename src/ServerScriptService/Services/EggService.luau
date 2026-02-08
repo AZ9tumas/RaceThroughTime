@@ -113,6 +113,18 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		return false, "Insufficient funds", nil
 	end
 	
+	-- Check if player has space in inventory
+	local inventory = DataService:Get(player, "Inventory")
+	local currentPetCount = inventory and inventory.PetInventory and #inventory.PetInventory or 0
+	if currentPetCount >= Stats.MaxPetInventory then
+		NotificationService:SendNotification(
+			player,
+			string.format("Inventory full! Maximum %d pets allowed.", Stats.MaxPetInventory),
+			NotificationService.Category.Warning
+		)
+		return false, "Inventory full", nil
+	end
+	
 	-- Deduct currency
 	DataService:Update(player, "Currencies", function(curr)
 		curr[currencyType] = (curr[currencyType] or 0) - cost
