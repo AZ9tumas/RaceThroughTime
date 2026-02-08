@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local GamePassIds = require(ReplicatedStorage.GamePassIds)
@@ -14,6 +15,7 @@ local MonetizationService = Knit.CreateService({
 MonetizationService.Passes = GamePassIds
 
 local PlayerGamePasses = {}
+local DebugOverrides = {} -- [UserId] = { [gamePassName] = boolean } - Debug overrides for Studio testing
 
 local function CheckAllGamePasses(player: Player)
 	local userId = player.UserId
@@ -36,6 +38,12 @@ end
 
 function MonetizationService:HasGamePass(player: Player, gamePassName: string): boolean
 	local userId = player.UserId
+	
+	-- In Studio, check debug overrides first
+	if RunService:IsStudio() and DebugOverrides[userId] and DebugOverrides[userId][gamePassName] ~= nil then
+		return DebugOverrides[userId][gamePassName]
+	end
+	
 	if not PlayerGamePasses[userId] then
 		return false
 	end
@@ -61,6 +69,18 @@ function MonetizationService.Client:GetPlayerPasses(player: Player)
 	return PlayerGamePasses[userId] or {}
 end
 
+-- Debug function to set gamepass ownership (only works in Studio)
+function MonetizationService.Client:SetDebugGamePass(player: Player, gamePassName: string, owned: boolean)
+	if RunService:IsStudio() then
+		local userId = player.UserId
+		if not DebugOverrides[userId] then
+			DebugOverrides[userId] = {}
+		end
+		DebugOverrides[userId][gamePassName] = owned
+		print(string.format("[MonetizationService]: Debug override set for %s - %s = %s", player.Name, gamePassName, tostring(owned)))
+	end
+end
+
 function MonetizationService:KnitInit()
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamePassId, wasPurchased)
 		if wasPurchased then
@@ -80,6 +100,7 @@ function MonetizationService:KnitInit()
 	
 	Players.PlayerRemoving:Connect(function(player)
 		PlayerGamePasses[player.UserId] = nil
+		DebugOverrides[player.UserId] = nil
 	end)
 end
 

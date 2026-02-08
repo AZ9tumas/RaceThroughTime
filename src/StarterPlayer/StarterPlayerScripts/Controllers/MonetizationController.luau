@@ -30,6 +30,10 @@ end
 function MonetizationController:SetDebugGamePass(gamePassName: string, owned: boolean)
 	if RunService:IsStudio() then
 		DebugOverrides[gamePassName] = owned
+		-- Also notify the server to update its debug overrides
+		if MonetizationService then
+			MonetizationService:SetDebugGamePass(gamePassName, owned)
+		end
 	end
 end
 

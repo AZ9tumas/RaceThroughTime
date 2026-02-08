@@ -26,8 +26,7 @@ local PlayerStarsFolder = nil
 local ProximityCheckConnection = nil -- RenderStep connection for proximity checking
 local CollectionDebounce = {} -- [starId] = true (prevents double collection)
 local ActiveCollectionTweens = {} -- [starId] = { Tween: Tween, OriginalSize: Vector3, OriginalTransparency: number }
-local HasMagnetGamepass = false -- Cached Magnet gamepass ownership (checked once)
-local HasVIPGamepass = false -- Cached VIP gamepass ownership (checked once)
+local MonetizationController = nil -- Reference to MonetizationController
 
 -- Helper function for logging
 local function Log(message: string)
@@ -301,14 +300,16 @@ local function CheckProximityCollection()
 	
 	local playerPosition = rootPart.Position
 	-- Use Magnet range if gamepass owned, otherwise use base range
-	local collectionRadius = HasMagnetGamepass and Stats.MagnetStarRange or Stats.MinStarCollectionPlayerRadius
+	local hasMagnet = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.Magnet)
+	local collectionRadius = hasMagnet and Stats.MagnetStarRange or Stats.MinStarCollectionPlayerRadius
 	
 	-- Check each star for proximity
 	for starId, starData in pairs(SpawnedStars) do
 		if CollectionDebounce[starId] then continue end
 		
 		-- Skip VIP stars if player doesn't have VIP gamepass
-		if starData.IsVIP and not HasVIPGamepass then
+		local hasVIP = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.VIP)
+		if starData.IsVIP and not hasVIP then
 			continue
 		end
 		
@@ -361,12 +362,8 @@ function StarController:KnitStart()
 	StarService.RemoveStar:Connect(OnRemoveStar)
 	StarService.RemoveAllStars:Connect(OnRemoveAllStars)
 
-	-- Check Magnet gamepass ownership once (cached to avoid repeated checks)
-	local MonetizationController = Knit.GetController("MonetizationController")
-	if MonetizationController then
-		HasMagnetGamepass = MonetizationController:HasGamePass(MonetizationController.Passes.Magnet)
-		HasVIPGamepass = MonetizationController:HasGamePass(MonetizationController.Passes.VIP)
-	end
+	-- Get reference to MonetizationController for gamepass checks
+	MonetizationController = Knit.GetController("MonetizationController")
 
 	-- Start proximity checking loop using Heartbeat (runs every frame)
 	ProximityCheckConnection = RunService.Heartbeat:Connect(CheckProximityCollection)
