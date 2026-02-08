@@ -116,10 +116,15 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	-- Check if player has space in inventory
 	local inventory = DataService:Get(player, "Inventory")
 	local currentPetCount = inventory and inventory.PetInventory and #inventory.PetInventory or 0
-	if currentPetCount >= Stats.MaxPetInventory then
+	local MonetizationService = Knit.GetService("MonetizationService")
+	local maxInventory = Stats.MaxPetInventory
+	if MonetizationService:HasGamePass(player, "ExtraSlots") then
+		maxInventory = maxInventory + Stats.ExtraSlotsBonus
+	end
+	if currentPetCount >= maxInventory then
 		NotificationService:SendNotification(
 			player,
-			string.format("Inventory full! Maximum %d pets allowed.", Stats.MaxPetInventory),
+			string.format("Inventory full! Maximum %d pets allowed.", maxInventory),
 			NotificationService.Category.Warning
 		)
 		return false, "Inventory full", nil

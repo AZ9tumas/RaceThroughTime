@@ -393,6 +393,9 @@ Stats.ExtraPetsBonus = 3
 -- Maximum number of pets that can be stored in inventory
 Stats.MaxPetInventory = 50
 
+-- Extra inventory slots bonus from gamepass (added to MaxPetInventory)
+Stats.ExtraSlotsBonus = 50
+
 -- Calculate other bonuses (VIP, dev products, boosts, etc.)
 -- Returns 0 by default - to be extended with VIP and dev product bonuses
 -- @return number - Total other bonus (0 if no special bonuses active)

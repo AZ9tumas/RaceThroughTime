@@ -59,6 +59,9 @@ function InventoryUIController:UpdatePetsInventory()
 	
 	-- Update inventory item count (total pets in inventory)
 	local maxInventory = statsM.MaxPetInventory
+	if MonetizationController:HasGamePass("ExtraSlots") then
+		maxInventory = maxInventory + statsM.ExtraSlotsBonus
+	end
 	inventoryItemCount.Count.Text = #petInventory .. "/" .. maxInventory
 	for index, petData in ipairs(petInventory) do
 		local petFrame = inventoryPetTemplate:Clone()
