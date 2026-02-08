@@ -145,6 +145,13 @@ Stats.StarProbabilities = {
 	Gems = 0.04,         -- 4% chance (Rare gem)
 }
 
+-- VIP Zone star probabilities (normalized from PurpleStar + WhiteStar = 0.08)
+-- Only PurpleStar and WhiteStar spawn in VIP zones
+Stats.VIPStarProbabilities = {
+	PurpleStar = 0.75,   -- 75% chance (0.06/0.08 normalized)
+	WhiteStar = 0.25,    -- 25% chance (0.02/0.08 normalized)
+}
+
 -- Star equivalents for fuel calculation (1 star = 1 unit of fuel base)
 -- Total fuel = Stars * multipliers (pet + rebirth + other multipliers)
 Stats.StarEquivalents = {
@@ -167,6 +174,13 @@ Stats.StarConfig = {
 	MinDistanceBetweenStars = 15, 	  -- Minimum distance between spawned stars
 	CollectionRadius = 15,            -- Distance within which a star can be collected
 	SpawnInterval = 3,                -- Seconds between spawning new stars (continuous spawning rate)
+}
+
+-- VIP Star spawn configuration
+Stats.VIPStarConfig = {
+	MaxVIPStars = 5,                  -- Maximum number of VIP stars that can exist at once per player
+	MinDistanceBetweenStars = 10,     -- Minimum distance between spawned VIP stars
+	SpawnInterval = 3,                -- Seconds between spawning new VIP stars
 }
 
 -- Track/Gate configuration
