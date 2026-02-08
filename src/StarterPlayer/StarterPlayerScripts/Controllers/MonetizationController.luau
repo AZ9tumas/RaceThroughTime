@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local GamePassIds = require(ReplicatedStorage.GamePassIds)
@@ -14,10 +15,30 @@ MonetizationController.Passes = GamePassIds
 
 local MonetizationService
 local OwnedPasses = {}
+local DebugOverrides = {} -- Debug overrides for Studio testing
 local Player = Players.LocalPlayer
 
 function MonetizationController:HasGamePass(gamePassName: string): boolean
+	-- In Studio, check debug overrides first
+	if RunService:IsStudio() and DebugOverrides[gamePassName] ~= nil then
+		return DebugOverrides[gamePassName]
+	end
 	return OwnedPasses[gamePassName] or false
+end
+
+-- Debug function to set gamepass ownership (only works in Studio)
+function MonetizationController:SetDebugGamePass(gamePassName: string, owned: boolean)
+	if RunService:IsStudio() then
+		DebugOverrides[gamePassName] = owned
+	end
+end
+
+-- Debug function to get current debug override state
+function MonetizationController:GetDebugGamePass(gamePassName: string): boolean?
+	if RunService:IsStudio() then
+		return DebugOverrides[gamePassName]
+	end
+	return nil
 end
 
 function MonetizationController:PromptPurchase(gamePassName: string)
