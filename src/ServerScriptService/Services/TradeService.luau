@@ -72,9 +72,24 @@ local IncomingRequests: { [number]: { [number]: TradeRequest } } = {}
 -- Active trade sessions: [player.UserId] = TradeSession (both players point to same session)
 local ActiveTrades: { [number]: TradeSession } = {}
 
+-- Player trading preferences: [player.UserId] = boolean (true = enabled, false = disabled)
+local PlayerTradingEnabled: { [number]: boolean } = {}
+
 -- Helper function for logging
 local function Log(message: string)
 	print(string.format("[TradeService]: %s", message))
+end
+
+-- Check if a player has trading enabled
+local function IsTradingEnabledForPlayer(player: Player): boolean
+	local DataService = Knit.GetService("DataService")
+	local meta = DataService:Get(player, "Meta")
+	
+	-- Default to true if not set
+	if meta and meta.Settings and meta.Settings.TradingEnabled ~= nil then
+		return meta.Settings.TradingEnabled
+	end
+	return true
 end
 
 -- Check if a player is currently in an active trade
@@ -360,6 +375,8 @@ end
 	@return (boolean, string?) - Success status and error message if failed
 ]]
 function TradeService:RequestTrade(player: Player, targetPlayer: Player): (boolean, string?)
+	local NotificationService = Knit.GetService("NotificationService")
+	
 	-- Validate players
 	if not player or not targetPlayer then
 		return false, "Invalid players"
@@ -371,6 +388,16 @@ function TradeService:RequestTrade(player: Player, targetPlayer: Player): (boole
 	
 	if not targetPlayer:IsDescendantOf(Players) then
 		return false, "Target player is not in the game"
+	end
+	
+	-- Check if the requesting player has trading enabled
+	if not IsTradingEnabledForPlayer(player) then
+		return false, "Trading is disabled, change this in settings"
+	end
+	
+	-- Check if the target player has trading enabled
+	if not IsTradingEnabledForPlayer(targetPlayer) then
+		return false, "That player has disabled trading"
 	end
 	
 	-- Check if either player is already in a trade
@@ -402,6 +429,9 @@ function TradeService:RequestTrade(player: Player, targetPlayer: Player): (boole
 	
 	-- Notify target player
 	TradeService.Client.TradeRequestReceived:Fire(targetPlayer, player)
+	
+	-- Send notifications (server handles all notifications)
+	NotificationService:SendNotification(player, string.format("Trade request sent to %s", targetPlayer.Name), NotificationService.Category.Success)
 	
 	Log(string.format("%s requested trade with %s", player.Name, targetPlayer.Name))
 	
@@ -622,7 +652,8 @@ function TradeService:LockIn(player: Player): (boolean, string?)
 	end
 	
 	local isP1 = IsPlayer1(session, player)
-	local alreadyLockedIn = isP1 and session.Player1LockedIn or session.Player2LockedIn
+	local alreadyLockedIn = session.Player1LockedIn
+	if not isP1 then alreadyLockedIn = session.Player2LockedIn end
 	
 	if alreadyLockedIn then
 		return false, "You have already locked in"
@@ -656,19 +687,24 @@ end
 ]]
 function TradeService:AcceptTrade(player: Player): (boolean, string?)
 	local session = GetTradeSession(player)
+	warn(session)
 	if not session then
+		warn("Not in trade")
 		return false, "You are not in a trade"
 	end
 	
 	-- Both players must be locked in before accepting
 	if not session.Player1LockedIn or not session.Player2LockedIn then
+		warn("Both players must lock in")
 		return false, "Both players must lock in before accepting"
 	end
 	
 	local isP1 = IsPlayer1(session, player)
-	local alreadyAccepted = isP1 and session.Player1Accepted or session.Player2Accepted
+	local alreadyAccepted = session.Player1Accepted
+	if not isP1 then alreadyAccepted = session.Player2Accepted end
 	
 	if alreadyAccepted then
+		warn("You have already accepted")
 		return false, "You have already accepted"
 	end
 	
@@ -781,7 +817,12 @@ end
 
 -- Client methods (called by client)
 function TradeService.Client:RequestTrade(player: Player, targetPlayer: Player): (boolean, string?)
-	return TradeService:RequestTrade(player, targetPlayer)
+	local stats, msg = TradeService:RequestTrade(player, targetPlayer)
+	local NotificationService = Knit.GetService("NotificationService")
+
+	if msg then
+		NotificationService:SendNotification(player, msg, NotificationService.Category[stats and "Success" or "Error"])
+	end
 end
 
 function TradeService.Client:AcceptTradeRequest(player: Player, fromPlayer: Player): (boolean, string?)
@@ -807,7 +848,10 @@ function TradeService.Client:LockIn(player: Player): (boolean, string?)
 end
 
 function TradeService.Client:AcceptTrade(player: Player): (boolean, string?)
-	return TradeService:AcceptTrade(player)
+	local status, msg = TradeService:AcceptTrade(player)
+	warn(status, msg)
+
+	return status, msg
 end
 
 function TradeService.Client:DeclineTrade(player: Player): (boolean, string?)
@@ -826,6 +870,34 @@ function TradeService.Client:GetPendingRequests(player: Player): { Player }
 	return TradeService:GetPendingRequests(player)
 end
 
+function TradeService.Client:SetTradingEnabled(player: Player, enabled: boolean)
+	return TradeService:SetTradingEnabled(player, enabled)
+end
+
+function TradeService.Client:IsInTrade(player: Player): boolean
+	return IsInTrade(player)
+end
+
+--[[
+	Set whether trading is enabled for a player.
+	
+	@param player Player - The player setting their preference
+	@param enabled boolean - Whether trading should be enabled
+]]
+function TradeService:SetTradingEnabled(player: Player, enabled: boolean)
+	local DataService = Knit.GetService("DataService")
+	DataService:Update(player, "Meta", function(meta)
+		meta = meta or {}
+		if not meta.Settings then
+			meta.Settings = {}
+		end
+		meta.Settings.TradingEnabled = enabled
+		return meta
+	end)
+	
+	Log(string.format("%s set trading enabled: %s", player.Name, tostring(enabled)))
+end
+
 -- Clean up when player leaves
 local function OnPlayerRemoving(player: Player)
 	-- Cancel any outgoing requests
@@ -834,6 +906,9 @@ local function OnPlayerRemoving(player: Player)
 	-- Cancel all incoming requests
 	CancelAllIncomingRequests(player)
 	IncomingRequests[player.UserId] = nil
+	
+	-- Clean up trading preference
+	PlayerTradingEnabled[player.UserId] = nil
 	
 	-- End any active trade
 	local session = GetTradeSession(player)

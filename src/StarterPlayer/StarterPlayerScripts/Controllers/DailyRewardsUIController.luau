@@ -33,13 +33,13 @@ function DailyRewardsUIController:UpdateRewardsStatus()
 end
 
 function DailyRewardsUIController:ToggleDailyFrame()
-	local UIController = Knit.GetController("UIController")
-	UIController:CloseAllFrames(dailyFrame)
-	dailyFrame.Visible = not dailyFrame.Visible
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:ToggleFrame("DailyRewards")
 end
 
 function DailyRewardsUIController:CloseDailyFrame()
-	dailyFrame.Visible = false
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:CloseFrame("DailyRewards")
 end
 
 function DailyRewardsUIController:KnitInit()
@@ -102,7 +102,7 @@ function DailyRewardsUIController:KnitStart()
 		_connections["Day" .. cardData.Frame.Name] = cardData.RedeemButton.MouseButton1Click:Connect(function()
 			DailyRewardService:RequestCollectReward(cardData.Day)
 			self:UpdateRewardsStatus()
-			dailyFrame.Visible = false
+			self:CloseDailyFrame()
 		end)
 	end
 end

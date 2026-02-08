@@ -42,6 +42,7 @@ local MainBossController = nil
 local IsInArena = false
 local IsOnTrack = false
 local IsBossFight = false
+local HideOtherPets = false
 local LastArenaCheck = 0
 local LastPetRefresh = 0
 local LastPetAttackTime = {} -- [PetModel] = last attack time
@@ -165,6 +166,50 @@ local function RefreshPetObjects()
 				-- Remove pets from different worlds
 				PetObjects[model] = nil
 				PetTargets[model] = nil
+			end
+		end
+	end
+end
+
+-- Hide or show other players' pets based on HideOtherPets setting
+local function UpdateOtherPetsVisibility()
+	local petModels = FindAllPetModels()
+	
+	for _, model in ipairs(petModels) do
+		local ownerUserId = model:GetAttribute("OwnerUserId")
+		local isLocalPlayerPet = (ownerUserId == Player.UserId)
+		
+		if not isLocalPlayerPet then
+			-- This is another player's pet
+			if HideOtherPets then
+				-- Hide the pet by setting transparency and disabling
+				for _, part in ipairs(model:GetDescendants()) do
+					if part:IsA("BasePart") then
+						part.Transparency = 1
+					elseif part:IsA("Decal") or part:IsA("Texture") then
+						part.Transparency = 1
+					elseif part:IsA("BillboardGui") or part:IsA("SurfaceGui") then
+						part.Enabled = false
+					elseif part:IsA("ParticleEmitter") or part:IsA("Trail") or part:IsA("Beam") then
+						part.Enabled = false
+					end
+				end
+			else
+				-- Show the pet by restoring visibility
+				for _, part in ipairs(model:GetDescendants()) do
+					if part:IsA("BasePart") then
+						-- Restore original transparency (assume 0 for pet parts)
+						local originalTransparency = part:GetAttribute("OriginalTransparency") or 0
+						part.Transparency = originalTransparency
+					elseif part:IsA("Decal") or part:IsA("Texture") then
+						local originalTransparency = part:GetAttribute("OriginalTransparency") or 0
+						part.Transparency = originalTransparency
+					elseif part:IsA("BillboardGui") or part:IsA("SurfaceGui") then
+						part.Enabled = true
+					elseif part:IsA("ParticleEmitter") or part:IsA("Trail") or part:IsA("Beam") then
+						part.Enabled = true
+					end
+				end
 			end
 		end
 	end
@@ -505,6 +550,10 @@ local function Update()
 	if now - LastPetRefresh >= PET_REFRESH_INTERVAL then
 		LastPetRefresh = now
 		RefreshPetObjects()
+		-- Update visibility for other players' pets when hiding is enabled
+		if HideOtherPets then
+			UpdateOtherPetsVisibility()
+		end
 	end
 	
 	-- Check arena status (throttled)
@@ -585,6 +634,16 @@ end
 
 function PetController:IsBossFightActive(): boolean
 	return IsBossFight
+end
+
+function PetController:SetHideOtherPets(hide: boolean)
+	HideOtherPets = hide
+	-- Immediately update visibility when setting changes
+	UpdateOtherPetsVisibility()
+end
+
+function PetController:IsHidingOtherPets(): boolean
+	return HideOtherPets
 end
 
 function PetController:KnitStart()

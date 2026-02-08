@@ -244,6 +244,9 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 		Bonus = bonus,
 	}
 	
+	-- Update client data
+	DataService:FireDataReady(player)
+	
 	-- Fire signal to client
 	self.Client.RebirthCompleted:Fire(player, resultData)
 	

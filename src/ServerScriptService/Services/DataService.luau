@@ -17,7 +17,7 @@ local ProfileStore = require(script.Parent.Parent.Modules.ProfileStore)
 -- Data Template
 local Template = {
 	Currencies = {
-		Cash = 1000,
+		Cash = 0,
 		Gems = 0,
 	},
 	Stats = {
@@ -26,6 +26,8 @@ local Template = {
 		Rebirths = 0,
 		Fuel = 0, -- Starting fuel for players
 		Stars = 0,  -- Total star equivalents collected (used to calculate fuel)
+		LauncherLevel = 1, -- Launcher level for fuel-to-distance multiplier
+		MaxDistanceTraveled = 0, -- Maximum distance ever traveled in a single track run
 	},
 	Progression = {
 		CurrentWorld = "Main",
@@ -185,17 +187,6 @@ local function TryResolveSession(player: Player)
 	
 	if profile and clientReady and sessionPromise and sessionPromise.resolve then
 		print(player, "Session Initialized")
-		
-		-- Give random pet for testing
-		local standardPet = statsM.Pets.StandardPet
-		if standardPet then
-			DataService:Update(player, "Inventory", function(inventory)
-				local newPet = table.clone(standardPet)
-				newPet.Multiplier = math.random(1, 50)
-				table.insert(inventory.PetInventory, newPet)
-				return inventory
-			end)
-		end
 
 		-- Initialize pets once when session is resolved
 		local PetService = Knit.GetService("PetService")
@@ -207,7 +198,8 @@ local function TryResolveSession(player: Player)
 		sessionPromise.resolve()
 		sessionPromise.resolve = nil -- Prevent double resolution
 
-		DataService:Update(player, "Currencies", function(c) c.Cash += 1000 return c end)
+		local LauncherService = Knit.GetService("LauncherService")
+		LauncherService:FireUpdateLauncherClient(player)
 	end
 end
 
@@ -384,31 +376,20 @@ function DataService:GetProfile(player: Player)
 	return PlayerProfiles[player]
 end
 
--- Valid world names that exist in the game configuration
-local VALID_WORLDS = { "Main", "StoneAge" } -- Add more worlds here as they are added to the game
-
--- Get the player's current world (defaults to "Main" if not set or invalid)
+-- Get the player's current world (defaults to nil)
 function DataService:GetPlayerWorld(player: Player): string
 	local profile = PlayerProfiles[player]
 	if not profile then
-		return "Main"
+		return nil
 	end
 	
 	local progression = profile.Data.Progression
 	if not progression or not progression.CurrentWorld then
-		return "Main"
+		return nil
 	end
 	
 	-- Validate that the world name exists in game configuration
-	local worldName = progression.CurrentWorld
-	for _, validWorld in ipairs(VALID_WORLDS) do
-		if worldName == validWorld then
-			return worldName
-		end
-	end
-	
-	-- Invalid world, return default
-	return "Main"
+	return progression.CurrentWorld
 end
 
 -- Deep copy helper function for creating read-only data copies
@@ -464,6 +445,13 @@ function DataService:FireDataReady(player: Player): boolean
 	end
 	
 	self.Client.DataReady:Fire(player, dataToSend)
+	
+	-- Also fire UpdateLauncherClient to update launcher UI
+	local LauncherService = Knit.GetService("LauncherService")
+	if LauncherService then
+		LauncherService:FireUpdateLauncherClient(player)
+	end
+	
 	return true
 end
 

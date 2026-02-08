@@ -50,12 +50,20 @@ local function ApplyMusicSetting(enabled: boolean)
 			sound.Volume = enabled and sound:GetAttribute("OriginalVolume") or 0
 		end
 	end
+	local SoundController = Knit.GetController("SoundController")
+	if SoundController then
+		SoundController:SetMusicEnabled(enabled)
+	end
 end
 
 local function ApplySFXSetting(enabled: boolean)
 	local sfxGroup = SoundService:FindFirstChild("SFX")
 	if sfxGroup then
 		sfxGroup.Volume = enabled and 0.5 or 0
+	end
+	local SoundController = Knit.GetController("SoundController")
+	if SoundController then
+		SoundController:SetSFXEnabled(enabled)
 	end
 end
 
@@ -113,15 +121,13 @@ function SettingsController:ToggleSetting(key: string)
 end
 
 function SettingsController:ToggleSettingsMenu()
-	local UIController = Knit.GetController("UIController")
-	if UIController then
-		UIController:CloseAllFrames()
-	end
-	mainFrame.Visible = not mainFrame.Visible
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:ToggleFrame("Settings")
 end
 
 function SettingsController:CloseSettingsMenu()
-	mainFrame.Visible = false
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:CloseFrame("Settings")
 end
 
 function SettingsController:KnitInit()
@@ -140,16 +146,24 @@ end
 
 function SettingsController:KnitStart()
 	local UIController = Knit.GetController("UIController")
-	local data = UIController:GetData()
-	if data and data.Meta and data.Meta.Settings then
-		for key, value in pairs(data.Meta.Settings) do
-			if localSettings[key] ~= nil then
-				localSettings[key] = value
+	local DataService = Knit.GetService("DataService")
+
+	local function updateSettings(data)
+		if data and data.Meta and data.Meta.Settings then
+			for key, value in pairs(data.Meta.Settings) do
+				if localSettings[key] ~= nil then
+					localSettings[key] = value
+				end
 			end
 		end
+		UpdateAllButtons()
+		ApplyAllSettings()
 	end
-	UpdateAllButtons()
-	ApplyAllSettings()
+
+	DataService.DataReady:Connect(updateSettings)
+
+	local data = UIController:GetData()
+	updateSettings(data)
 
 	_connections["SettingsButton"] = settingsButton.MouseButton1Click:Connect(function()
 		self:ToggleSettingsMenu()

@@ -46,13 +46,14 @@ function RebirthUIController:HandleRebirthFrame()
 		multiplier = rebirthMenu.Frame.Multiplier,
 		status = rebirthMenu.Frame.Status,
 	}
-	local vals = {
+	
+	if nextLevel then
+		local vals = {
 		access = nextLevel.Bonus.WorldAccess or " --- ",
 		bonus = "+" .. nextLevel.Bonus.Gems .. " Gems",
 		multiplier = "+" .. ((nextLevel.Multiplier or 0) * 100) .. "% Multiplier",
 		status = nextLevel.KeepPets and "Keep Pets" or "Lose Pets",
 	}
-	if nextLevel then
 		local progress, remainingCash = rebirthStatsM.GetRebirthProgress(currentRebirthLevel, cashVal.Value)
 		progressBar.Size = UDim2.new(progress, 0, 1, 0)
 		progressText.Text = cash .. "/" .. TruncateNumber(nextLevel.CashRequired) .. " Cash"
@@ -71,23 +72,38 @@ function RebirthUIController:HandleRebirthFrame()
 end
 
 function RebirthUIController:ToggleRebirthMenu()
-	local UIController = Knit.GetController("UIController")
-	UIController:CloseAllFrames(rebirthMenu)
-	local buttonPressed = not UIController:GetButtonPressed()
-	UIController:SetButtonPressed(buttonPressed)
-	rebirthMenu.Visible = buttonPressed
-	if rebirthMenu.Visible then
+	local UIFramesController = Knit.GetController("UIFramesController")
+	local wasOpen = UIFramesController:IsFrameOpen("Rebirth")
+	
+	UIFramesController:ToggleFrame("Rebirth")
+	
+	if not wasOpen then
 		self:HandleRebirthFrame()
 	end
 end
 
 function RebirthUIController:CloseRebirthMenu()
-	rebirthMenu.Visible = false
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:CloseFrame("Rebirth")
 end
 
 function RebirthUIController:UpdateMenuVisibility()
 	local UIController = Knit.GetController("UIController")
-	rebirthMenu.Visible = UIController:GetButtonPressed() or UIController:IsPlayerNearRebirthArea()
+	local UIFramesController = Knit.GetController("UIFramesController")
+	local shouldShow = UIController:IsPlayerNearRebirthArea()
+
+	if shouldShow and not UIFramesController:IsFrameOpen("Rebirth") then
+		UIFramesController:OpenFrame("Rebirth")
+		self:HandleRebirthFrame()
+	end
+	
+	--[[
+	if shouldShow and not UIFramesController:IsFrameOpen("Rebirth") then
+		UIFramesController:OpenFrame("Rebirth")
+		self:HandleRebirthFrame()
+	elseif not shouldShow and UIFramesController:IsFrameOpen("Rebirth") then
+		UIFramesController:CloseFrame("Rebirth")
+	end]]
 end
 
 function RebirthUIController:KnitInit()
@@ -111,7 +127,7 @@ function RebirthUIController:KnitStart()
 	local InventoryUIController = Knit.GetController("InventoryUIController")
 
 	_connections["RebirthButton"] = rebirthButton.MouseButton1Click:Connect(function()
-		rebirthMenu.Visible = false
+		self:CloseRebirthMenu()
 		RebirthService:RequestRebirth():andThen(function(success, errorMsg, resultData)
 			if success and resultData then
 				local data = UIController:GetData()

@@ -61,6 +61,7 @@ TradeController.OnTradeCompleted = Signal.new()         -- (receivedPets: {})
 -- Private state
 local Player = Players.LocalPlayer
 local TradeService = nil
+local TradingEnabled = true -- Whether trading is enabled for this player
 
 -- Current trade state (synced with server)
 local CurrentTradeState = nil
@@ -76,7 +77,32 @@ local function ShowNotification(message: string, category: string?)
 end
 
 --[[
+	Set whether trading is enabled for this player.
+	
+	@param enabled boolean - Whether trading should be enabled
+]]
+function TradeController:SetTradingEnabled(enabled: boolean)
+	TradingEnabled = enabled
+	
+	-- Notify server of trading preference change
+	if TradeService then
+		TradeService:SetTradingEnabled(enabled)
+	end
+end
+
+--[[
+	Check if trading is enabled for this player.
+	
+	@return boolean
+]]
+function TradeController:IsTradingEnabled(): boolean
+	return TradingEnabled
+end
+
+--[[
 	Request a trade with another player.
+	Client awaits server response, frames remain enabled until trade officially starts.
+	Server handles all notifications (success/failure).
 	
 	@param targetPlayer Player - The player to trade with
 	@return boolean - Whether the request was sent successfully
@@ -89,9 +115,9 @@ function TradeController:RequestTrade(targetPlayer: Player): boolean
 	
 	local success, errorMsg = TradeService:RequestTrade(targetPlayer)
 	
-	if success then
-		ShowNotification(string.format("Trade request sent to %s", targetPlayer.Name), "Success")
-	else
+	-- Server handles notifications for trade requests
+	-- Client only shows error if the request fails to send
+	if not success then
 		ShowNotification(errorMsg or "Failed to send trade request", "Error")
 	end
 	
@@ -218,10 +244,15 @@ function TradeController:Accept(): boolean
 		return false
 	end
 	
-	local success, errorMsg = TradeService:AcceptTrade()
+	local success, errorMsg
+	TradeService:AcceptTrade():andThen(function(success_, errorMsg_)
+		success = success_
+		errorMsg = errorMsg_
+	end)
 	
 	if not success then
-		ShowNotification(errorMsg or "Failed to accept trade", "Error")
+		warn(success, errorMsg)
+		if errorMsg then ShowNotification(errorMsg, "Error") end
 	end
 	
 	return success
@@ -341,12 +372,25 @@ local function OnTradeStarted(otherPlayer: Player)
 	-- Clear pending requests since we're now in a trade
 	PendingRequests = {}
 	
+	-- Disable frames during trade (no exceptions)
+	local UIFramesController = Knit.GetController("UIFramesController")
+	if UIFramesController then
+		UIFramesController:DisableFramesWithExceptions(true, { "TradeMain" })
+	end
+	
 	ShowNotification(string.format("Trade started with %s", otherPlayer.Name), "Success")
 	TradeController.OnTradeStarted:Fire(otherPlayer)
 end
 
 local function OnTradeEnded(reason: string)
 	CurrentTradeState = nil
+	
+	-- Re-enable frames when trade ends
+	local UIFramesController = Knit.GetController("UIFramesController")
+	if UIFramesController then
+		UIFramesController:DisableFrames(false)
+	end
+	
 	TradeController.OnTradeEnded:Fire(reason)
 end
 
@@ -400,6 +444,12 @@ end
 
 local function OnTradeCompleted(receivedPets: any)
 	CurrentTradeState = nil
+	
+	-- Re-enable frames when trade completes
+	local UIFramesController = Knit.GetController("UIFramesController")
+	if UIFramesController then
+		UIFramesController:DisableFrames(false)
+	end
 	
 	local petCount = receivedPets and #receivedPets or 0
 	if petCount > 0 then

@@ -40,14 +40,20 @@ function InventoryUIController:UpdatePetsInventory()
 	end
 	local UIController = Knit.GetController("UIController")
 	local PetModalUIController = Knit.GetController("PetModalUIController")
+	local MonetizationController = Knit.GetController("MonetizationController")
 	local data = UIController:GetData()
 	local petInventory = data.Inventory.PetInventory
-	local equippedPets = data.Inventory.EquippedPets
+	local equippedPets = data.Inventory.EquippedPets or {}
 	local equippedSet = {}
 	for _, petIndex in ipairs(equippedPets) do
 		equippedSet[petIndex] = true
 	end
-	inventoryPetCount.Count.Text = #petInventory .. "/3"
+	-- Calculate max equipped pets based on gamepass
+	local maxEquipped = statsM.MaxEquippedPets
+	if MonetizationController:HasGamePass(MonetizationController.Passes.ExtraPets) then
+		maxEquipped = maxEquipped + statsM.ExtraPetsBonus
+	end
+	inventoryPetCount.Count.Text = #equippedPets .. "/" .. maxEquipped
 	for index, petData in ipairs(petInventory) do
 		local petFrame = inventoryPetTemplate:Clone()
 		petFrame.Name = "Pet_" .. index
@@ -88,7 +94,6 @@ function InventoryUIController:UpdatePetsInventory()
 		}
 		if petFrame:IsA("TextButton") then
 			petFrame.MouseButton1Click:Connect(function()
-				UIController:CloseAllFrames()
 				if PetModalUIController then
 					PetModalUIController:OpenPetModal(fullPetData)
 				end
@@ -99,20 +104,25 @@ function InventoryUIController:UpdatePetsInventory()
 end
 
 function InventoryUIController:ToggleInventory()
-	local UIController = Knit.GetController("UIController")
-	UIController:CloseAllFrames(inventoryMainFrame)
-	inventoryMainFrame.Visible = not inventoryMainFrame.Visible
-	if inventoryMainFrame.Visible then
+	local UIFramesController = Knit.GetController("UIFramesController")
+	local wasOpen = UIFramesController:IsFrameOpen("Inventory")
+	
+	if wasOpen then
+		UIFramesController:CloseFrame("Inventory")
+	else
+		UIFramesController:OpenFrame("Inventory")
 		self:UpdatePetsInventory()
 	end
 end
 
 function InventoryUIController:CloseInventory()
-	inventoryMainFrame.Visible = false
+	local UIFramesController = Knit.GetController("UIFramesController")
+	UIFramesController:CloseFrame("Inventory")
 end
 
 function InventoryUIController:IsVisible(): boolean
-	return inventoryMainFrame.Visible
+	local UIFramesController = Knit.GetController("UIFramesController")
+	return UIFramesController:IsFrameOpen("Inventory")
 end
 
 function InventoryUIController:KnitInit()

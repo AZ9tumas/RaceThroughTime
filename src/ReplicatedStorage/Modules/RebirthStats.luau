@@ -55,7 +55,7 @@ RebirthStats.RebirthLevels = {
 		Multiplier = 0.75, -- main multiplier that helps with fuel collection
 		SpeedBoostMultiplier = 0.08, -- +8% speed (total +13%)
 		PetReward = "StandardPet", -- Pet from StoneAge world
-		KeepPets = false, -- Lose all pets on rebirth
+		KeepPets = true,
 		Bonus = {Gems = 50, World = nil, Cash = 0},
 		World = "StoneAge",
 	},
@@ -148,7 +148,7 @@ function RebirthStats.CalculateTotalMultiplier(rebirthLevel: number): number
 		end
 	end
 	
-	return totalBonus
+	return totalBonus > 0 and 1 + totalBonus or 0
 end
 
 -- Get progress toward next rebirth

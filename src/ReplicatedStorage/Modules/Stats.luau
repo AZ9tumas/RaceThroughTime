@@ -25,7 +25,10 @@ export type Pet = {
 -- Player star collection radius (studs) - player can collect stars within this distance
 Stats.MaxStarCollectionPlayerRadius = 30
 Stats.MinStarCollectionPlayerRadius = 20
-Stats.BaseSpeed = 50 -- base track speed
+
+-- Magnet gamepass increased star range (15% more = 20 * 1.15 = 23)
+Stats.MagnetStarRange = 23
+Stats.BaseSpeed = 35 -- base track speed
 
 -- pet max limits
 Stats.MaxPetSpeed = 35
@@ -41,7 +44,7 @@ Stats.MaxTrackTime = 20
 
 -- Maximum physical speed limit (for body movers and lap detection)
 -- Calculated speed can exceed this for stats/distance tracking, but physical movement is capped
-Stats.MaxPhysicalSpeed = 180
+Stats.MaxPhysicalSpeed = 130
 
 -- Base acceleration for track movement (studs/sec²)
 Stats.BaseAcceleration = 20
@@ -66,8 +69,8 @@ Stats.ArenaRadius = {
 }
 
 Stats.FuelConsumptionRate = {
-	Main = 150, -- Fuel consumed per second on the Main world
-	StoneAge = 200, -- Slightly higher fuel consumption in StoneAge
+	Main = 1, -- Fuel consumed per second on the Main world
+	StoneAge = 1, -- Slightly higher fuel consumption in StoneAge
 }
 
 Stats.WorldCashRates = {
@@ -92,7 +95,7 @@ function Stats.GetBossHealth(bossKey: string): number
 end
 
 -- Boss spawn requirement (stars needed to trigger boss fight)
-Stats.BossUnlockRequirement = { Stars = 2 }
+Stats.BossUnlockRequirement = { Stars = 250 }
 
 -- Default pet attack rate against bosses (attacks per second)
 Stats.DefaultPetAttackRate = 1 -- 1 attack per second
@@ -102,11 +105,11 @@ Stats.DefaultPetAttackRate = 1 -- 1 attack per second
 -- Format: { Distance = number, Rebirth = number? }
 Stats.WorldUnlockRequirements = {
 	-- Main is unlocked by default
-	StoneAge = { Distance = 10510 },
-	AncientEgypt = { Distance = 110110, Rebirth = 1 },
-	Medieval = { Distance = 250000, Rebirth = 2 },
-	Industrial = { Distance = 1250000, Rebirth = 5 },
-	Neon = { Distance = 5250000, Rebirth = 10 },
+	StoneAge = { Distance = 100510, Rebirth = 1 },
+	AncientEgypt = { Distance = 510110, Rebirth = 2 },
+	Medieval = { Distance = 1250000, Rebirth = 5 },
+	Industrial = { Distance = 5250000, Rebirth = 7 },
+	Neon = { Distance = 105250000, Rebirth = 10 },
 }
 
 -- Get distance requirement for a world
@@ -179,7 +182,7 @@ Stats.StarConfig = {
 }
 
 -- Track/Gate configuration
-Stats.GateProximityDistance = 10 -- studs - distance player must be from gate to start track
+Stats.GateProximityDistance = 30 -- studs - distance player must be from gate to start track
 Stats.MaxGateIndex = 3 -- Gates are numbered 0 to MaxGateIndex (0, 1, 2, 3)
 
 -- Calculate multipliers from pets, rebirths, and boosts
@@ -215,75 +218,55 @@ function Stats.CalculateSpeedFromFuel(fuel: number, worldName: string?): number
 	return totalSpeed
 end
 
--- Calculate the total distance a player can travel based on fuel and world
--- Uses CalculateSpeedFromFuel internally for speed calculation
--- @param fuel number - The current fuel amount
--- @param worldName string? - The world name (default: "Main")
--- @return number - The calculated total distance (floored to integer)
-function Stats.CalculateDistanceFromFuel(fuel: number, worldName: string?): number
-	local world = worldName or "Main"
-	local speed = Stats.CalculateSpeedFromFuel(fuel, world)
-	local fuelConsumptionRate = Stats.FuelConsumptionRate[world] or Stats.FuelConsumptionRate.Main
-	
-	-- Time = Fuel / FuelConsumptionRate
-	-- Distance = Speed * Time
-	local timeLeft = fuel / fuelConsumptionRate
-	local totalDistance = speed * timeLeft
-	
-	return math.floor(totalDistance)
-end
-
 -- Calculate track parameters with acceleration and 30s max time limit
 -- This calculates optimal speed and acceleration to cover required distance within max time
 -- @param fuel number - The current fuel amount
 -- @param worldName string? - The world name (default: "Main")
+-- @param launcherMultiplier number - The launcher multiplier for distance (default: 1)
 -- @return table - { initialSpeed, acceleration, maxSpeed, totalTime, totalDistance }
-function Stats.CalculateTrackParameters(fuel: number, worldName: string?): { initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
+function Stats.CalculateTrackParameters(fuel: number, worldName: string?, launcherMultiplier: number): 
+	{ initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
 	local world = worldName or "Main"
 	local fuelConsumptionRate = Stats.FuelConsumptionRate[world] or Stats.FuelConsumptionRate.Main
 	
-	-- Calculate base values
-	local baseSpeedFromFuel = Stats.CalculateSpeedFromFuel(fuel, world)
-	local baseTime = fuel / fuelConsumptionRate
+	-- New distance calculation: distance = fuel * multipliers
+	local statMultipliers = Stats.CalculateMultipliers()
+	local totalDistance = fuel * statMultipliers * (launcherMultiplier or 1)
+
+	-- amount of the time player can run for.
+	local baseTime = totalDistance / Stats.BaseSpeed
 	
-	-- Cap time at MaxTrackTime (30 seconds)
+	-- Cap time at MaxTrackTime (20 seconds)
 	local actualTime = math.min(baseTime, Stats.MaxTrackTime)
-	
-	-- Calculate distance that would be covered with base speed
-	local baseDistance = baseSpeedFromFuel * baseTime
-	
-	-- Now we need to cover baseDistance in actualTime
+	-- Now we need to cover totalDistance in actualTime
 	-- Using kinematics: d = v0*t + 0.5*a*t^2
-	-- If time is limited, we need to adjust acceleration to cover the distance
 	
 	local initialSpeed, acceleration, maxSpeed
 	
-	if actualTime >= baseTime then
-		-- No time limit hit, use base calculations with gentle acceleration
-		initialSpeed = baseSpeedFromFuel * 0.5 -- Start at 50% of final speed
-		acceleration = Stats.BaseAcceleration
-		maxSpeed = baseSpeedFromFuel
+	if actualTime <= 0 then
+		initialSpeed = 0
+		acceleration = 0
+		maxSpeed = 0
 	else
-		-- Time is capped, need to adjust to cover distance in limited time
 		-- Average speed needed = distance / time
-		local avgSpeedNeeded = baseDistance / actualTime
+		local avgSpeedNeeded = totalDistance / actualTime
 		
 		-- Start at 30% of average, accelerate to cover distance
-		initialSpeed = avgSpeedNeeded * 0.3
+		initialSpeed = math.max(avgSpeedNeeded * 0.3, Stats.BaseSpeed)
 		
 		-- With constant acceleration: d = v0*t + 0.5*a*t^2
 		-- Solve for a: a = 2*(d - v0*t) / t^2
-		acceleration = 2 * (baseDistance - initialSpeed * actualTime) / (actualTime * actualTime)
+		acceleration = 2 * (totalDistance - initialSpeed * actualTime) / (actualTime * actualTime)
 		
 		-- Cap acceleration to prevent unrealistic values
-		acceleration = math.max(acceleration, Stats.BaseAcceleration)
+		acceleration = math.max(acceleration, 0)
 		
 		-- Max speed = v0 + a*t
 		maxSpeed = initialSpeed + acceleration * actualTime
 	end
 	
 	-- Ensure minimum values
-	initialSpeed = math.max(initialSpeed, Stats.BaseSpeed)
+	initialSpeed = math.max(initialSpeed, 0)
 	acceleration = math.max(acceleration, 0)
 	maxSpeed = math.max(maxSpeed, initialSpeed)
 	
@@ -292,7 +275,7 @@ function Stats.CalculateTrackParameters(fuel: number, worldName: string?): { ini
 		acceleration = acceleration,
 		maxSpeed = maxSpeed,
 		totalTime = actualTime,
-		totalDistance = baseDistance,
+		totalDistance = totalDistance,
 	}
 end
 
@@ -403,6 +386,9 @@ end
 
 -- Maximum number of pets that can be equipped at once
 Stats.MaxEquippedPets = 3
+
+-- Extra pets bonus from gamepass (added to MaxEquippedPets)
+Stats.ExtraPetsBonus = 3
 
 -- Calculate other bonuses (VIP, dev products, boosts, etc.)
 -- Returns 0 by default - to be extended with VIP and dev product bonuses

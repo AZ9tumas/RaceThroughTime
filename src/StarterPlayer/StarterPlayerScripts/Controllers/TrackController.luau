@@ -57,6 +57,7 @@ local Stats = require(ReplicatedStorage.Modules.Stats)
 
 -- Reference to UIController for debounce reset
 local UIController = nil
+local UIFramesController = nil
 
 -- Camera settings
 local DEFAULT_FOV = 70
@@ -105,6 +106,10 @@ local DistanceTraveled = 0
 local LapCount = 0
 local WorldUnlocked = false
 
+-- Pet follow constants (same as PetController and TrackService)
+local PET_FOLLOW_DISTANCE = 8
+local PET_FOLLOW_HEIGHT = 2
+
 -- Player indicators on globalView
 local PlayerIndicators: { [number]: ImageLabel } = {}
 local PlayerHeadshotCache: { [number]: string } = {}
@@ -113,6 +118,66 @@ local PlayerLapsFolder: Folder = nil
 -- Helper function for logging
 local function Log(message: string)
 	--print(string.format("[TrackController]: %s", message))
+end
+
+-- Find all pet models in workspace that belong to the local player and are in track mode
+local function FindLocalPlayerTrackPets(): { Model }
+	local pets = {}
+	local localUserId = player.UserId
+	
+	for _, child in ipairs(Workspace:GetChildren()) do
+		if child:IsA("Model") and child.PrimaryPart then
+			local ownerUserId = child:GetAttribute("OwnerUserId")
+			local trackMode = child:GetAttribute("TrackMode")
+			
+			-- Only include pets that belong to local player and are in track mode
+			if ownerUserId == localUserId and trackMode == true then
+				table.insert(pets, child)
+			end
+		end
+	end
+	
+	return pets
+end
+
+-- Update pet positions during track run
+-- Pets move at the same position as the player with an offset
+local function UpdatePetPositionsDuringTrack(targetPosition: Vector3, targetCFrame: CFrame, physicalSpeed: number)
+	local pets = FindLocalPlayerTrackPets()
+	
+	for _, petModel in ipairs(pets) do
+		local primaryPart = petModel.PrimaryPart
+		if not primaryPart then continue end
+		
+		local petIndex = petModel:GetAttribute("PetIndex") or 1
+		local alignPos = primaryPart:FindFirstChild("PetAlignPosition")
+		local alignOri = primaryPart:FindFirstChild("PetAlignOrientation")
+		
+		if alignPos and alignOri then
+			-- Calculate offset for this pet (same formula as SetPetToFollowPlayer)
+			local offset = Vector3.new(
+				math.cos(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE,
+				PET_FOLLOW_HEIGHT,
+				math.sin(petIndex * math.pi / 2) * PET_FOLLOW_DISTANCE
+			)
+			
+			-- Apply offset relative to player's orientation
+			local petTargetCFrame = targetCFrame * CFrame.new(offset)
+			
+			-- Dynamically adjust responsiveness based on speed (same as player)
+			local baseResponsiveness = 50
+			local speedFactor = math.clamp(physicalSpeed / 10, 1, 20)
+			local dynamicResponsiveness = baseResponsiveness + (speedFactor * 10)
+			local dynamicMaxVelocity = math.max(500, physicalSpeed * 2)
+			
+			alignPos.Responsiveness = dynamicResponsiveness
+			alignPos.MaxVelocity = dynamicMaxVelocity
+			
+			-- Update body mover targets
+			alignPos.Position = petTargetCFrame.Position
+			alignOri.CFrame = petTargetCFrame
+		end
+	end
 end
 
 -- Get the world folder from workspace
@@ -435,7 +500,9 @@ end
 local function UpdateDistanceDisplay(distance: number, totalDistance: number)
 	if distanceCounter then
 		local percentage = math.clamp((distance / totalDistance) * 100, 0, 100)
-		distanceCounter.Text = string.format("%.0f / %.0f (%.1f%%)", distance, totalDistance, percentage)
+		local distStr = UIController and UIController:TruncateNumber(distance) or string.format("%.1f", distance)
+		local totalDistStr = UIController and UIController:TruncateNumber(totalDistance) or string.format("%.1f", totalDistance)
+		distanceCounter.Text = string.format("%s / %s (%.1f%%)", distStr, totalDistStr, percentage)
 	end
 end
 
@@ -572,11 +639,17 @@ local function OnTrackStarted(trackData: {
 	-- Show cancel button during track run
 	trackCancelButton.Visible = true
 	
+	-- Disable all other UI frames during track run (except RaceHUD)
+	if UIFramesController then
+		UIFramesController:DisableFramesWithExceptions(true, {"RaceHUD"})
+	end
+	
 	-- Show notification
 	local NotificationController = Knit.GetController("NotificationController")
 	if NotificationController then
+		local totalDistStr = UIController and UIController:TruncateNumber(trackData.totalDistance) or string.format("%.0f", trackData.totalDistance)
 		NotificationController:ShowNotification(
-			"Track Run Started! Distance: " .. math.floor(trackData.totalDistance),
+			"Track Run Started! Distance: " .. totalDistStr,
 			NotificationController.Category.Alert,
 			3
 		)
@@ -708,6 +781,9 @@ local function OnTrackStarted(trackData: {
 		-- Update body mover targets
 		alignPosition.Position = targetPosition
 		alignOrientation.CFrame = targetCFrame
+		
+		-- Update pet positions alongside player (using same position/orientation and speed)
+		UpdatePetPositionsDuringTrack(targetPosition, targetCFrame, physicalSpeed)
 	end)
 end
 
@@ -759,6 +835,11 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	
 	-- Hide cancel button when track ends
 	trackCancelButton.Visible = false
+	
+	-- Re-enable all UI frames after track run ends
+	if UIFramesController then
+		UIFramesController:DisableFramesWithExceptions(false, {})
+	end
 
 	print(trackData)
 	
@@ -768,7 +849,7 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	
 	-- Set distance value text
 	if distanceValueLabel then
-		distanceValueLabel.Text = string.format("%.0f", distanceTraveled)
+		distanceValueLabel.Text = UIController and UIController:TruncateNumber(distanceTraveled) or string.format("%.0f", distanceTraveled)
 	end
 	
 	-- Set green fill width based on percentage (scale X from 0 to 1)
@@ -805,8 +886,9 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	-- Show notification with cash earned
 	local NotificationController = Knit.GetController("NotificationController")
 	if NotificationController then
+		local cashStr = trackData.cashEarned and (UIController and UIController:TruncateNumber(trackData.cashEarned) or string.format("%.0f", trackData.cashEarned)) or "0"
 		local cashMessage = trackData.cashEarned and trackData.cashEarned > 0 
-			and string.format("Track Run Complete! +$%.0f", trackData.cashEarned)
+			and string.format("Track Run Complete! +$%s", cashStr)
 			or "Track Run Complete!"
 		NotificationController:ShowNotification(cashMessage, NotificationController.Category.Success, 3)
 	end
@@ -892,6 +974,23 @@ function TrackController:UpdateWorldFrameColors()
 			end
 		end
 		if latestUnlockedWorld ~= "Main" or Stats.WorldOrder[i] == "Main" then break end
+	end
+
+	-- next world info
+	local nextWorldIndex = table.find(Stats.WorldOrder, latestUnlockedWorld) + 1
+	local nextworldname = Stats.WorldOrder[nextWorldIndex]
+	local nextWorld = Stats.WorldOrder[nextWorldIndex] and Stats.WorldUnlockRequirements[nextworldname] or {Rebirth = 0}
+	local worldProgress: Frame = globalView.Parent:FindFirstChild("WorldProgress")
+	local rebirths: TextLabel = worldProgress:WaitForChild("Rebirths")
+	warn(data.Stats.Rebirths, nextWorld.Rebirth)
+
+	rebirths.Text = data.Stats.Rebirths .. "/" .. nextWorld.Rebirth
+	worldProgress.WorldName.Text = nextworldname or "MAX"
+
+	if nextWorld then
+		worldProgress.Visible = true
+	else
+		worldProgress.Visible = false
 	end
 	
 	-- Update each world frame in globalView
@@ -1047,12 +1146,30 @@ end
 function TrackController:KnitStart()
 	-- Get UIController reference for debounce reset
 	UIController = Knit.GetController("UIController")
+	UIFramesController = Knit.GetController("UIFramesController")
 	
 	-- Listen for server signals
 	local TrackService = Knit.GetService("TrackService")
 	
 	TrackService.TrackStarted:Connect(OnTrackStarted)
 	TrackService.TrackEnded:Connect(OnTrackEnded)
+	
+	-- Listen for early world unlock during track run
+	TrackService.EarlyWorldUnlock:Connect(function(unlockData)
+		Log(string.format("Early world unlock! New world: %s, distance: %.2f", unlockData.newWorld or "unknown", unlockData.distanceTraveled or 0))
+		
+		-- Show notification
+		local NotificationController = Knit.GetController("NotificationController")
+		if NotificationController then
+			NotificationController:ShowNotification(
+				"🌍 World Unlocked!",
+				NotificationController.Category.Success,
+				3
+			)
+		end
+		
+		-- The TrackEnded signal will also be fired, which will handle cleanup
+	end)
 
 	closeButton.MouseButton1Click:Connect(function()
 		resultsFrame.Parent.Visible = false
@@ -1074,6 +1191,11 @@ function TrackController:KnitStart()
 	
 	-- Ensure cancel button is hidden initially
 	trackCancelButton.Visible = false
+	
+	-- Setup button animation for cancel button (hover/click effects)
+	if UIFramesController then
+		UIFramesController:SetupButtonAnimation(trackCancelButton)
+	end
 	
 	-- Listen for data updates to refresh world frame colors
 	local DataService = Knit.GetService("DataService")
