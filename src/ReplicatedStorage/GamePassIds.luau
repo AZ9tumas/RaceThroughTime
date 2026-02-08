@@ -7,6 +7,7 @@ local GamePassIds = {
 	VIP = 1703762481,
 	ExtraSlots = 1703918323,
 	Luck = 1703166098,
+	SuperLuck = 1703261962,
 }
 
 return GamePassIds

@@ -114,7 +114,8 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 		return
 	end
 
-	-- Check if player has Luck gamepass for displaying updated probabilities
+	-- Check if player has Luck or SuperLuck gamepass for displaying updated probabilities
+	local hasSuperLuck = MonetizationController and MonetizationController:HasGamePass("SuperLuck")
 	local hasLuck = MonetizationController and MonetizationController:HasGamePass("Luck")
 
 	for _, child in ipairs(contentFrame:GetChildren()) do
@@ -125,9 +126,12 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 
 	for i, petOption in ipairs(eggConfig.Pets) do
 		local petName = petOption.Pet
-		-- Use LuckProbability if player has Luck gamepass and it's defined
+		-- Use SuperLuckProbability if player has SuperLuck gamepass (takes priority)
+		-- Otherwise use LuckProbability if player has Luck gamepass
 		local probability = petOption.Probability
-		if hasLuck and petOption.LuckProbability then
+		if hasSuperLuck and petOption.SuperLuckProbability then
+			probability = petOption.SuperLuckProbability
+		elseif hasLuck and petOption.LuckProbability then
 			probability = petOption.LuckProbability
 		end
 		local petConfig = GetPetConfig(petName)
