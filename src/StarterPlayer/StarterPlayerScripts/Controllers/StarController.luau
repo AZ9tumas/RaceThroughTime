@@ -20,13 +20,14 @@ local StarController = Knit.CreateController({
 })
 
 -- Private state
-local SpawnedStars = {} -- [starId] = { Instance: StarInstance, Position: Vector3 }
+local SpawnedStars = {} -- [starId] = { Instance: StarInstance, Position: Vector3, IsVIP: boolean? }
 local StarAssets = nil
 local PlayerStarsFolder = nil
 local ProximityCheckConnection = nil -- RenderStep connection for proximity checking
 local CollectionDebounce = {} -- [starId] = true (prevents double collection)
 local ActiveCollectionTweens = {} -- [starId] = { Tween: Tween, OriginalSize: Vector3, OriginalTransparency: number }
 local HasMagnetGamepass = false -- Cached Magnet gamepass ownership (checked once)
+local HasVIPGamepass = false -- Cached VIP gamepass ownership (checked once)
 
 -- Helper function for logging
 local function Log(message: string)
@@ -70,13 +71,14 @@ local function GetStarAssets(): Folder?
 end
 
 -- Spawn a single star at the given position
-local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: string, Index: number })
+local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: string, Index: number, IsVIP: boolean? })
 	local starsFolder = GetStarsFolder()
 	if not starsFolder then
 		-- Still track the star for collection even without visual
 		SpawnedStars[starInfo.ID] = {
 			Instance = nil,
 			Position = starInfo.Position,
+			IsVIP = starInfo.IsVIP or false,
 		}
 		return
 	end
@@ -87,6 +89,7 @@ local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: st
 		SpawnedStars[starInfo.ID] = {
 			Instance = nil,
 			Position = starInfo.Position,
+			IsVIP = starInfo.IsVIP or false,
 		}
 		return
 	end
@@ -98,6 +101,7 @@ local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: st
 		SpawnedStars[starInfo.ID] = {
 			Instance = nil,
 			Position = starInfo.Position,
+			IsVIP = starInfo.IsVIP or false,
 		}
 		return
 	end
@@ -124,6 +128,7 @@ local function SpawnStar(starInfo: { Position: Vector3, ID: string, StarName: st
 	SpawnedStars[starInfo.ID] = {
 		Instance = starClone,
 		Position = starInfo.Position,
+		IsVIP = starInfo.IsVIP or false,
 	}
 	
 	-- Start star animations (pulsing and jumping)
@@ -302,6 +307,11 @@ local function CheckProximityCollection()
 	for starId, starData in pairs(SpawnedStars) do
 		if CollectionDebounce[starId] then continue end
 		
+		-- Skip VIP stars if player doesn't have VIP gamepass
+		if starData.IsVIP and not HasVIPGamepass then
+			continue
+		end
+		
 		local distance = (playerPosition - starData.Position).Magnitude
 		if distance <= collectionRadius then
 			-- Mark as being collected to prevent double collection
@@ -355,6 +365,7 @@ function StarController:KnitStart()
 	local MonetizationController = Knit.GetController("MonetizationController")
 	if MonetizationController then
 		HasMagnetGamepass = MonetizationController:HasGamePass(MonetizationController.Passes.Magnet)
+		HasVIPGamepass = MonetizationController:HasGamePass(MonetizationController.Passes.VIP)
 	end
 
 	-- Start proximity checking loop using Heartbeat (runs every frame)
