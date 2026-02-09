@@ -39,6 +39,7 @@ function InventoryUIController:UpdatePetsInventory()
 			child:Destroy()
 		end
 	end
+
 	local UIController = Knit.GetController("UIController")
 	local PetModalUIController = Knit.GetController("PetModalUIController")
 	local MonetizationController = Knit.GetController("MonetizationController")
@@ -46,12 +47,14 @@ function InventoryUIController:UpdatePetsInventory()
 	local petInventory = data.Inventory.PetInventory
 	local equippedPets = data.Inventory.EquippedPets or {}
 	local equippedSet = {}
+
 	for _, petIndex in ipairs(equippedPets) do
 		equippedSet[petIndex] = true
 	end
 	-- Calculate max equipped pets based on gamepass
 	local maxEquipped = statsM.MaxEquippedPets
 	warn(MonetizationController:HasGamePass("ExtraPets"), "ExtraPets")
+
 	if MonetizationController:HasGamePass("ExtraPets") then
 		maxEquipped = maxEquipped + statsM.ExtraPetsBonus
 	end
@@ -62,15 +65,35 @@ function InventoryUIController:UpdatePetsInventory()
 	if MonetizationController:HasGamePass("ExtraSlots") then
 		maxInventory = maxInventory + statsM.ExtraSlotsBonus
 	end
+
 	inventoryItemCount.Count.Text = #petInventory .. "/" .. maxInventory
+	
 	for index, petData in ipairs(petInventory) do
 		local petFrame = inventoryPetTemplate:Clone()
 		petFrame.Name = "Pet_" .. index
 		petFrame.Visible = true
+		
 		local nameLabel = petFrame:FindFirstChild("PetName")
 		if nameLabel then
 			nameLabel.Text = petData.Name or "Unknown Pet"
 		end
+
+		local timeFrame = petFrame:FindFirstChild("TimeLimit")
+		if timeFrame and petData.ExpireLength then
+			local timeLabel = timeFrame:FindFirstChild("TextLabel")
+			if timeLabel then
+				local remainingTime = petData.obtainedAt + petData.ExpireLength - os.time()
+				if remainingTime > 0 then
+					local hours = math.floor(remainingTime / 3600)
+					local minutes = math.floor((remainingTime % 3600) / 60)
+					local seconds = remainingTime % 60
+					timeLabel.Text = string.format("%02dh %02dm %02ds", hours, minutes, seconds)
+				else
+					timeLabel.Text = "Expired"
+				end
+			end
+		end
+
 		local multiplierFrame = petFrame:FindFirstChild("Multiplier")
 		if multiplierFrame then
 			local multiplierLabel = multiplierFrame:FindFirstChild("TextLabel")
@@ -78,13 +101,16 @@ function InventoryUIController:UpdatePetsInventory()
 				multiplierLabel.Text = string.format("x%.1f", petData.Multiplier or 1.0)
 			end
 		end
+		
 		local isEquipped = equippedSet[index] == true
 		petFrame.UIStroke.Color = statsM.TierColors[petData.TierLevel]
+		
 		if isEquipped then
 			petFrame.BackgroundColor3 = DefaultBackgroundColorSelected
 		else
 			petFrame.BackgroundColor3 = DefaultBackgroundColorNotSelected
 		end
+		
 		local fullPetData = {
 			ID = petData.ID,
 			Name = petData.Name,
@@ -101,6 +127,7 @@ function InventoryUIController:UpdatePetsInventory()
 			Equipped = isEquipped,
 			Index = index,
 		}
+		
 		if petFrame:IsA("TextButton") then
 			petFrame.MouseButton1Click:Connect(function()
 				if PetModalUIController then
@@ -108,6 +135,7 @@ function InventoryUIController:UpdatePetsInventory()
 				end
 			end)
 		end
+		
 		petFrame.Parent = inventoryScrollingFrame
 	end
 end

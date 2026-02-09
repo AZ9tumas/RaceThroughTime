@@ -446,7 +446,7 @@ Stats.Pets = {
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
 		Rarity = "LimitedTime", -- Standard, Premium, LimitedTime, or Exclusive
-		ExpireLength = 3600 * 24 * 7, -- 7 days in seconds
+		ExpireLength = 30, -- debug time: 30s
 	}
 }
 
@@ -463,6 +463,7 @@ function Stats.CalculateFuelMultiplier(equippedPets: {any}?, potionMultiplier: n
 	end
 	
 	-- First pass: calculate base total from non-percentage pets
+	local highestMultiplier = 0
 	local baseTotal = 0
 	local totalPercentageBonus = 0
 	
@@ -471,14 +472,12 @@ function Stats.CalculateFuelMultiplier(equippedPets: {any}?, potionMultiplier: n
 			-- This is a percentage pet - accumulate its percentage bonus
 			totalPercentageBonus = totalPercentageBonus + (pet.Percentage or 0)
 		else
-			-- Regular pet - add its multiplier to base total
-			baseTotal = baseTotal + (pet.Multiplier or 0)
+			baseTotal += pet.Multiplier or 0
+			highestMultiplier = math.max(highestMultiplier, pet.Multiplier or 0)
 		end
 	end
-	warn(totalPercentageBonus, baseTotal)
-	-- Apply percentage bonus: baseTotal * (1 + totalPercentage/100)
-	-- Example: if baseTotal = 100 and percentage = 150, result = 100 * (1 + 1.5) = 250
-	local totalBonus = baseTotal * (1 + totalPercentageBonus / 100)
+	warn(totalPercentageBonus, highestMultiplier)
+	local totalBonus = baseTotal + (highestMultiplier * (totalPercentageBonus / 100))
 	
 	-- Apply potion multiplier if provided
 	-- Example: if totalBonus = 250 and potionMultiplier = 1.5, result = 375

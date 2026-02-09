@@ -280,10 +280,16 @@ function PetService:InitializePets(player: Player)
 	local inventory = DataService:Get(player, "Inventory")
 	if inventory and inventory.PetInventory then
 		-- Assign IDs to existing pets
-		for index, _ in ipairs(inventory.PetInventory) do
+		for index, petdata in ipairs(inventory.PetInventory) do
 			local petID = GeneratePetID()
 			PlayerPetIDs[userId].petIndexToID[index] = petID
 			PlayerPetIDs[userId].idToPetIndex[petID] = index
+
+			-- for those pets that have an expiry date and have expired, remove.
+			if petdata.ExpireLength ~= nil and petdata.obtainedAt + petdata.ExpireLength < os.time() then
+				print("removed", petdata)
+				inventory.PetInventory[index] = nil
+			end
 		end
 		
 		-- Spawn equipped pets

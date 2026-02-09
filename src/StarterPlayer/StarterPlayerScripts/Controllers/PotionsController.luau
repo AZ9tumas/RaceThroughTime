@@ -11,28 +11,35 @@ local PotionsController = Knit.CreateController({
 
 local PotionsService
 
+local function GetPotionsService()
+	if not PotionsService then
+		PotionsService = Knit.GetService("PotionsService")
+	end
+	return PotionsService
+end
+
 function PotionsController:HasActivePotion(potionName: string)
-	return PotionsService:HasActivePotion(potionName)
+	return GetPotionsService():HasActivePotion(potionName)
 end
 
 function PotionsController:GetProbabilityKey()
-	return PotionsService:GetProbabilityKey()
+	return GetPotionsService():GetProbabilityKey()
 end
 
 function PotionsController:GetPotionMultiplier()
-	return PotionsService:GetPotionMultiplier()
+	return GetPotionsService():GetPotionMultiplier()
 end
 
 function PotionsController:GetRemainingTime(potionName: string)
-	return PotionsService:GetRemainingTime(potionName)
+	return GetPotionsService():GetRemainingTime(potionName)
 end
 
 function PotionsController:KnitInit()
-	
+	GetPotionsService()
 end
 
 function PotionsController:KnitStart()
-	PotionsService = Knit.GetService("PotionsService")
+	
 end
 
 return PotionsController
