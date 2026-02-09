@@ -83,14 +83,19 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
 		local hasLuck = MonetizationService:HasGamePass(player, "Luck")
 		
+		-- Check if player has active potion that affects probabilities
+		local PotionsService = Knit.GetService("PotionsService")
+		local hasPotion, potionProbabilityKey = PotionsService:HasProbabilityPotion(player)
+		
 		local random = math.random()
 		local cumulativeProbability = 0
 		
 		for _, petOption in ipairs(eggConfig.Pets) do
-			-- Use SuperLuckProbability if player has SuperLuck gamepass (takes priority)
-			-- Otherwise use LuckProbability if player has Luck gamepass
+			-- Priority: Potion > SuperLuck gamepass > Luck gamepass > Default
 			local probability = petOption.Probability
-			if hasSuperLuck and petOption.SuperLuckProbability then
+			if hasPotion and potionProbabilityKey and petOption[potionProbabilityKey] then
+				probability = petOption[potionProbabilityKey]
+			elseif hasSuperLuck and petOption.SuperLuckProbability then
 				probability = petOption.SuperLuckProbability
 			elseif hasLuck and petOption.LuckProbability then
 				probability = petOption.LuckProbability
@@ -227,14 +232,19 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
 		local hasLuck = MonetizationService:HasGamePass(player, "Luck")
 		
+		-- Check if player has active potion that affects probabilities
+		local PotionsService = Knit.GetService("PotionsService")
+		local hasPotion, potionProbabilityKey = PotionsService:HasProbabilityPotion(player)
+		
 		local random = math.random()
 		local cumulativeProbability = 0
 		
 		for _, petOption in ipairs(eggConfig.Pets) do
-			-- Use SuperLuckProbability if player has SuperLuck gamepass (takes priority)
-			-- Otherwise use LuckProbability if player has Luck gamepass
+			-- Priority: Potion > SuperLuck gamepass > Luck gamepass > Default
 			local probability = petOption.Probability
-			if hasSuperLuck and petOption.SuperLuckProbability then
+			if hasPotion and potionProbabilityKey and petOption[potionProbabilityKey] then
+				probability = petOption[potionProbabilityKey]
+			elseif hasSuperLuck and petOption.SuperLuckProbability then
 				probability = petOption.SuperLuckProbability
 			elseif hasLuck and petOption.LuckProbability then
 				probability = petOption.LuckProbability

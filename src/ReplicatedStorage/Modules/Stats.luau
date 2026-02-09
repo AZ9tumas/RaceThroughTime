@@ -444,7 +444,7 @@ Stats.Pets = {
 -- Formula: totalBonus = baseTotal * (1 + percentage/100) for each percentage pet
 -- @param equippedPets table? - Array of equipped pet data { Multiplier: number, Percentage: number?, ... }
 -- @return number - Total fuel bonus (sum of pet Multiplier values with percentage bonuses applied)
-function Stats.CalculateFuelMultiplier(equippedPets: {any}?): number
+function Stats.CalculateFuelMultiplier(equippedPets: {any}?, potionMultiplier: number?): number
 	if not equippedPets or #equippedPets == 0 then
 		return 0
 	end
@@ -466,6 +466,12 @@ function Stats.CalculateFuelMultiplier(equippedPets: {any}?): number
 	-- Apply percentage bonus: baseTotal * (1 + totalPercentage/100)
 	-- Example: if baseTotal = 100 and percentage = 150, result = 100 * (1 + 1.5) = 250
 	local totalBonus = baseTotal * (1 + totalPercentageBonus / 100)
+	
+	-- Apply potion multiplier if provided
+	-- Example: if totalBonus = 250 and potionMultiplier = 1.5, result = 375
+	if potionMultiplier and potionMultiplier > 1 then
+		totalBonus = totalBonus * potionMultiplier
+	end
 	
 	return totalBonus
 end
