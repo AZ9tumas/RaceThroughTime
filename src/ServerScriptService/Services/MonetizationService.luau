@@ -5,6 +5,7 @@ local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local GamePassIds = require(ReplicatedStorage.GamePassIds)
+local DevProductIds = require(ReplicatedStorage.DevProductIds)
 
 local MonetizationService = Knit.CreateService({
 	Name = "MonetizationService",
@@ -13,9 +14,35 @@ local MonetizationService = Knit.CreateService({
 
 -- Expose Passes table for both server and client usage
 MonetizationService.Passes = GamePassIds
+MonetizationService.DevProducts = DevProductIds
 
 local PlayerGamePasses = {}
 local DebugOverrides = {} -- [UserId] = { [gamePassName] = boolean } - Debug overrides for Studio testing
+
+-- Dev Product Purchases Manager
+local PurchasesManager = {
+	[DevProductIds.MediumCashPack] = {
+		Name = "MediumCashPack",
+		OnPurchase = function(player)
+			local DataService = Knit.GetService("DataService")
+			DataService:Update(player, "Currencies", function(currencies)
+				currencies.Cash = (currencies.Cash or 0) + 10000
+				return currencies
+			end)
+			
+			local NotificationService = Knit.GetService("NotificationService")
+			if NotificationService then
+				NotificationService:SendNotification(
+					player,
+					"You received 10,000 Cash!",
+					NotificationService.Category.Success
+				)
+			end
+			
+			return true
+		end
+	},
+}
 
 local function CheckAllGamePasses(player: Player)
 	local userId = player.UserId
@@ -92,6 +119,7 @@ function MonetizationService.Client:IsStudio(player: Player)
 end
 
 function MonetizationService:KnitInit()
+	-- Handle game pass purchases
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamePassId, wasPurchased)
 		if wasPurchased then
 			local userId = player.UserId
@@ -113,6 +141,34 @@ function MonetizationService:KnitInit()
 			end
 		end
 	end)
+	
+	-- Handle dev product purchases
+	MarketplaceService.ProcessReceipt = function(receiptInfo)
+		local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
+		if not player then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		
+		local productId = receiptInfo.ProductId
+		local purchaseHandler = PurchasesManager[productId]
+		
+		if purchaseHandler then
+			local success, result = pcall(function()
+				return purchaseHandler.OnPurchase(player)
+			end)
+			
+			if success and result then
+				print(string.format("[MonetizationService] Player %s purchased %s", player.Name, purchaseHandler.Name))
+				return Enum.ProductPurchaseDecision.PurchaseGranted
+			else
+				warn(string.format("[MonetizationService] Failed to process purchase for %s: %s", player.Name, tostring(result)))
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
+		else
+			warn(string.format("[MonetizationService] Unknown product ID: %d", productId))
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+	end
 	
 	Players.PlayerRemoving:Connect(function(player)
 		PlayerGamePasses[player.UserId] = nil
