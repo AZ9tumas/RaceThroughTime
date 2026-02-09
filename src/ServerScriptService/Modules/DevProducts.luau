@@ -17,7 +17,7 @@ local DevProducts = {}
 -- Dev Product IDs
 DevProducts.Ids = {
 	MediumCashPack = 3533352608,
-	HugeCashPack = 3533352608,
+	HugeCashPack = 3533356103,
 	LargeGemPack = 3533356279,
 }
 

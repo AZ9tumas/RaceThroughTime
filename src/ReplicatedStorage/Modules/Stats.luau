@@ -342,6 +342,33 @@ Stats.Eggs = {
 			{ Pet = "PercentagePet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 }, -- 100% chance
 		},
 	},
+	PremiumWorldEgg = {
+		Cost = 1500,
+		Tier = "Premium",
+		Currency = "Cash",
+		World = "Main",
+		Pets = {
+			{ Pet = "PremiumPet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 },
+		},
+	},
+	LimitedHistoricalEgg = {
+		Cost = 5000,
+		Tier = "Limited",
+		Currency = "Cash",
+		World = "Main",
+		Pets = {
+			{ Pet = "GoldenPet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 },
+		},
+	},
+	GoldenChronoEgg = {
+		Cost = 10000,
+		Tier = "Exclusive",
+		Currency = "Cash",
+		World = "Main",
+		Pets = {
+			{ Pet = "GoldenPet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 },
+		},
+	},
 }
 
 Stats.TierColors = setmetatable({
