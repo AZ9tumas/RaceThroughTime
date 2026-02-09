@@ -24,6 +24,10 @@ DevProducts.Ids = {
 	LimitedHistoricalEgg = 3533366398,
 	PremiumWorldEgg = 3533366275,
 	GoldenChronoEgg = 3533366982,
+	-- Missing Merge Products (fills 1 slot to create next tier)
+	MissingMergeStage1 = 3533370001, -- Fills 1 slot to create Tier 2 Pet
+	MissingMergeStage2 = 3533370002, -- Fills 1 slot to create Tier 3 Pet
+	MissingMergeStage3 = 3533370003, -- Fills 1 slot to create Tier 4 Pet
 }
 
 -- Purchases Manager - handlers are initialized when Initialize() is called
@@ -118,6 +122,52 @@ function DevProducts.Initialize(Knit)
 			Name = "GoldenChronoEgg",
 			OnPurchase = function(player)
 				local success = EggService:HatchEgg(player, "GoldenChronoEgg")
+				return success
+			end
+		},
+		-- Missing Merge Products
+		[DevProducts.Ids.MissingMergeStage1] = {
+			Name = "MissingMergeStage1",
+			OnPurchase = function(player)
+				local PetService = Knit.GetService("PetService")
+				local success, errorMsg = PetService:MergePetsWithException(player, 1)
+				if success then
+					NotificationService:SendNotification(
+						player,
+						"Missing merge successful! Pet upgraded to Tier 2!",
+						NotificationService.Category.Success
+					)
+				end
+				return success
+			end
+		},
+		[DevProducts.Ids.MissingMergeStage2] = {
+			Name = "MissingMergeStage2",
+			OnPurchase = function(player)
+				local PetService = Knit.GetService("PetService")
+				local success, errorMsg = PetService:MergePetsWithException(player, 2)
+				if success then
+					NotificationService:SendNotification(
+						player,
+						"Missing merge successful! Pet upgraded to Tier 3!",
+						NotificationService.Category.Success
+					)
+				end
+				return success
+			end
+		},
+		[DevProducts.Ids.MissingMergeStage3] = {
+			Name = "MissingMergeStage3",
+			OnPurchase = function(player)
+				local PetService = Knit.GetService("PetService")
+				local success, errorMsg = PetService:MergePetsWithException(player, 3)
+				if success then
+					NotificationService:SendNotification(
+						player,
+						"Missing merge successful! Pet upgraded to Tier 4!",
+						NotificationService.Category.Success
+					)
+				end
 				return success
 			end
 		},

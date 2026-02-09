@@ -59,6 +59,10 @@ local PlayerPetIDs = {}
 -- [Player.UserId] = { [petIndex] = Model }
 local SpawnedPets = {}
 
+-- Pending merge data for Missing Merge dev products
+-- [Player.UserId] = { tierLevel: number, selectedIndexes: {number}, selectedIDs: {string} }
+local PendingMergeData = {}
+
 -- Track if collision group was created
 local PetsCollisionGroupCreated = false
 
@@ -982,6 +986,259 @@ function PetService:GetSpawnedPets(player: Player): { [number]: Model }
 	return SpawnedPets[userId] or {}
 end
 
+-- Store pending merge data for Missing Merge dev product purchases
+-- Called when client detects they're 1 pet short before prompting purchase
+function PetService:StorePendingMerge(player: Player, tierLevel: number, selectedIndexes: { number }, selectedIDs: { string }): boolean
+	local userId = player.UserId
+	
+	-- Validate the data
+	if not tierLevel or tierLevel < 1 or tierLevel > 3 then
+		return false
+	end
+	
+	if not selectedIndexes or not selectedIDs then
+		return false
+	end
+	
+	PendingMergeData[userId] = {
+		tierLevel = tierLevel,
+		selectedIndexes = selectedIndexes,
+		selectedIDs = selectedIDs,
+		timestamp = os.time(),
+	}
+	
+	Log(string.format("Stored pending merge for player %s: tier %d with %d pets", player.Name, tierLevel, #selectedIndexes))
+	return true
+end
+
+-- Get pending merge data for a player
+function PetService:GetPendingMergeData(player: Player)
+	local userId = player.UserId
+	return PendingMergeData[userId]
+end
+
+-- Clear pending merge data for a player
+function PetService:ClearPendingMerge(player: Player)
+	local userId = player.UserId
+	PendingMergeData[userId] = nil
+end
+
+-- Merge pets with exception (1 pet short) - called from dev product OnPurchase
+-- targetTierLevel: 1 = create Tier 2, 2 = create Tier 3, 3 = create Tier 4
+function PetService:MergePetsWithException(player: Player, targetTierLevel: number): (boolean, string?)
+	local DataService = Knit.GetService("DataService")
+	local NotificationService = Knit.GetService("NotificationService")
+	
+	local userId = player.UserId
+	local pendingData = PendingMergeData[userId]
+	
+	if not pendingData then
+		return false, "No pending merge data"
+	end
+	
+	-- Validate that pending data matches the purchased tier
+	if pendingData.tierLevel ~= targetTierLevel then
+		PendingMergeData[userId] = nil
+		return false, "Pending merge tier mismatch"
+	end
+	
+	-- Check if data is too old (5 minutes max)
+	if os.time() - pendingData.timestamp > 300 then
+		PendingMergeData[userId] = nil
+		return false, "Pending merge expired"
+	end
+	
+	local selectedIndexes = pendingData.selectedIndexes
+	local selectedIDs = pendingData.selectedIDs
+	local tierLevel = pendingData.tierLevel
+	
+	-- Clear pending data
+	PendingMergeData[userId] = nil
+	
+	if not selectedIndexes or not selectedIDs or #selectedIndexes == 0 then
+		return false, "Invalid pending merge data"
+	end
+	
+	local inventory = DataService:Get(player, "Inventory")
+	if not inventory or not inventory.PetInventory then
+		return false, "Inventory not found"
+	end
+	
+	local firstPetIndex = selectedIndexes[1]
+	local firstPet = inventory.PetInventory[firstPetIndex]
+	
+	if not firstPet then
+		return false, "Selected pet not found"
+	end
+	
+	-- Verify the pet's tier matches what we expect
+	local petTierLevel = firstPet.TierLevel or firstPet.Level or 1
+	if petTierLevel ~= tierLevel then
+		return false, "Pet tier mismatch"
+	end
+	
+	local petName = firstPet.Name
+	local petType = firstPet.PetType
+	local world = firstPet.World
+	
+	if PetMergeStats.IsMaxTier(tierLevel) then
+		return false, "Max tier reached"
+	end
+	
+	local copiesRequired = PetMergeStats.GetCopiesRequired(tierLevel)
+	
+	-- For exception merge, we allow 1 less pet than required
+	if #selectedIndexes ~= copiesRequired - 1 then
+		return false, string.format("Expected %d pets for exception merge, got %d", copiesRequired - 1, #selectedIndexes)
+	end
+	
+	-- Validate all selected pets
+	for i, petIndex in ipairs(selectedIndexes) do
+		local expectedID = self:GetPetIDByIndex(player, petIndex)
+		if expectedID ~= selectedIDs[i] then
+			return false, "Pet ID mismatch - inventory may have changed"
+		end
+		
+		local pet = inventory.PetInventory[petIndex]
+		if not pet then
+			return false, "Pet not found at index"
+		end
+		
+		local currentTierLevel = pet.TierLevel or pet.Level
+		if currentTierLevel ~= tierLevel then
+			return false, "Tier level mismatch"
+		end
+	end
+	
+	-- Check gem cost (same as normal merge)
+	local mergeCost = PetMergeStats.GetMergeCost(tierLevel)
+	local currencies = DataService:Get(player, "Currencies")
+	
+	if not currencies or (currencies.Gems or 0) < mergeCost then
+		return false, string.format("Not enough Gems. Need %d Gems.", mergeCost)
+	end
+	
+	-- Unequip any selected pets that are equipped
+	local equippedPets = inventory.EquippedPets or {}
+	local petsToUnequip = {}
+	
+	for _, equippedIndex in ipairs(equippedPets) do
+		for _, selectedIndex in ipairs(selectedIndexes) do
+			if equippedIndex == selectedIndex then
+				table.insert(petsToUnequip, selectedIndex)
+			end
+		end
+	end
+	
+	-- Deduct gems
+	DataService:Update(player, "Currencies", function(curr)
+		curr.Gems = (curr.Gems or 0) - mergeCost
+		return curr
+	end)
+	
+	-- Despawn equipped pets that will be merged
+	for _, petIndexToRemove in ipairs(petsToUnequip) do
+		DespawnPetModel(player, petIndexToRemove)
+	end
+	
+	-- Calculate new pet stats
+	local newTierLevel = tierLevel + 1
+	local oldStats = {
+		Multiplier = firstPet.Multiplier or 1.0,
+		PickupRangeBonus = firstPet.PickupRangeBonus or 1.0,
+		RoamRange = firstPet.RoamRange or 30,
+		StarCollectionRadius = firstPet.StarCollectionRadius or 5,
+		Velocity = firstPet.Velocity or 20,
+	}
+	local newStats = PetMergeStats.CalculateMergedStats(oldStats, tierLevel)
+	local newTier = PetMergeStats.GetTierByLevel(newTierLevel)
+	
+	-- Remove old pets and add new merged pet
+	local indicesToRemove = {}
+	for _, idx in ipairs(selectedIndexes) do
+		table.insert(indicesToRemove, idx)
+	end
+	table.sort(indicesToRemove, function(a, b) return a > b end)
+	
+	DataService:Update(player, "Inventory", function(inv)
+		for _, indexToRemove in ipairs(indicesToRemove) do
+			table.remove(inv.PetInventory, indexToRemove)
+		end
+		
+		local newPet = {
+			ID = GeneratePetID(),
+			Name = petName,
+			PetType = petType,
+			World = world,
+			Level = newTierLevel,
+			TierLevel = newTierLevel,
+			TierName = newTier.Name,
+			Multiplier = newStats.Multiplier,
+			PickupRangeBonus = newStats.PickupRangeBonus,
+			RoamRange = newStats.RoamRange,
+			StarCollectionRadius = newStats.StarCollectionRadius,
+			Velocity = newStats.Velocity,
+			Equipped = false,
+		}
+		table.insert(inv.PetInventory, newPet)
+		
+		-- Update equipped indexes
+		if inv.EquippedPets then
+			local newEquipped = {}
+			for _, equippedIndex in ipairs(inv.EquippedPets) do
+				local isRemoved = false
+				for _, removedIndex in ipairs(indicesToRemove) do
+					if equippedIndex == removedIndex then
+						isRemoved = true
+						break
+					end
+				end
+				
+				if not isRemoved then
+					local adjustedIndex = equippedIndex
+					for _, removedIndex in ipairs(indicesToRemove) do
+						if removedIndex < equippedIndex then
+							adjustedIndex = adjustedIndex - 1
+						end
+					end
+					table.insert(newEquipped, adjustedIndex)
+				end
+			end
+			inv.EquippedPets = newEquipped
+		end
+		
+		return inv
+	end)
+	
+	-- Regenerate pet IDs
+	if PlayerPetIDs[userId] then
+		PlayerPetIDs[userId] = {
+			petIndexToID = {},
+			idToPetIndex = {},
+		}
+		
+		local newInventory = DataService:Get(player, "Inventory")
+		if newInventory and newInventory.PetInventory then
+			for index, _ in ipairs(newInventory.PetInventory) do
+				local petID = GeneratePetID()
+				PlayerPetIDs[userId].petIndexToID[index] = petID
+				PlayerPetIDs[userId].idToPetIndex[petID] = index
+			end
+		end
+	end
+	
+	Log(string.format("Player %s used Missing Merge to create %s tier %s (Level %d)", player.Name, newTier.Name, petName, newTierLevel))
+	
+	DataService:FireDataReady(player)
+	
+	return true, nil
+end
+
+-- Client function to store pending merge data
+function PetService.Client:StorePendingMerge(player: Player, tierLevel: number, selectedIndexes: { number }, selectedIDs: { string }): boolean
+	return PetService:StorePendingMerge(player, tierLevel, selectedIndexes, selectedIDs)
+end
+
 -- Clean up when player leaves
 local function OnPlayerRemoving(player: Player)
 	local userId = player.UserId
@@ -992,6 +1249,7 @@ local function OnPlayerRemoving(player: Player)
 	-- Clean up data
 	PlayerPetIDs[userId] = nil
 	SpawnedPets[userId] = nil
+	PendingMergeData[userId] = nil
 	
 	Log(string.format("Cleared pet data for player %s", player.Name))
 end

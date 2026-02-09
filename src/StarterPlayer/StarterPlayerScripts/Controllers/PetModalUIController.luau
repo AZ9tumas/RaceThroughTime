@@ -2,6 +2,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local Knit = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Knit"))
 
@@ -524,6 +525,55 @@ function PetModalUIController:KnitStart()
 		end
 		
 		if State.Debounce.MergeExecution then
+			return
+		end
+		
+		-- Check if exactly 1 pet short - prompt Missing Merge dev product
+		if State.Merge.SelectedCount == State.Merge.RequiredCopies - 1 then
+			-- Only support Missing Merge for tiers 1, 2, 3 (creating tiers 2, 3, 4)
+			local tierLevel = State.Merge.TierLevel
+			if tierLevel >= 1 and tierLevel <= 3 then
+				State.Debounce.MergeExecution = true
+				
+				local selectedIndexes = GetSelectedPetIndexes()
+				local selectedIDs = GetSelectedPetIDs()
+				
+				-- Store pending merge data on server
+				services.Pet:StorePendingMerge(tierLevel, selectedIndexes, selectedIDs):andThen(function(stored)
+					if stored then
+						-- Get the appropriate dev product ID
+						local MonetizationService = Knit.GetService("MonetizationService")
+						local productName = "MissingMergeStage" .. tierLevel
+						
+						MonetizationService:GetDevProductId(productName):andThen(function(productId)
+							if productId then
+								-- Prompt purchase - the dev product OnPurchase will handle the merge
+								MarketplaceService:PromptProductPurchase(Player, productId)
+							else
+								controllers.Notification:ShowNotification(
+									"Missing Merge product not available",
+									controllers.Notification.Category.Error,
+									3
+								)
+							end
+							State.Debounce.MergeExecution = false
+						end)
+					else
+						controllers.Notification:ShowNotification(
+							"Failed to prepare merge data",
+							controllers.Notification.Category.Error,
+							3
+						)
+						State.Debounce.MergeExecution = false
+					end
+				end)
+			else
+				controllers.Notification:ShowNotification(
+					string.format("Need %d copies to merge, selected %d", State.Merge.RequiredCopies, State.Merge.SelectedCount),
+					controllers.Notification.Category.Warning,
+					3
+				)
+			end
 			return
 		end
 		
