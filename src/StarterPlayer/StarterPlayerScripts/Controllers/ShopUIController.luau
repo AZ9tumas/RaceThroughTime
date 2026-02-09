@@ -140,6 +140,22 @@ function ShopUIController:KnitStart()
 			MarketplaceService:PromptProductPurchase(player, productId)
 		end
 	end)
+
+	_connections["HugeCashPack"] = UI.Frames.Currency.HugeCashPack.TextButton.MouseButton1Click:Connect(function()
+		local MonetizationService = Knit.GetService("MonetizationService")
+		local productId = MonetizationService:GetDevProductId("HugeCashPack")
+		if productId then
+			MarketplaceService:PromptProductPurchase(player, productId)
+		end
+	end)
+
+	_connections["LargeGemPack"] = UI.Frames.Currency.LargeGemPack.TextButton.MouseButton1Click:Connect(function()
+		local MonetizationService = Knit.GetService("MonetizationService")
+		local productId = MonetizationService:GetDevProductId("LargeGemPack")
+		if productId then
+			MarketplaceService:PromptProductPurchase(player, productId)
+		end
+	end)
 end
 
 return ShopUIController

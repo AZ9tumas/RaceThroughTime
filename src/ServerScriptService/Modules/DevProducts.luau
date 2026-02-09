@@ -17,6 +17,8 @@ local DevProducts = {}
 -- Dev Product IDs
 DevProducts.Ids = {
 	MediumCashPack = 3533352608,
+	HugeCashPack = 3533352608,
+	LargeGemPack = 3533356279,
 }
 
 -- Purchases Manager - handlers are initialized when Initialize() is called
@@ -40,6 +42,44 @@ function DevProducts.Initialize(Knit)
 					NotificationService:SendNotification(
 						player,
 						"You received 10,000 Cash!",
+						NotificationService.Category.Success
+					)
+				end
+				
+				return true
+			end
+		},
+		[DevProducts.Ids.HugeCashPack] = {
+			Name = "HugeCashPack",
+			OnPurchase = function(player)
+				DataService:Update(player, "Currencies", function(currencies)
+					currencies.Cash = (currencies.Cash or 0) + 50000
+					return currencies
+				end)
+				
+				if NotificationService then
+					NotificationService:SendNotification(
+						player,
+						"You received 50,000 Cash!",
+						NotificationService.Category.Success
+					)
+				end
+				
+				return true
+			end
+		},
+		[DevProducts.Ids.LargeGemPack] = {
+			Name = "LargeGemPack",
+			OnPurchase = function(player)
+				DataService:Update(player, "Currencies", function(currencies)
+					currencies.Gems = (currencies.Gems or 0) + 1000
+					return currencies
+				end)
+				
+				if NotificationService then
+					NotificationService:SendNotification(
+						player,
+						"You received 1,000 Gems!",
 						NotificationService.Category.Success
 					)
 				end
