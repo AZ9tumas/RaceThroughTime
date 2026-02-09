@@ -95,6 +95,7 @@ function MonetizationService.Client:IsStudio(player: Player)
 end
 
 function MonetizationService.Client:GetDevProductId(player: Player, productName: string): number?
+	print(DevProducts.GetProductId(productName), "monetization, product id")
 	return DevProducts.GetProductId(productName)
 end
 

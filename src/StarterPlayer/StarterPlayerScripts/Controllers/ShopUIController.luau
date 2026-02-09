@@ -128,60 +128,66 @@ function ShopUIController:KnitStart()
 	-- all the egg frames work the same way
 	_connections["BestFriendEgg"] = UI.Frames.Eggs.BestFriendEggFrame.TextButton.MouseButton1Click:Connect(function()
 		local MonetizationService = Knit.GetService("MonetizationService")
-		local productId = MonetizationService:GetDevProductId("BestFriendEgg")
-		if productId then
-			MarketplaceService:PromptProductPurchase(player, productId)
-		end
+		MonetizationService:GetDevProductId("BestFriendEgg"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
 	end)
 
 	_connections["LimitedHistoricalEgg"] = UI.Frames.Eggs.LimitedHistoricalEgg.TextButton.MouseButton1Click:Connect(function()
 		local MonetizationService = Knit.GetService("MonetizationService")
-		local productId = MonetizationService:GetDevProductId("LimitedHistoricalEgg")
-		if productId then
-			MarketplaceService:PromptProductPurchase(player, productId)
-		end
+		MonetizationService:GetDevProductId("LimitedHistoricalEgg"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
 	end)
 
 	_connections["PremiumWorldEgg"] = UI.Frames.Eggs.PremiumWorldEgg.TextButton.MouseButton1Click:Connect(function()
 		local MonetizationService = Knit.GetService("MonetizationService")
-		local productId = MonetizationService:GetDevProductId("PremiumWorldEgg")
-		if productId then
-			MarketplaceService:PromptProductPurchase(player, productId)
-		end
+		MonetizationService:GetDevProductId("PremiumWorldEgg"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
 	end)
 
 	_connections["GoldenChronoEgg"] = UI.Frames.Eggs.GoldenChronoEgg.TextButton.MouseButton1Click:Connect(function()
 		local MonetizationService = Knit.GetService("MonetizationService")
-		local productId = MonetizationService:GetDevProductId("GoldenChronoEgg")
-		if productId then
-			MarketplaceService:PromptProductPurchase(player, productId)
-		end
+		MonetizationService:GetDevProductId("GoldenChronoEgg"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
 	end)
-
 
 	-- currency purchases
 	_connections["MediumCashPack"] = UI.Frames.Currency.MediumCashPack.TextButton.MouseButton1Click:Connect(function()
 		local MonetizationService = Knit.GetService("MonetizationService")
-		local productId = MonetizationService:GetDevProductId("MediumCashPack")
-		if productId then
-			MarketplaceService:PromptProductPurchase(player, productId)
-		end
+		MonetizationService:GetDevProductId("MediumCashPack"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
 	end)
 
 	_connections["HugeCashPack"] = UI.Frames.Currency.HugeCashPack.TextButton.MouseButton1Click:Connect(function()
 		local MonetizationService = Knit.GetService("MonetizationService")
-		local productId = MonetizationService:GetDevProductId("HugeCashPack")
-		if productId then
-			MarketplaceService:PromptProductPurchase(player, productId)
-		end
+		MonetizationService:GetDevProductId("HugeCashPack"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
 	end)
 
 	_connections["LargeGemPack"] = UI.Frames.Currency.LargeGemPack.TextButton.MouseButton1Click:Connect(function()
 		local MonetizationService = Knit.GetService("MonetizationService")
-		local productId = MonetizationService:GetDevProductId("LargeGemPack")
-		if productId then
-			MarketplaceService:PromptProductPurchase(player, productId)
-		end
+		MonetizationService:GetDevProductId("LargeGemPack"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
 	end)
 end
 
