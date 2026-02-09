@@ -145,6 +145,13 @@ Stats.StarProbabilities = {
 	Gems = 0.04,         -- 4% chance (Rare gem)
 }
 
+-- VIP Zone star probabilities (normalized from PurpleStar + WhiteStar = 0.08)
+-- Only PurpleStar and WhiteStar spawn in VIP zones
+Stats.VIPStarProbabilities = {
+	PurpleStar = 0.75,   -- 75% chance (0.06/0.08 normalized)
+	WhiteStar = 0.25,    -- 25% chance (0.02/0.08 normalized)
+}
+
 -- Star equivalents for fuel calculation (1 star = 1 unit of fuel base)
 -- Total fuel = Stars * multipliers (pet + rebirth + other multipliers)
 Stats.StarEquivalents = {
@@ -167,6 +174,13 @@ Stats.StarConfig = {
 	MinDistanceBetweenStars = 15, 	  -- Minimum distance between spawned stars
 	CollectionRadius = 15,            -- Distance within which a star can be collected
 	SpawnInterval = 3,                -- Seconds between spawning new stars (continuous spawning rate)
+}
+
+-- VIP Star spawn configuration
+Stats.VIPStarConfig = {
+	MaxVIPStars = 5,                  -- Maximum number of VIP stars that can exist at once per player
+	MinDistanceBetweenStars = 10,     -- Minimum distance between spawned VIP stars
+	SpawnInterval = 3,                -- Seconds between spawning new VIP stars
 }
 
 -- Track/Gate configuration
@@ -313,8 +327,46 @@ Stats.Eggs = {
 		World = "Main",
 		-- Pets array contains possible pets with their spawn probabilities (must sum to 1.0)
 		Pets = {
-			{ Pet = "StandardPet", Probability = 0.70 }, -- 70% chance
-			{ Pet = "StandardPet", Probability = 0.30 }, -- 30% chance (same pet, for testing)
+			{ Pet = "StandardPet", Probability = 0.70, LuckProbability = 0.50, SuperLuckProbability = 0.25 }, -- 70% chance
+			{ Pet = "PremiumPet", Probability = 0.30, LuckProbability = 0.50, SuperLuckProbability = 0.75 }, -- 30% chance (same pet, for testing)
+		},
+	},
+	BestFriendEgg = {
+		Cost = 0,
+		Tier = "Basic",
+		Currency = "Cash",
+		World = "Main",
+		-- Pets array contains possible pets with their spawn probabilities (must sum to 1.0)
+		Pets = {
+			{ Pet = "StandardPet", Probability = 0.00, LuckProbability = 0.00, SuperLuckProbability = 0.00 }, -- 0% chance
+			{ Pet = "PercentagePet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 }, -- 100% chance
+		},
+	},
+	PremiumWorldEgg = {
+		Cost = 1500,
+		Tier = "Premium",
+		Currency = "Cash",
+		World = "Main",
+		Pets = {
+			{ Pet = "PremiumPet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 },
+		},
+	},
+	LimitedHistoricalEgg = {
+		Cost = 5000,
+		Tier = "Limited",
+		Currency = "Cash",
+		World = "Main",
+		Pets = {
+			{ Pet = "LimitedPet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 },
+		},
+	},
+	GoldenChronoEgg = {
+		Cost = 10000,
+		Tier = "Exclusive",
+		Currency = "Cash",
+		World = "Main",
+		Pets = {
+			{ Pet = "GoldenPet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 },
 		},
 	},
 }
@@ -346,22 +398,91 @@ Stats.Pets = {
 		BaseTierLevel = 1, -- Starting tier level
 		Rarity = "Standard", -- Standard, Premium, or LimitedTime
 	},
+	PremiumPet = {
+		Name = "Premium Pet",
+		TierLevel = 2, -- Required especially during merging pets
+		Multiplier = 20, -- x10
+		PickupRangeBonus = 2.0, -- No range extension (base range)
+		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
+		StarCollectionRadius = 15, -- Distance from star to collect it
+		Velocity = 25, -- Pet movement speed (studs/sec)
+		World = "Main", -- Associated world for merging
+		BaseTierLevel = 1, -- Starting tier level
+		Rarity = "Premium", -- Standard, Premium, or LimitedTime
+	},
+	GoldenPet = {
+		Name = "Golden Pet",
+		TierLevel = 4, -- Required especially during merging pets
+		Multiplier = 50, -- x50
+		PickupRangeBonus = 3.0, -- Extended range
+		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
+		StarCollectionRadius = 20, -- Distance from star to collect it
+		Velocity = 30, -- Pet movement speed (studs/sec)
+		World = "Main", -- Associated world for merging
+		BaseTierLevel = 1, -- Starting tier level
+		Rarity = "Exclusive", -- Standard, Premium, LimitedTime, or Exclusive
+	},
+	PercentagePet = {
+		Name = "Percentage Pet",
+		TierLevel = 4, -- Required especially during merging pets
+		Multiplier = 0,
+		PickupRangeBonus = 3.0, -- Extended range
+		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
+		StarCollectionRadius = 25, -- Distance from star to collect it
+		Velocity = 35, -- Pet movement speed (studs/sec)
+		World = "Main", -- Associated world for merging
+		BaseTierLevel = 1, -- Starting tier level
+		Rarity = "Exclusive", -- Standard, Premium, LimitedTime, or Exclusive
+		Percentage = 40
+	},
+	LimitedPet = {
+		Name = "Limited Pet",
+		TierLevel = 3, -- Required especially during merging pets
+		Multiplier = 135, -- x35
+		PickupRangeBonus = 2.5, -- Extended range
+		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
+		StarCollectionRadius = 18, -- Distance from star to collect it
+		Velocity = 28, -- Pet movement speed (studs/sec)
+		World = "Main", -- Associated world for merging
+		BaseTierLevel = 1, -- Starting tier level
+		Rarity = "LimitedTime", -- Standard, Premium, LimitedTime, or Exclusive
+		ExpireLength = 30, -- debug time: 30s
+	}
 }
 
 -- Calculate total fuel bonus from all equipped pets
 -- Returns the sum of all equipped pets' bonuses (0 if no pets equipped)
 -- The bonus is added to the base 1.0 multiplier in CalculateFuelFromStars
--- @param equippedPets table? - Array of equipped pet data { Multiplier: number, ... }
--- @return number - Total fuel bonus (sum of pet Multiplier values, or 0 if no pets)
-function Stats.CalculateFuelMultiplier(equippedPets: {any}?): number
+-- Pets with "Percentage" parameter boost the total multiplier of other pets
+-- Formula: totalBonus = baseTotal * (1 + percentage/100) for each percentage pet
+-- @param equippedPets table? - Array of equipped pet data { Multiplier: number, Percentage: number?, ... }
+-- @return number - Total fuel bonus (sum of pet Multiplier values with percentage bonuses applied)
+function Stats.CalculateFuelMultiplier(equippedPets: {any}?, potionMultiplier: number?): number
 	if not equippedPets or #equippedPets == 0 then
 		return 0
 	end
 	
-	local totalBonus = 0
+	-- First pass: calculate base total from non-percentage pets
+	local highestMultiplier = 0
+	local baseTotal = 0
+	local totalPercentageBonus = 0
+	
 	for _, pet in ipairs(equippedPets) do
-		-- Each pet's Multiplier value is added directly as bonus
-		totalBonus = totalBonus + (pet.Multiplier or 0)
+		if pet.Percentage then
+			-- This is a percentage pet - accumulate its percentage bonus
+			totalPercentageBonus = totalPercentageBonus + (pet.Percentage or 0)
+		else
+			baseTotal += pet.Multiplier or 0
+			highestMultiplier = math.max(highestMultiplier, pet.Multiplier or 0)
+		end
+	end
+	warn(totalPercentageBonus, highestMultiplier)
+	local totalBonus = baseTotal + (highestMultiplier * (totalPercentageBonus / 100))
+	
+	-- Apply potion multiplier if provided
+	-- Example: if totalBonus = 250 and potionMultiplier = 1.5, result = 375
+	if potionMultiplier and potionMultiplier > 1 then
+		totalBonus = totalBonus * potionMultiplier
 	end
 	
 	return totalBonus
@@ -375,6 +496,12 @@ Stats.MaxEquippedPets = 3
 
 -- Extra pets bonus from gamepass (added to MaxEquippedPets)
 Stats.ExtraPetsBonus = 3
+
+-- Maximum number of pets that can be stored in inventory
+Stats.MaxPetInventory = 50
+
+-- Extra inventory slots bonus from gamepass (added to MaxPetInventory)
+Stats.ExtraSlotsBonus = 50
 
 -- Calculate other bonuses (VIP, dev products, boosts, etc.)
 -- Returns 0 by default - to be extended with VIP and dev product bonuses

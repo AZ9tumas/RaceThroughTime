@@ -34,7 +34,7 @@ end
 
 function CurrencyUIController:UpdateFuelUI(amount: number)
 	if fuelText then
-		fuelText.Text = "⛽ FUEL: " .. math.floor(amount)
+		fuelText.Text = "⛽ FUEL: " .. TruncateNumber(amount)
 	end
 end
 

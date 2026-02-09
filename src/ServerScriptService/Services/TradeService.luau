@@ -726,6 +726,49 @@ function TradeService:AcceptTrade(player: Player): (boolean, string?)
 	
 	-- Check if both have accepted
 	if session.Player1Accepted and session.Player2Accepted then
+		-- Check inventory space before completing trade
+		local DataService = Knit.GetService("DataService")
+		local NotificationService = Knit.GetService("NotificationService")
+		local MonetizationService = Knit.GetService("MonetizationService")
+		local Stats = require(ReplicatedStorage.Modules.Stats)
+		
+		local player1Inventory = DataService:Get(session.Player1, "Inventory")
+		local player2Inventory = DataService:Get(session.Player2, "Inventory")
+		
+		local player1CurrentPets = player1Inventory and player1Inventory.PetInventory and #player1Inventory.PetInventory or 0
+		local player2CurrentPets = player2Inventory and player2Inventory.PetInventory and #player2Inventory.PetInventory or 0
+		
+		-- Calculate max inventory for each player based on gamepass
+		local player1MaxInventory = Stats.MaxPetInventory
+		if MonetizationService:HasGamePass(session.Player1, "ExtraSlots") then
+			player1MaxInventory = player1MaxInventory + Stats.ExtraSlotsBonus
+		end
+		local player2MaxInventory = Stats.MaxPetInventory
+		if MonetizationService:HasGamePass(session.Player2, "ExtraSlots") then
+			player2MaxInventory = player2MaxInventory + Stats.ExtraSlotsBonus
+		end
+		
+		-- Calculate net change: pets received - pets given
+		local player1NetChange = #session.Player2Offers - #session.Player1Offers
+		local player2NetChange = #session.Player1Offers - #session.Player2Offers
+		
+		local player1FinalCount = player1CurrentPets + player1NetChange
+		local player2FinalCount = player2CurrentPets + player2NetChange
+		
+		if player1FinalCount > player1MaxInventory then
+			NotificationService:SendNotification(session.Player1, string.format("Trade cancelled: You would exceed max inventory (%d/%d pets).", player1FinalCount, player1MaxInventory), NotificationService.Category.Error)
+			NotificationService:SendNotification(session.Player2, string.format("Trade cancelled: %s would exceed max inventory.", session.Player1.Name), NotificationService.Category.Error)
+			EndTradeSession(session, "Trade cancelled: Player 1 would exceed max inventory")
+			return false, "Trade would exceed inventory limit"
+		end
+		
+		if player2FinalCount > player2MaxInventory then
+			NotificationService:SendNotification(session.Player2, string.format("Trade cancelled: You would exceed max inventory (%d/%d pets).", player2FinalCount, player2MaxInventory), NotificationService.Category.Error)
+			NotificationService:SendNotification(session.Player1, string.format("Trade cancelled: %s would exceed max inventory.", session.Player2.Name), NotificationService.Category.Error)
+			EndTradeSession(session, "Trade cancelled: Player 2 would exceed max inventory")
+			return false, "Trade would exceed inventory limit"
+		end
+		
 		CompleteTrade(session)
 	end
 	

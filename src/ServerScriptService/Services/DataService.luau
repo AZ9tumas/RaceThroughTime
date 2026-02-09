@@ -191,6 +191,11 @@ local function TryResolveSession(player: Player)
 		-- Initialize pets once when session is resolved
 		local PetService = Knit.GetService("PetService")
 		PetService:InitializePets(player)
+		
+		-- Initialize potions from saved data
+		local PotionsService = Knit.GetService("PotionsService")
+		local potionsData = profile.Data.Inventory and profile.Data.Inventory.Potions
+		PotionsService:InitializePotions(player, potionsData)
 
 		local dataToSend = setupPets(player, profile.Data)
 		

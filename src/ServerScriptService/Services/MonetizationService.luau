@@ -1,9 +1,12 @@
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local GamePassIds = require(ReplicatedStorage.GamePassIds)
+local DevProducts = require(ServerScriptService.Modules.DevProducts)
 
 local MonetizationService = Knit.CreateService({
 	Name = "MonetizationService",
@@ -12,8 +15,10 @@ local MonetizationService = Knit.CreateService({
 
 -- Expose Passes table for both server and client usage
 MonetizationService.Passes = GamePassIds
+MonetizationService.DevProducts = DevProducts.Ids
 
 local PlayerGamePasses = {}
+local DebugOverrides = {} -- [UserId] = { [gamePassName] = boolean } - Debug overrides for Studio testing
 
 local function CheckAllGamePasses(player: Player)
 	local userId = player.UserId
@@ -36,6 +41,12 @@ end
 
 function MonetizationService:HasGamePass(player: Player, gamePassName: string): boolean
 	local userId = player.UserId
+	
+	-- In Studio, check debug overrides first
+	if RunService:IsStudio() and DebugOverrides[userId] then
+		return DebugOverrides[userId][gamePassName] or false
+	end
+	
 	if not PlayerGamePasses[userId] then
 		return false
 	end
@@ -61,7 +72,38 @@ function MonetizationService.Client:GetPlayerPasses(player: Player)
 	return PlayerGamePasses[userId] or {}
 end
 
+-- Debug function to set gamepass ownership (only works in Studio)
+function MonetizationService.Client:SetDebugGamePass(player: Player, gamePassName: string, owned: boolean)
+	if RunService:IsStudio() then
+		local userId = player.UserId
+		if not DebugOverrides[userId] then
+			DebugOverrides[userId] = {}
+		end
+		DebugOverrides[userId][gamePassName] = owned
+		print("[MonetizationService]: ", DebugOverrides)
+		
+		-- Fire DataReady to update client UI when gamepass ownership changes
+		local DataService = Knit.GetService("DataService")
+		if DataService then
+			DataService:FireDataReady(player)
+		end
+	end
+end
+
+function MonetizationService.Client:IsStudio(player: Player)
+	return RunService:IsStudio()
+end
+
+function MonetizationService.Client:GetDevProductId(player: Player, productName: string): number?
+	print(DevProducts.GetProductId(productName), "monetization, product id")
+	return DevProducts.GetProductId(productName)
+end
+
 function MonetizationService:KnitInit()
+	-- Initialize DevProducts module with Knit services
+	DevProducts.Initialize(Knit)
+	
+	-- Handle game pass purchases
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamePassId, wasPurchased)
 		if wasPurchased then
 			local userId = player.UserId
@@ -72,14 +114,49 @@ function MonetizationService:KnitInit()
 			for gamePassName, id in pairs(GamePassIds) do
 				if id == gamePassId then
 					PlayerGamePasses[userId][gamePassName] = true
+					
+					-- Fire DataReady to update client UI when gamepass is purchased
+					local DataService = Knit.GetService("DataService")
+					if DataService then
+						DataService:FireDataReady(player)
+					end
 					break
 				end
 			end
 		end
 	end)
 	
+	-- Handle dev product purchases
+	MarketplaceService.ProcessReceipt = function(receiptInfo)
+		local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
+		if not player then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		
+		local productId = receiptInfo.ProductId
+		local purchaseHandler = DevProducts.GetHandler(productId)
+		
+		if purchaseHandler then
+			local success, result = pcall(function()
+				return purchaseHandler.OnPurchase(player)
+			end)
+			
+			if success and result then
+				print(string.format("[MonetizationService] Player %s purchased %s", player.Name, purchaseHandler.Name))
+				return Enum.ProductPurchaseDecision.PurchaseGranted
+			else
+				warn(string.format("[MonetizationService] Failed to process purchase for %s: %s", player.Name, tostring(result)))
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
+		else
+			warn(string.format("[MonetizationService] Unknown product ID: %d", productId))
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+	end
+	
 	Players.PlayerRemoving:Connect(function(player)
 		PlayerGamePasses[player.UserId] = nil
+		DebugOverrides[player.UserId] = nil
 	end)
 end
 

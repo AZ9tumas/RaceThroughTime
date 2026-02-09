@@ -10,6 +10,7 @@ local HttpService = game:GetService("HttpService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local Stats = require(ReplicatedStorage.Modules.Stats)
+local GamePassIds = require(ReplicatedStorage.GamePassIds)
 
 local RebirthStats = require(ReplicatedStorage.Modules.RebirthStats)
 
@@ -25,9 +26,11 @@ local StarService = Knit.CreateService({
 
 -- Private state
 local UniversalTracker = {} -- [Player.UserId] = {StarInfo, StarInfo, ... 10 times}
+local VIPTracker = {} -- [Player.UserId] = {VIPStarInfo, VIPStarInfo, ...} for VIP zone stars
 local StarsFolder = nil
 local TotalStarsCollected = 0 -- Counter for total stars collected by all players in the server
 local StarSpawnLoops = {} -- [Player.UserId] = thread (spawn loop thread)
+local VIPSpawnLoops = {} -- [Player.UserId] = thread (VIP spawn loop thread)
 
 -- Helper function to get total fuel multiplier for player
 -- Used for Gems calculation with multipliers
@@ -131,6 +134,23 @@ local function GetSpawnLocationForPlayer(player: Player): SpawnLocation?
 	return nil
 end
 
+-- Get VIP_Zone from the player's current world
+local function GetVIPZoneForPlayer(player: Player): BasePart?
+	local DataService = Knit.GetService("DataService")
+	local worldName = DataService:GetPlayerWorld(player)
+	
+	-- World folders are named directly in workspace (e.g., "Main", "StoneAge")
+	local worldFolder = workspace:FindFirstChild(worldName)
+	if worldFolder then
+		local vipZone = worldFolder:FindFirstChild("VIP_Zone")
+		if vipZone and vipZone:IsA("BasePart") then
+			return vipZone
+		end
+	end
+	
+	return nil
+end
+
 -- Initialize the Stars folder in workspace
 local function InitializeStarsFolder()
 	-- Find or create Stars folder
@@ -184,6 +204,22 @@ local function GetRandomStarType(): string
 	return "YellowStar"
 end
 
+-- Get a random VIP star type based on VIP probability weights (PurpleStar/WhiteStar only)
+local function GetRandomVIPStarType(): string
+	local random = math.random()
+	local cumulativeProbability = 0
+
+	for starName, probability in pairs(Stats.VIPStarProbabilities) do
+		cumulativeProbability = cumulativeProbability + probability
+		if random <= cumulativeProbability then
+			return starName
+		end
+	end
+
+	-- Fallback to PurpleStar
+	return "PurpleStar"
+end
+
 -- Generate a unique ID for a star
 local function GenerateStarId(): string
 	return HttpService:GenerateGUID(false)
@@ -214,6 +250,59 @@ local function GenerateRandomPosition(centerPosition: Vector3, existingPositions
 
 		if isValidPosition then
 			return newPosition
+		end
+	end
+
+	-- Could not find valid position after max attempts
+	return nil
+end
+
+-- Generate random position above VIP_Zone surface using raycasting
+local function GenerateVIPStarPosition(vipZone: BasePart, existingPositions: { Vector3 }): Vector3?
+	local config = Stats.VIPStarConfig
+	local maxAttempts = 50
+	
+	-- Get VIP zone bounds
+	local zoneCFrame = vipZone.CFrame
+	local zoneSize = vipZone.Size
+	local halfSizeX = zoneSize.X / 2
+	local halfSizeZ = zoneSize.Z / 2
+	
+	-- Create raycast params to only hit the VIP_Zone
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Include
+	raycastParams.FilterDescendantsInstances = {vipZone}
+
+	for _ = 1, maxAttempts do
+		-- Generate random X and Z within VIP zone bounds (in local space)
+		local localOffsetX = math.random() * zoneSize.X - halfSizeX
+		local localOffsetZ = math.random() * zoneSize.Z - halfSizeZ
+		
+		-- Convert to world space position (starting high above the zone)
+		local worldPos = zoneCFrame * Vector3.new(localOffsetX, 100, localOffsetZ)
+		
+		-- Raycast downward to find surface of VIP_Zone
+		local rayOrigin = worldPos
+		local rayDirection = Vector3.new(0, -200, 0) -- Cast downward
+		
+		local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+		
+		if raycastResult then
+			-- Position the star slightly above the surface
+			local newPosition = raycastResult.Position + Vector3.new(0, 5, 0)
+			
+			-- Check minimum distance from existing VIP star positions
+			local isValidPosition = true
+			for _, existingPos in ipairs(existingPositions) do
+				if (newPosition - existingPos).Magnitude < config.MinDistanceBetweenStars then
+					isValidPosition = false
+					break
+				end
+			end
+			
+			if isValidPosition then
+				return newPosition
+			end
 		end
 	end
 
@@ -270,32 +359,57 @@ function StarService:GetStarInformation(player: Player)
 	return UniversalTracker[player.UserId]
 end
 
--- Find star info by ID in player's tracker
+-- Get VIP star information for a player
+function StarService:GetVIPStarInformation(player: Player)
+	return VIPTracker[player.UserId]
+end
+
+-- Find star info by ID in player's tracker (searches both regular and VIP trackers)
+-- Returns starInfo, index, and isVIP (true if found in VIP tracker)
+-- Returns nil, nil, nil if the star is not found in either tracker
 -- Note: Uses player's CurrentWorld attribute for world info if needed
 local function FindStarById(userId: number, starId: string):
-	({ Position: Vector3, ID: string, StarName: string, Index: number }?, number?)
+	({ Position: Vector3, ID: string, StarName: string, Index: number, IsVIP: boolean? }?, number?, boolean?)
+	-- First check regular tracker
 	local starInfoList = UniversalTracker[userId]
-	if not starInfoList then
-		return nil, nil
+	if starInfoList then
+		for index, starInfo in ipairs(starInfoList) do
+			if starInfo.ID == starId then
+				return starInfo, index, false
+			end
+		end
 	end
-
-	for index, starInfo in ipairs(starInfoList) do
-		if starInfo.ID == starId then
-			return starInfo, index
+	
+	-- Then check VIP tracker
+	local vipStarInfoList = VIPTracker[userId]
+	if vipStarInfoList then
+		for index, starInfo in ipairs(vipStarInfoList) do
+			if starInfo.ID == starId then
+				return starInfo, index, true
+			end
 		end
 	end
 
-	return nil, nil
+	return nil, nil, nil
 end
 
 -- Server-side star collection (for pets, no distance check)
 -- Returns the star equivalent value if successful, nil otherwise
 function StarService:CollectStarServer(player: Player, starId: string): number?
 	local userId = player.UserId
-	local starInfo, index = FindStarById(userId, starId)
+	local starInfo, index, isVIP = FindStarById(userId, starId)
 	
 	if not starInfo then
 		return nil
+	end
+	
+	-- If this is a VIP star, verify gamepass ownership
+	if isVIP then
+		local MonetizationService = Knit.GetService("MonetizationService")
+		if not MonetizationService:HasGamePass(player, "VIP") then
+			warn(string.format("[StarService]: Player %s tried to collect VIP star without gamepass", player.Name))
+			return nil
+		end
 	end
 	
 	local baseStarEquivalent = Stats.StarEquivalents[starInfo.StarName] or 0
@@ -305,10 +419,17 @@ function StarService:CollectStarServer(player: Player, starId: string): number?
 	local starsMultiplier = MonetizationService:GetStarsMultiplier(player)
 	local starEquivalent = baseStarEquivalent * starsMultiplier
 	
-	-- Remove star from tracker
-	local starInfoList = UniversalTracker[userId]
-	if starInfoList then
-		table.remove(starInfoList, index)
+	-- Remove star from appropriate tracker
+	if isVIP then
+		local vipStarInfoList = VIPTracker[userId]
+		if vipStarInfoList then
+			table.remove(vipStarInfoList, index)
+		end
+	else
+		local starInfoList = UniversalTracker[userId]
+		if starInfoList then
+			table.remove(starInfoList, index)
+		end
 	end
 	
 	-- Notify client to remove the star
@@ -325,11 +446,20 @@ end
 -- Verify and process star collection
 function StarService.Client:CollectStar(player: Player, starId: string): boolean
 	local userId = player.UserId
-	local starInfo, index = FindStarById(userId, starId)
+	local starInfo, index, isVIP = FindStarById(userId, starId)
 
 	if not starInfo then
 		warn(string.format("[StarService]: Star %s not found for player %s", starId, player.Name))
 		return false
+	end
+
+	-- If this is a VIP star, verify gamepass ownership
+	if isVIP then
+		local MonetizationService = Knit.GetService("MonetizationService")
+		if not MonetizationService:HasGamePass(player, "VIP") then
+			warn(string.format("[StarService]: Player %s tried to collect VIP star without gamepass", player.Name))
+			return false
+		end
 	end
 
 	-- Verify player position is close to star position
@@ -409,10 +539,17 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 	-- Process counts and boss spawning logic
 	ProcessGlobalStarCollection(player)
 
-	-- Remove star from tracker
-	local starInfoList = UniversalTracker[userId]
-	if starInfoList then
-		table.remove(starInfoList, index)
+	-- Remove star from appropriate tracker
+	if isVIP then
+		local vipStarInfoList = VIPTracker[userId]
+		if vipStarInfoList then
+			table.remove(vipStarInfoList, index)
+		end
+	else
+		local starInfoList = UniversalTracker[userId]
+		if starInfoList then
+			table.remove(starInfoList, index)
+		end
 	end
 
 	-- Notify client to remove the star
@@ -425,9 +562,14 @@ end
 function StarService:RemoveAllStarsForPlayer(player: Player)
 	local userId = player.UserId
 	
-	-- Clear tracker data
+	-- Clear regular tracker data
 	if UniversalTracker[userId] then
 		UniversalTracker[userId] = {}
+	end
+	
+	-- Clear VIP tracker data
+	if VIPTracker[userId] then
+		VIPTracker[userId] = {}
 	end
 	
 	-- Notify client to clear visuals
@@ -477,10 +619,105 @@ local function GenerateStar(player: Player)
 		ID = GenerateStarId(),
 		StarName = starName,
 		Index = #starInfoList + 1,
+		IsVIP = false,
 	}
 
 	table.insert(starInfoList, starInfo)
 	return starInfo
+end
+
+-- Generate a single VIP star for a player (spawns above VIP_Zone)
+local function GenerateVIPStar(player: Player)
+	local userId = player.UserId
+	
+	-- Initialize VIP tracker if needed
+	if not VIPTracker[userId] then
+		VIPTracker[userId] = {}
+	end
+	
+	local vipStarInfoList = VIPTracker[userId]
+	
+	-- Get VIP_Zone from the player's current world
+	local vipZone = GetVIPZoneForPlayer(player)
+	if not vipZone then
+		return nil -- No VIP zone in this world
+	end
+	
+	-- Collect existing VIP star positions
+	local existingPositions = {}
+	for _, starInfo in ipairs(vipStarInfoList) do
+		table.insert(existingPositions, starInfo.Position)
+	end
+	
+	-- Generate position for new VIP star
+	local position = GenerateVIPStarPosition(vipZone, existingPositions)
+	if not position then
+		return nil -- Could not find valid position
+	end
+
+	local starName = GetRandomVIPStarType()
+	local starInfo = {
+		Position = position,
+		ID = GenerateStarId(),
+		StarName = starName,
+		Index = #vipStarInfoList + 1,
+		IsVIP = true,
+	}
+
+	table.insert(vipStarInfoList, starInfo)
+	return starInfo
+end
+
+-- Start VIP star spawning logic for a player
+local function StartVIPSpawn(self, player: Player)
+	local userId = player.UserId
+
+	-- Cancel existing VIP loop if any
+	if VIPSpawnLoops[userId] then
+		task.cancel(VIPSpawnLoops[userId])
+	end
+
+	VIPSpawnLoops[userId] = task.spawn(function()
+		Log(string.format("Started VIP star loop for %s", player.Name))
+		
+		while player:IsDescendantOf(Players) do
+			local config = Stats.VIPStarConfig
+			-- Wait for spawn interval
+			task.wait(config.SpawnInterval)
+			
+			-- Check if world has a VIP zone
+			local vipZone = GetVIPZoneForPlayer(player)
+			if vipZone then
+				local vipStarInfoList = VIPTracker[userId] or {}
+				local count = #vipStarInfoList
+				local target = config.MaxVIPStars
+				
+				-- Check if below MaxVIPStars
+				if count < target then
+					local newStars = {}
+					
+					-- Generate VIP stars until we reach MaxVIPStars
+					while #vipStarInfoList < target do
+						local star = GenerateVIPStar(player)
+						if star then
+							table.insert(newStars, star)
+							vipStarInfoList = VIPTracker[userId] -- Update reference
+						else
+							break -- No valid positions or error
+						end
+					end
+					
+					-- Send to client after generation is done
+					if #newStars > 0 then
+						self.Client.SpawnStars:Fire(player, newStars)
+						Log(string.format("Spawned %d new VIP stars for %s", #newStars, player.Name))
+					end
+				end
+			end
+		end
+		
+		VIPSpawnLoops[userId] = nil
+	end)
 end
 
 -- Start star spawning logic for a player
@@ -529,6 +766,9 @@ function StarService:Start(player: Player)
 		
 		StarSpawnLoops[userId] = nil
 	end)
+	
+	-- Also start VIP star spawning
+	StartVIPSpawn(self, player)
 end
 
 -- Clean up player data when they leave
@@ -537,7 +777,12 @@ local function OnPlayerRemoving(player: Player)
 		task.cancel(StarSpawnLoops[player.UserId])
 		StarSpawnLoops[player.UserId] = nil
 	end
+	if VIPSpawnLoops[player.UserId] then
+		task.cancel(VIPSpawnLoops[player.UserId])
+		VIPSpawnLoops[player.UserId] = nil
+	end
 	UniversalTracker[player.UserId] = nil
+	VIPTracker[player.UserId] = nil
 	Log(string.format("Cleared star data for player %s", player.Name))
 end
 

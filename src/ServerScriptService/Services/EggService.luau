@@ -30,6 +30,149 @@ local function GeneratePetID(): string
 end
 
 --[[
+	Hatch an egg for a player without charging currency.
+	Useful for dev products, rewards, etc.
+	@param player Player - The player hatching the egg
+	@param eggType string - The type of egg to hatch
+	@return (boolean, string?, { Name: string, ID: string, Multiplier: number }?) - Success status, error message if failed, pet info if successful
+]]
+function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?, { Name: string, ID: string, Multiplier: number }?)
+	local DataService = Knit.GetService("DataService")
+	local NotificationService = Knit.GetService("NotificationService")
+	local PetService = Knit.GetService("PetService")
+	local MonetizationService = Knit.GetService("MonetizationService")
+	
+	-- Check if egg type exists
+	local eggConfig = Stats.Eggs[eggType]
+	if not eggConfig then
+		if NotificationService then
+			NotificationService:SendNotification(
+				player,
+				"Invalid egg type.",
+				NotificationService.Category.Error
+			)
+		end
+		return false, "Invalid egg type", nil
+	end
+	
+	-- Check if player has space in inventory
+	local inventory = DataService:Get(player, "Inventory")
+	local currentPetCount = inventory and inventory.PetInventory and #inventory.PetInventory or 0
+	local maxInventory = Stats.MaxPetInventory
+	if MonetizationService:HasGamePass(player, "ExtraSlots") then
+		maxInventory = maxInventory + Stats.ExtraSlotsBonus
+	end
+	if currentPetCount >= maxInventory then
+		if NotificationService then
+			NotificationService:SendNotification(
+				player,
+				string.format("Inventory full! Maximum %d pets allowed.", maxInventory),
+				NotificationService.Category.Warning
+			)
+		end
+		return false, "Inventory full", nil
+	end
+	
+	-- Get pet type from egg based on probability
+	local petType = nil
+	
+	-- Support both old format (single Pet) and new format (Pets array with probabilities)
+	if eggConfig.Pets and #eggConfig.Pets > 0 then
+		-- New format: select pet based on probability
+		-- Check if player has Luck or SuperLuck gamepass for better probabilities
+		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
+		local hasLuck = MonetizationService:HasGamePass(player, "Luck")
+		
+		-- Check if player has active potion that affects probabilities
+		local PotionsService = Knit.GetService("PotionsService")
+		local hasPotion, potionProbabilityKey = PotionsService:HasProbabilityPotion(player)
+		
+		local random = math.random()
+		local cumulativeProbability = 0
+		
+		for _, petOption in ipairs(eggConfig.Pets) do
+			-- Priority: Potion > SuperLuck gamepass > Luck gamepass > Default
+			local probability = petOption.Probability
+			if hasPotion and potionProbabilityKey and petOption[potionProbabilityKey] then
+				probability = petOption[potionProbabilityKey]
+			elseif hasSuperLuck and petOption.SuperLuckProbability then
+				probability = petOption.SuperLuckProbability
+			elseif hasLuck and petOption.LuckProbability then
+				probability = petOption.LuckProbability
+			end
+			cumulativeProbability = cumulativeProbability + probability
+			if random <= cumulativeProbability then
+				petType = petOption.Pet
+				break
+			end
+		end
+		
+		-- Fallback to first pet if probabilities don't sum to 1.0
+		if not petType then
+			petType = eggConfig.Pets[1].Pet
+		end
+	else
+		-- Old format: single Pet field
+		petType = eggConfig.Pet
+	end
+	
+	local petConfig = Stats.Pets[petType]
+	if not petConfig then
+		if NotificationService then
+			NotificationService:SendNotification(
+				player,
+				"Pet configuration not found.",
+				NotificationService.Category.Error
+			)
+		end
+		return false, "Pet config not found", nil
+	end
+	
+	-- Generate pet ID and add pet to inventory immediately
+	local petID = GeneratePetID()
+	local newPetIndex = nil
+
+	local finalPetEntry = {}
+	for key, val in ipairs(petConfig) do
+		finalPetEntry[key] = val
+	end
+
+	finalPetEntry.ObtainedAt = os.time()
+	
+	DataService:Update(player, "Inventory", function(inventory)
+		if not inventory.PetInventory then
+			inventory.PetInventory = {}
+		end
+		
+		-- Add pet with all stats from config
+		table.insert(inventory.PetInventory, finalPetEntry)
+		newPetIndex = #inventory.PetInventory
+		
+		return inventory
+	end)
+	
+	-- Register the runtime pet ID with PetService
+	PetService:RegisterPetID(player, newPetIndex, petID)
+	
+	Log(string.format("Player %s hatched %s and obtained %s (ID: %s)", 
+		player.Name, eggType, petConfig.Name, petID))
+	
+	if NotificationService then
+		NotificationService:SendNotification(
+			player,
+			string.format("Obtained %s!", petConfig.Name),
+			NotificationService.Category.Success
+		)
+	end
+	
+	-- Fire signal to client
+	EggService.Client.PetObtained:Fire(player, finalPetEntry)
+	DataService:FireDataReady(player)
+	
+	return true, nil, finalPetEntry
+end
+
+--[[
 	Purchase an egg and immediately hatch it to get a pet.
 	The egg is not stored - the resulting pet is added directly to inventory.
 	@param player Player - The player purchasing the egg
@@ -58,11 +201,29 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	-- Support both old format (single Pet) and new format (Pets array with probabilities)
 	if eggConfig.Pets and #eggConfig.Pets > 0 then
 		-- New format: select pet based on probability
+		-- Check if player has Luck or SuperLuck gamepass for better probabilities
+		local MonetizationService = Knit.GetService("MonetizationService")
+		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
+		local hasLuck = MonetizationService:HasGamePass(player, "Luck")
+		
+		-- Check if player has active potion that affects probabilities
+		local PotionsService = Knit.GetService("PotionsService")
+		local hasPotion, potionProbabilityKey = PotionsService:HasProbabilityPotion(player)
+		
 		local random = math.random()
 		local cumulativeProbability = 0
 		
 		for _, petOption in ipairs(eggConfig.Pets) do
-			cumulativeProbability = cumulativeProbability + petOption.Probability
+			-- Priority: Potion > SuperLuck gamepass > Luck gamepass > Default
+			local probability = petOption.Probability
+			if hasPotion and potionProbabilityKey and petOption[potionProbabilityKey] then
+				probability = petOption[potionProbabilityKey]
+			elseif hasSuperLuck and petOption.SuperLuckProbability then
+				probability = petOption.SuperLuckProbability
+			elseif hasLuck and petOption.LuckProbability then
+				probability = petOption.LuckProbability
+			end
+			cumulativeProbability = cumulativeProbability + probability
 			if random <= cumulativeProbability then
 				petType = petOption.Pet
 				break
@@ -113,6 +274,23 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		return false, "Insufficient funds", nil
 	end
 	
+	-- Check if player has space in inventory
+	local inventory = DataService:Get(player, "Inventory")
+	local currentPetCount = inventory and inventory.PetInventory and #inventory.PetInventory or 0
+	local MonetizationService = Knit.GetService("MonetizationService")
+	local maxInventory = Stats.MaxPetInventory
+	if MonetizationService:HasGamePass(player, "ExtraSlots") then
+		maxInventory = maxInventory + Stats.ExtraSlotsBonus
+	end
+	if currentPetCount >= maxInventory then
+		NotificationService:SendNotification(
+			player,
+			string.format("Inventory full! Maximum %d pets allowed.", maxInventory),
+			NotificationService.Category.Warning
+		)
+		return false, "Inventory full", nil
+	end
+	
 	-- Deduct currency
 	DataService:Update(player, "Currencies", function(curr)
 		curr[currencyType] = (curr[currencyType] or 0) - cost
@@ -122,6 +300,13 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	-- Generate pet ID and add pet to inventory immediately
 	local petID = GeneratePetID()
 	local newPetIndex = nil
+
+	local finalPetEntry = {}
+	for key, val in ipairs(petConfig) do
+		finalPetEntry[key] = val
+	end
+
+	finalPetEntry.ObtainedAt = os.time()
 	
 	DataService:Update(player, "Inventory", function(inventory)
 		if not inventory.PetInventory then
@@ -129,22 +314,7 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		end
 		
 		-- Add pet with all stats from config
-		local petEntry = {
-			PetType = petType,
-			Name = petConfig.Name,
-			Multiplier = petConfig.Multiplier,
-			PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
-			RoamRange = petConfig.RoamRange,
-			StarCollectionRadius = petConfig.StarCollectionRadius or 5,
-			Velocity = petConfig.Velocity or 20,
-			World = petConfig.World or eggConfig.World,
-			Level = petConfig.BaseTierLevel or 1,
-			TierLevel = petConfig.BaseTierLevel or 1,
-			TierName = "Common", -- Starting tier name
-			Rarity = petConfig.Rarity or "Standard",
-			ObtainedAt = os.time(),
-		}
-		table.insert(inventory.PetInventory, petEntry)
+		table.insert(inventory.PetInventory, finalPetEntry)
 		newPetIndex = #inventory.PetInventory
 		
 		return inventory
@@ -162,27 +332,11 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		NotificationService.Category.Success
 	)
 	
-	local petInfo = {
-		Name = petConfig.Name,
-		ID = petID,
-		PetType = petType,
-		Multiplier = petConfig.Multiplier,
-		PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
-		RoamRange = petConfig.RoamRange or 30,
-		StarCollectionRadius = petConfig.StarCollectionRadius or 5,
-		Velocity = petConfig.Velocity or 20,
-		World = petConfig.World or eggConfig.World or "Main",
-		Level = petConfig.BaseTierLevel or 1,
-		TierLevel = petConfig.BaseTierLevel or 1,
-		TierName = "Common",
-		Rarity = petConfig.Rarity or "Standard",
-	}
-	
 	-- Fire signal to client
-	EggService.Client.PetObtained:Fire(player, petInfo)
+	EggService.Client.PetObtained:Fire(player, finalPetEntry)
 	DataService:FireDataReady(player)
 	
-	return true, nil, petInfo
+	return true, nil, finalPetEntry
 end
 
 -- Client request to purchase an egg (immediately hatches to pet)

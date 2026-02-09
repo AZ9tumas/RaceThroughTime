@@ -114,6 +114,14 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 		return
 	end
 
+	-- Check if player has Luck or SuperLuck gamepass for displaying updated probabilities
+	local hasSuperLuck = MonetizationController and MonetizationController:HasGamePass("SuperLuck")
+	local hasLuck = MonetizationController and MonetizationController:HasGamePass("Luck")
+	
+	-- Check if player has active potion that affects probabilities
+	local PotionsController = Knit.GetController("PotionsController")
+	local potionProbabilityKey = PotionsController and PotionsController:GetProbabilityKey()
+
 	for _, child in ipairs(contentFrame:GetChildren()) do
 		if child:IsA("GuiObject") and child.Name ~= "Template" and child ~= gridLayout and not child:IsA("UIGridLayout") then
 			child:Destroy()
@@ -122,7 +130,15 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 
 	for i, petOption in ipairs(eggConfig.Pets) do
 		local petName = petOption.Pet
+		-- Priority: Potion > SuperLuck gamepass > Luck gamepass > Default
 		local probability = petOption.Probability
+		if potionProbabilityKey and petOption[potionProbabilityKey] then
+			probability = petOption[potionProbabilityKey]
+		elseif hasSuperLuck and petOption.SuperLuckProbability then
+			probability = petOption.SuperLuckProbability
+		elseif hasLuck and petOption.LuckProbability then
+			probability = petOption.LuckProbability
+		end
 		local petConfig = GetPetConfig(petName)
 
 		local newTemplate = template:Clone()
@@ -150,7 +166,7 @@ local function PurchaseSingleEgg(eggName: string)
 	
 	IsHatching = true
 	
-	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.InstantHatch)
+	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass("InstantHatch")
 	
 	if hasInstantHatch then
 		EggService:RequestPurchaseEgg(eggName):andThen(function(success, errorMsg, petInfo)
@@ -218,7 +234,7 @@ local function PurchaseMultipleEggs(eggName: string, count: number)
 	local purchasedCount = 0
 	local currentIndex = 0
 	
-	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.InstantHatch)
+	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass("InstantHatch")
 	
 	if hasInstantHatch then
 		local function PurchaseNextInstant()
@@ -335,7 +351,7 @@ local function StartAutoHatch(eggName: string)
 	end
 	
 	-- Check if player owns AutoHatch gamepass
-	local hasAutoHatchPass = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.AutoHatch)
+	local hasAutoHatchPass = MonetizationController and MonetizationController:HasGamePass("AutoHatch")
 	if not hasAutoHatchPass then
 		-- Prompt purchase
 		if MonetizationController then
@@ -357,7 +373,7 @@ local function StartAutoHatch(eggName: string)
 
 	AutoHatchActive[eggName] = true
 	
-	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass(MonetizationController.Passes.InstantHatch)
+	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass("InstantHatch")
 
 	task.spawn(function()
 		while AutoHatchActive[eggName] do

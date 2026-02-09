@@ -72,21 +72,13 @@ local function ApplyRewardItems(player: Player, items: { { ItemType: string, Qua
 						inventory.PetInventory = {}
 					end
 					-- Add pet with unique ID and full stats
-					local petEntry = {
-						PetType = item.PetId,
-						Name = petConfig.Name,
-						Multiplier = petConfig.Multiplier,
-						PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
-						RoamRange = petConfig.RoamRange,
-						StarCollectionRadius = petConfig.StarCollectionRadius or 5,
-						Velocity = petConfig.Velocity or 20,
-						World = petConfig.World or "Main",
-						Level = petConfig.BaseTierLevel or 1,
-						TierLevel = petConfig.BaseTierLevel or 1,
-						TierName = "Common",
-						Rarity = petConfig.Rarity or "Standard",
-						ObtainedAt = os.time(),
-					}
+					local petEntry = {}
+
+					for key, val in ipairs(petConfig) do
+						petEntry[key] = val
+					end
+
+					petEntry.ObtainedAt = os.time()
 					table.insert(inventory.PetInventory, petEntry)
 					return inventory
 				end)
