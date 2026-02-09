@@ -25,9 +25,9 @@ DevProducts.Ids = {
 	PremiumWorldEgg = 3533366275,
 	GoldenChronoEgg = 3533366982,
 	-- Missing Merge Products (fills 1 slot to create next tier)
-	MissingMergeStage1 = 3533370001, -- Fills 1 slot to create Tier 2 Pet
-	MissingMergeStage2 = 3533370002, -- Fills 1 slot to create Tier 3 Pet
-	MissingMergeStage3 = 3533370003, -- Fills 1 slot to create Tier 4 Pet
+	MissingMergeStage1 = 3533428993, -- Fills 1 slot to create Tier 2 Pet
+	MissingMergeStage2 = 3533429099, -- Fills 1 slot to create Tier 3 Pet
+	MissingMergeStage3 = 3533429232, -- Fills 1 slot to create Tier 4 Pet
 }
 
 -- Purchases Manager - handlers are initialized when Initialize() is called
