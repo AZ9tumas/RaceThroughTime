@@ -64,7 +64,7 @@ local PotionDefinitions: {[string]: PotionDefinition} = {
 	PointsOverload = {
 		Name = "Points Overload Potion",
 		Duration = 10 * 60, -- 10 minutes in seconds
-		Multiplier = 3.0, -- x3 the total distance produced from fuel
+		Multiplier = 3.0, -- x3 multiplier applied to total distance in track runs
 		ProbabilityKey = nil, -- Does not affect egg probabilities
 	},
 }
