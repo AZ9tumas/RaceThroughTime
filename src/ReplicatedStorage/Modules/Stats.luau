@@ -433,6 +433,7 @@ Stats.Pets = {
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
 		Rarity = "Exclusive", -- Standard, Premium, LimitedTime, or Exclusive
+		Percentage = 40
 	},
 }
 
