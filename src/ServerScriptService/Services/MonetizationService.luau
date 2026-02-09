@@ -1,11 +1,12 @@
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local GamePassIds = require(ReplicatedStorage.GamePassIds)
-local DevProductIds = require(ReplicatedStorage.DevProductIds)
+local DevProducts = require(ServerScriptService.Modules.DevProducts)
 
 local MonetizationService = Knit.CreateService({
 	Name = "MonetizationService",
@@ -14,35 +15,10 @@ local MonetizationService = Knit.CreateService({
 
 -- Expose Passes table for both server and client usage
 MonetizationService.Passes = GamePassIds
-MonetizationService.DevProducts = DevProductIds
+MonetizationService.DevProducts = DevProducts.Ids
 
 local PlayerGamePasses = {}
 local DebugOverrides = {} -- [UserId] = { [gamePassName] = boolean } - Debug overrides for Studio testing
-
--- Dev Product Purchases Manager
-local PurchasesManager = {
-	[DevProductIds.MediumCashPack] = {
-		Name = "MediumCashPack",
-		OnPurchase = function(player)
-			local DataService = Knit.GetService("DataService")
-			DataService:Update(player, "Currencies", function(currencies)
-				currencies.Cash = (currencies.Cash or 0) + 10000
-				return currencies
-			end)
-			
-			local NotificationService = Knit.GetService("NotificationService")
-			if NotificationService then
-				NotificationService:SendNotification(
-					player,
-					"You received 10,000 Cash!",
-					NotificationService.Category.Success
-				)
-			end
-			
-			return true
-		end
-	},
-}
 
 local function CheckAllGamePasses(player: Player)
 	local userId = player.UserId
@@ -118,7 +94,14 @@ function MonetizationService.Client:IsStudio(player: Player)
 	return RunService:IsStudio()
 end
 
+function MonetizationService.Client:GetDevProductId(player: Player, productName: string): number?
+	return DevProducts.GetProductId(productName)
+end
+
 function MonetizationService:KnitInit()
+	-- Initialize DevProducts module with Knit services
+	DevProducts.Initialize(Knit)
+	
 	-- Handle game pass purchases
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamePassId, wasPurchased)
 		if wasPurchased then
@@ -150,7 +133,7 @@ function MonetizationService:KnitInit()
 		end
 		
 		local productId = receiptInfo.ProductId
-		local purchaseHandler = PurchasesManager[productId]
+		local purchaseHandler = DevProducts.GetHandler(productId)
 		
 		if purchaseHandler then
 			local success, result = pcall(function()

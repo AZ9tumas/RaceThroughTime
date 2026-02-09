@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local Knit = require(ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Knit"))
 
@@ -133,7 +134,11 @@ function ShopUIController:KnitStart()
 
 	-- currency purchases
 	_connections["MediumCashPack"] = UI.Frames.Currency.MediumCashPack.TextButton.MouseButton1Click:Connect(function()
-		-- dev product purchase
+		local MonetizationService = Knit.GetService("MonetizationService")
+		local productId = MonetizationService:GetDevProductId("MediumCashPack")
+		if productId then
+			MarketplaceService:PromptProductPurchase(player, productId)
+		end
 	end)
 end
 
