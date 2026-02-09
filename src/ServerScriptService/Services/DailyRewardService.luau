@@ -86,6 +86,7 @@ local function ApplyRewardItems(player: Player, items: { { ItemType: string, Qua
 						TierName = "Common",
 						Rarity = petConfig.Rarity or "Standard",
 						ObtainedAt = os.time(),
+						Percentage = petConfig.Percentage or 0,
 					}
 					table.insert(inventory.PetInventory, petEntry)
 					return inventory

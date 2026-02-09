@@ -425,7 +425,7 @@ Stats.Pets = {
 	PercentagePet = {
 		Name = "Percentage Pet",
 		TierLevel = 4, -- Required especially during merging pets
-		Multiplier = 100, -- x100
+		Multiplier = 0,
 		PickupRangeBonus = 3.0, -- Extended range
 		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
 		StarCollectionRadius = 25, -- Distance from star to collect it
@@ -462,7 +462,7 @@ function Stats.CalculateFuelMultiplier(equippedPets: {any}?): number
 			baseTotal = baseTotal + (pet.Multiplier or 0)
 		end
 	end
-	
+	warn(totalPercentageBonus, baseTotal)
 	-- Apply percentage bonus: baseTotal * (1 + totalPercentage/100)
 	-- Example: if baseTotal = 100 and percentage = 150, result = 100 * (1 + 1.5) = 250
 	local totalBonus = baseTotal * (1 + totalPercentageBonus / 100)

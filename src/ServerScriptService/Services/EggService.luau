@@ -147,6 +147,7 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 			TierName = "Common", -- Starting tier name
 			Rarity = petConfig.Rarity or "Standard",
 			ObtainedAt = os.time(),
+			Percentage = petConfig.Percentage or 0,
 		}
 		table.insert(inventory.PetInventory, petEntry)
 		newPetIndex = #inventory.PetInventory
@@ -182,6 +183,7 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 		TierLevel = petConfig.BaseTierLevel or 1,
 		TierName = "Common",
 		Rarity = petConfig.Rarity or "Standard",
+		Percentage = petConfig.Percentage or 0,
 	}
 	
 	-- Fire signal to client
@@ -335,6 +337,7 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 			TierName = "Common", -- Starting tier name
 			Rarity = petConfig.Rarity or "Standard",
 			ObtainedAt = os.time(),
+			Percentage = petConfig.Percentage or 0,
 		}
 		table.insert(inventory.PetInventory, petEntry)
 		newPetIndex = #inventory.PetInventory
@@ -368,6 +371,7 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		TierLevel = petConfig.BaseTierLevel or 1,
 		TierName = "Common",
 		Rarity = petConfig.Rarity or "Standard",
+		Percentage = petConfig.Percentage or 0,
 	}
 	
 	-- Fire signal to client
