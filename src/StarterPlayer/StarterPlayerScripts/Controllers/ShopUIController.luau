@@ -127,8 +127,35 @@ function ShopUIController:KnitStart()
 
 	-- all the egg frames work the same way
 	_connections["BestFriendEgg"] = UI.Frames.Eggs.BestFriendEggFrame.TextButton.MouseButton1Click:Connect(function()
-		-- auto hatch, etc. look into egg controller.
-		EggService:PurchaseEgg("BestFriendEgg")
+		local MonetizationService = Knit.GetService("MonetizationService")
+		local productId = MonetizationService:GetDevProductId("BestFriendEgg")
+		if productId then
+			MarketplaceService:PromptProductPurchase(player, productId)
+		end
+	end)
+
+	_connections["LimitedHistoricalEgg"] = UI.Frames.Eggs.LimitedHistoricalEgg.TextButton.MouseButton1Click:Connect(function()
+		local MonetizationService = Knit.GetService("MonetizationService")
+		local productId = MonetizationService:GetDevProductId("LimitedHistoricalEgg")
+		if productId then
+			MarketplaceService:PromptProductPurchase(player, productId)
+		end
+	end)
+
+	_connections["PremiumWorldEgg"] = UI.Frames.Eggs.PremiumWorldEgg.TextButton.MouseButton1Click:Connect(function()
+		local MonetizationService = Knit.GetService("MonetizationService")
+		local productId = MonetizationService:GetDevProductId("PremiumWorldEgg")
+		if productId then
+			MarketplaceService:PromptProductPurchase(player, productId)
+		end
+	end)
+
+	_connections["GoldenChronoEgg"] = UI.Frames.Eggs.GoldenChronoEgg.TextButton.MouseButton1Click:Connect(function()
+		local MonetizationService = Knit.GetService("MonetizationService")
+		local productId = MonetizationService:GetDevProductId("GoldenChronoEgg")
+		if productId then
+			MarketplaceService:PromptProductPurchase(player, productId)
+		end
 	end)
 
 

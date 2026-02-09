@@ -19,6 +19,11 @@ DevProducts.Ids = {
 	MediumCashPack = 3533352608,
 	HugeCashPack = 3533356103,
 	LargeGemPack = 3533356279,
+	-- Egg Products
+	BestFriendEgg = 3533366172,
+	LimitedHistoricalEgg = 3533366398,
+	PremiumWorldEgg = 3533366275,
+	GoldenChronoEgg = 3533366982,
 }
 
 -- Purchases Manager - handlers are initialized when Initialize() is called
@@ -80,6 +85,86 @@ function DevProducts.Initialize(Knit)
 					NotificationService:SendNotification(
 						player,
 						"You received 1,000 Gems!",
+						NotificationService.Category.Success
+					)
+				end
+				
+				return true
+			end
+		},
+		[DevProducts.Ids.BestFriendEgg] = {
+			Name = "BestFriendEgg",
+			OnPurchase = function(player)
+				DataService:Update(player, "Eggs", function(eggs)
+					eggs = eggs or {}
+					table.insert(eggs, "BestFriendEgg")
+					return eggs
+				end)
+				
+				if NotificationService then
+					NotificationService:SendNotification(
+						player,
+						"You received a Best Friend Egg!",
+						NotificationService.Category.Success
+					)
+				end
+				
+				return true
+			end
+		},
+		[DevProducts.Ids.LimitedHistoricalEgg] = {
+			Name = "LimitedHistoricalEgg",
+			OnPurchase = function(player)
+				DataService:Update(player, "Eggs", function(eggs)
+					eggs = eggs or {}
+					table.insert(eggs, "LimitedHistoricalEgg")
+					return eggs
+				end)
+				
+				if NotificationService then
+					NotificationService:SendNotification(
+						player,
+						"You received a Limited Historical Egg!",
+						NotificationService.Category.Success
+					)
+				end
+				
+				return true
+			end
+		},
+		[DevProducts.Ids.PremiumWorldEgg] = {
+			Name = "PremiumWorldEgg",
+			OnPurchase = function(player)
+				DataService:Update(player, "Eggs", function(eggs)
+					eggs = eggs or {}
+					table.insert(eggs, "PremiumWorldEgg")
+					return eggs
+				end)
+				
+				if NotificationService then
+					NotificationService:SendNotification(
+						player,
+						"You received a Premium World Egg!",
+						NotificationService.Category.Success
+					)
+				end
+				
+				return true
+			end
+		},
+		[DevProducts.Ids.GoldenChronoEgg] = {
+			Name = "GoldenChronoEgg",
+			OnPurchase = function(player)
+				DataService:Update(player, "Eggs", function(eggs)
+					eggs = eggs or {}
+					table.insert(eggs, "GoldenChronoEgg")
+					return eggs
+				end)
+				
+				if NotificationService then
+					NotificationService:SendNotification(
+						player,
+						"You received a Golden Chrono Egg!",
 						NotificationService.Category.Success
 					)
 				end
