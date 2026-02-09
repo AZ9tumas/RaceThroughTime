@@ -331,6 +331,17 @@ Stats.Eggs = {
 			{ Pet = "PremiumPet", Probability = 0.30, LuckProbability = 0.50, SuperLuckProbability = 0.75 }, -- 30% chance (same pet, for testing)
 		},
 	},
+	BestFriendEgg = {
+		Cost = 0,
+		Tier = "Basic",
+		Currency = "Cash",
+		World = "Main",
+		-- Pets array contains possible pets with their spawn probabilities (must sum to 1.0)
+		Pets = {
+			{ Pet = "StandardPet", Probability = 0.00, LuckProbability = 0.00, SuperLuckProbability = 0.00 }, -- 0% chance
+			{ Pet = "PercentagePet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 }, -- 100% chance
+		},
+	},
 }
 
 Stats.TierColors = setmetatable({
@@ -359,6 +370,42 @@ Stats.Pets = {
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
 		Rarity = "Standard", -- Standard, Premium, or LimitedTime
+	},
+	PremiumPet = {
+		Name = "Premium Pet",
+		TierLevel = 2, -- Required especially during merging pets
+		Multiplier = 20, -- x10
+		PickupRangeBonus = 2.0, -- No range extension (base range)
+		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
+		StarCollectionRadius = 15, -- Distance from star to collect it
+		Velocity = 25, -- Pet movement speed (studs/sec)
+		World = "Main", -- Associated world for merging
+		BaseTierLevel = 1, -- Starting tier level
+		Rarity = "Premium", -- Standard, Premium, or LimitedTime
+	},
+	GoldenPet = {
+		Name = "Golden Pet",
+		TierLevel = 4, -- Required especially during merging pets
+		Multiplier = 50, -- x50
+		PickupRangeBonus = 3.0, -- Extended range
+		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
+		StarCollectionRadius = 20, -- Distance from star to collect it
+		Velocity = 30, -- Pet movement speed (studs/sec)
+		World = "Main", -- Associated world for merging
+		BaseTierLevel = 1, -- Starting tier level
+		Rarity = "Exclusive", -- Standard, Premium, LimitedTime, or Exclusive
+	},
+	PercentagePet = {
+		Name = "Percentage Pet",
+		TierLevel = 4, -- Required especially during merging pets
+		Multiplier = 100, -- x100
+		PickupRangeBonus = 3.0, -- Extended range
+		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
+		StarCollectionRadius = 25, -- Distance from star to collect it
+		Velocity = 35, -- Pet movement speed (studs/sec)
+		World = "Main", -- Associated world for merging
+		BaseTierLevel = 1, -- Starting tier level
+		Rarity = "Exclusive", -- Standard, Premium, LimitedTime, or Exclusive
 	},
 }
 

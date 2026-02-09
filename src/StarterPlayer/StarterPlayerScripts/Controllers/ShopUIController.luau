@@ -13,15 +13,52 @@ local ShopUIController = Knit.CreateController({
 local player = Players.LocalPlayer
 local PlayerGui = player:WaitForChild("PlayerGui")
 
-local shopButton: TextButton
-local shopMain: Frame
-local shopCloseButton: TextButton
-local standardEggBuy: TextButton
-local eggHatchScreenGui: ScreenGui
-local eggHatchDimmer: Frame
-local eggviewport: ViewportFrame
-local eggHatchFlash: Frame?
+local UI = {
+	Buttons = {
+		Open = nil,
+		Close = nil,
+	},
+	Frames = {
+		Main = nil,
+		ScrollingFrame = nil,
 
+		EggHatch = {
+			Gui = nil,
+			Dimmer = nil,
+			Viewport = nil,
+			Flash = nil,
+		},
+
+		Gamepasses = {
+			Frame = nil,
+			VIPFrame = nil,
+			MagnetFrame = nil,
+			LuckFrame = nil,
+		},
+
+		Currency = {
+			Frame = nil,
+			-- cash
+			MediumCashPack = nil,
+			HugeCashPack = nil,
+
+			-- gems
+			LargeGemPack = nil,
+		},
+
+		Eggs = {
+			Frame = nil,
+
+			BestFriendEggFrame = nil,
+			PremiumWorldEgg = nil,
+			GoldenChronoEgg = nil,
+			LimitedHistoricalEgg = nil
+		}
+	},
+}
+
+
+export type ShopUIStructure = typeof(UI)
 local _connections = {}
 
 function ShopUIController:UpdateShopUI()
@@ -38,18 +75,38 @@ function ShopUIController:CloseShop()
 end
 
 function ShopUIController:KnitInit()
-	local mainUi: ScreenGui = PlayerGui:WaitForChild("RaceThroughTime_UI")
-	local uiShop: ScreenGui = PlayerGui:WaitForChild("UI_Shop")
-	local leftPanel: Frame = mainUi:WaitForChild("LeftPanel")
-	shopButton = leftPanel:WaitForChild("ShopButton")
-	shopMain = uiShop:WaitForChild("MainFrame")
-	shopCloseButton = shopMain:WaitForChild("Close")
-	local shopEggsContainer = shopMain:WaitForChild("ScrollingFrame"):WaitForChild("Eggs"):WaitForChild("MainFrame")
-	standardEggBuy = shopEggsContainer:WaitForChild("StandardEgg"):WaitForChild("Buy")
-	eggHatchScreenGui = PlayerGui:WaitForChild("EggHatchScreen")
-	eggHatchDimmer = eggHatchScreenGui:WaitForChild("Dimmer")
-	eggviewport = eggHatchDimmer:WaitForChild("Viewport")
-	eggHatchFlash = eggHatchScreenGui:FindFirstChild("Flash")
+	local mainUi = PlayerGui:WaitForChild("RaceThroughTime_UI")
+	local uiShop = PlayerGui:WaitForChild("UI_Shop")
+	local leftPanel = mainUi:WaitForChild("LeftPanel")
+
+	UI.Buttons.Open = leftPanel:WaitForChild("ShopButton")
+	UI.Frames.Main = uiShop:WaitForChild("MainFrame")
+	UI.Frames.ScrollingFrame = UI.Frames.Main:WaitForChild("ScrollingFrame")
+	UI.Buttons.Close = UI.Frames.Main:WaitForChild("Close")
+
+	UI.Frames.EggHatch.Gui = PlayerGui:WaitForChild("EggHatchScreen")
+	UI.Frames.EggHatch.Dimmer = UI.Frames.EggHatch.Gui:WaitForChild("Dimmer")
+	UI.Frames.EggHatch.Viewport = UI.Frames.EggHatch.Dimmer:WaitForChild("Viewport")
+	UI.Frames.EggHatch.Flash = UI.Frames.EggHatch.Gui:FindFirstChild("Flash")
+
+	-- init gamepasses
+	UI.Frames.Gamepasses.Frame = UI.Frames.ScrollingFrame:WaitForChild("Gamepasses"):WaitForChild("MainFrame")
+	UI.Frames.Gamepasses.VIPFrame = UI.Frames.Gamepasses.Frame:WaitForChild("VIP")
+	UI.Frames.Gamepasses.MagnetFrame = UI.Frames.Gamepasses.Frame:WaitForChild("Magnet")
+	UI.Frames.Gamepasses.LuckFrame = UI.Frames.Gamepasses.Frame:WaitForChild("Luck")
+
+	-- currency
+	UI.Frames.Currency.Frame = UI.Frames.ScrollingFrame:WaitForChild("Currency"):WaitForChild("MainFrame")
+	UI.Frames.Currency.MediumCashPack = UI.Frames.Currency.Frame:WaitForChild("MediumCashPack")
+	UI.Frames.Currency.HugeCashPack = UI.Frames.Currency.Frame:WaitForChild("HugeCashPack")
+	UI.Frames.Currency.LargeGemPack = UI.Frames.Currency.Frame:WaitForChild("LargeGemPack")
+
+	-- eggs
+	UI.Frames.Eggs.Frame = UI.Frames.ScrollingFrame:WaitForChild("Eggs"):WaitForChild("MainFrame")
+	UI.Frames.Eggs.BestFriendEggFrame = UI.Frames.Eggs.Frame:WaitForChild("BestFriendEgg")
+	UI.Frames.Eggs.PremiumWorldEgg = UI.Frames.Eggs.Frame:WaitForChild("PremiumWorldEgg")
+	UI.Frames.Eggs.GoldenChronoEgg = UI.Frames.Eggs.Frame:WaitForChild("GoldenChronoEgg")
+	UI.Frames.Eggs.LimitedHistoricalEgg = UI.Frames.Eggs.Frame:WaitForChild("LimitedHistoricalEgg")
 end
 
 function ShopUIController:KnitStart()
@@ -59,62 +116,24 @@ function ShopUIController:KnitStart()
 	local UIFramesController = Knit.GetController("UIFramesController")
 	local MonetizationController = Knit.GetController("MonetizationController")
 
-	_connections["ShopButton"] = shopButton.MouseButton1Click:Connect(function()
+	_connections["ShopButton"] = UI.Buttons.Open.MouseButton1Click:Connect(function()
 		self:ToggleShop()
 	end)
 
-	_connections["ShopClose"] = shopCloseButton.MouseButton1Click:Connect(function()
+	_connections["ShopClose"] = UI.Buttons.Close.MouseButton1Click:Connect(function()
 		self:CloseShop()
 	end)
 
-	_connections["StandardEggBuy"] = standardEggBuy.MouseButton1Click:Connect(function()
-		if EggHatchAnimation.IsPlaying() then
-			return
-		end
-		
-		local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass("InstantHatch")
-		
-		if hasInstantHatch then
-			EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, petInfo)
-				if success and petInfo then
-					local data = UIController:GetData()
-					if not data.Inventory.PetInventory then
-						data.Inventory.PetInventory = {}
-					end
-					table.insert(data.Inventory.PetInventory, petInfo)
-					if InventoryUIController then
-						InventoryUIController:UpdatePetsInventory()
-					end
-				end
-			end)
-		else
-			UIFramesController:DisableFrames(true)
-			eggviewport.Parent.Visible = true
-			EggHatchAnimation.PlayHatch(
-				eggviewport,
-				"StandardEgg",
-				eggHatchDimmer,
-				eggHatchFlash,
-				function(animationSuccess)
-					if animationSuccess then
-						EggService:RequestPurchaseEgg("StandardEgg"):andThen(function(success, errorMsg, petInfo)
-							if success and petInfo then
-								local data = UIController:GetData()
-								if not data.Inventory.PetInventory then
-									data.Inventory.PetInventory = {}
-								end
-								table.insert(data.Inventory.PetInventory, petInfo)
-								if InventoryUIController then
-									InventoryUIController:UpdatePetsInventory()
-								end
-							end
-						end)
-					end
-					eggviewport.Parent.Visible = false
-					UIFramesController:DisableFrames(false)
-				end
-			)
-		end
+	-- all the egg frames work the same way
+	_connections["BestFriendEgg"] = UI.Frames.Eggs.BestFriendEggFrame.TextButton.MouseButton1Click:Connect(function()
+		-- auto hatch, etc. look into egg controller.
+		EggService:PurchaseEgg("BestFriendEgg")
+	end)
+
+
+	-- currency purchases
+	_connections["MediumCashPack"] = UI.Frames.Currency.MediumCashPack.TextButton.MouseButton1Click:Connect(function()
+		-- dev product purchase
 	end)
 end
 

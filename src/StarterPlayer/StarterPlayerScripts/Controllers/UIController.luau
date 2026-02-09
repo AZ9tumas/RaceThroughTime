@@ -16,16 +16,41 @@ local UIController = Knit.CreateController({
 local player = Players.LocalPlayer
 local PlayerGui = player:WaitForChild("PlayerGui")
 
-local mainUi: ScreenGui
-local uiShop: ScreenGui
-local uiInventory: ScreenGui
-local uiPetModal: ScreenGui
-local uiMerge: ScreenGui
-local tradingScreenGui: ScreenGui
-local uiSettings: ScreenGui
-local rebirthMenu: Frame
-local worldMenu: Frame
-local dailyFrame: Frame
+export type UIReference = {
+	Gui: ScreenGui?,
+	MainFrame: Frame?,
+	[string]: any,
+}
+
+local UI = {
+	Main = nil :: ScreenGui?,
+	DailyFrame = nil :: Frame?,
+	Shop = {
+		Gui = nil :: ScreenGui?,
+		MainFrame = nil :: Frame?,
+	} :: UIReference,
+	Inventory = {
+		Gui = nil :: ScreenGui?,
+		MainFrame = nil :: Frame?,
+	} :: UIReference,
+	PetModal = {
+		Gui = nil :: ScreenGui?,
+		DarkOverlay = nil :: Frame?,
+	} :: UIReference,
+	Merge = {
+		Gui = nil :: ScreenGui?,
+	} :: UIReference,
+	Trading = {
+		Gui = nil :: ScreenGui?,
+		PlayerListFrame = nil :: Frame?,
+	} :: UIReference,
+	Settings = {
+		Gui = nil :: ScreenGui?,
+		MainFrame = nil :: Frame?,
+	} :: UIReference,
+	RebirthMenu = nil :: Frame?,
+	WorldMenu = nil :: Frame?,
+}
 
 local GATE_PROXIMITY_DISTANCE = statsM.GateProximityDistance
 local MAX_GATE_INDEX = statsM.MaxGateIndex
@@ -190,42 +215,27 @@ end
 
 function UIController:CloseAllFrames(exceptFrame: Frame?)
 	local old = exceptFrame and exceptFrame.Visible
-	if dailyFrame then dailyFrame.Visible = false end
-	if uiShop then
-		local shopMain = uiShop:FindFirstChild("MainFrame")
-		if shopMain then shopMain.Visible = false end
-	end
-	if uiInventory then
-		local inventoryMainFrame = uiInventory:FindFirstChild("MainFrame")
-		if inventoryMainFrame then inventoryMainFrame.Visible = false end
-	end
-	if uiPetModal then
-		local petModalDarkOverlay = uiPetModal:FindFirstChild("DarkOverlay")
-		if petModalDarkOverlay then petModalDarkOverlay.Visible = false end
-	end
-	if rebirthMenu then rebirthMenu.Visible = false end
-	if tradingScreenGui then
-		local playerListFrame = tradingScreenGui:FindFirstChild("PlayerListFrame")
-		if playerListFrame then playerListFrame.Visible = false end
-	end
-	if uiSettings then
-		local settingsMain = uiSettings:FindFirstChild("MainFrame")
-		if settingsMain then settingsMain.Visible = false end
-	end
+	if UI.DailyFrame then UI.DailyFrame.Visible = false end
+	if UI.Shop.MainFrame then UI.Shop.MainFrame.Visible = false end
+	if UI.Inventory.MainFrame then UI.Inventory.MainFrame.Visible = false end
+	if UI.PetModal.DarkOverlay then UI.PetModal.DarkOverlay.Visible = false end
+	if UI.RebirthMenu then UI.RebirthMenu.Visible = false end
+	if UI.Trading.PlayerListFrame then UI.Trading.PlayerListFrame.Visible = false end
+	if UI.Settings.MainFrame then UI.Settings.MainFrame.Visible = false end
 	if exceptFrame then exceptFrame.Visible = old end
 end
 
 function UIController:GetUIReferences()
 	return {
-		MainUI = mainUi,
-		ShopUI = uiShop,
-		InventoryUI = uiInventory,
-		PetModalUI = uiPetModal,
-		MergeUI = uiMerge,
-		TradingUI = tradingScreenGui,
-		RebirthMenu = rebirthMenu,
-		WorldMenu = worldMenu,
-		DailyFrame = dailyFrame,
+		MainUI = UI.Main,
+		ShopUI = UI.Shop.Gui,
+		InventoryUI = UI.Inventory.Gui,
+		PetModalUI = UI.PetModal.Gui,
+		MergeUI = UI.Merge.Gui,
+		TradingUI = UI.Trading.Gui,
+		RebirthMenu = UI.RebirthMenu,
+		WorldMenu = UI.WorldMenu,
+		DailyFrame = UI.DailyFrame,
 	}
 end
 
@@ -248,18 +258,36 @@ function UIController:CalculateTotalMultiplier(): number
 end
 
 function UIController:KnitInit()
-	mainUi = PlayerGui:WaitForChild("RaceThroughTime_UI")
-	uiShop = PlayerGui:WaitForChild("UI_Shop")
-	uiInventory = PlayerGui:WaitForChild("UI_Inventory")
-	uiPetModal = PlayerGui:WaitForChild("UI_PetModal")
-	uiMerge = PlayerGui:WaitForChild("UI_Merge")
-	tradingScreenGui = PlayerGui:WaitForChild("TradingSuite")
-	uiSettings = PlayerGui:WaitForChild("SettingsUI")
+	UI.Main = PlayerGui:WaitForChild("RaceThroughTime_UI")
+
+	local shopGui = PlayerGui:WaitForChild("UI_Shop")
+	UI.Shop.Gui = shopGui
+	UI.Shop.MainFrame = shopGui:WaitForChild("MainFrame")
+
+	local invGui = PlayerGui:WaitForChild("UI_Inventory")
+	UI.Inventory.Gui = invGui
+	UI.Inventory.MainFrame = invGui:WaitForChild("MainFrame")
+
+	local petModalGui = PlayerGui:WaitForChild("UI_PetModal")
+	UI.PetModal.Gui = petModalGui
+	UI.PetModal.DarkOverlay = petModalGui:WaitForChild("DarkOverlay")
+
+	UI.Merge.Gui = PlayerGui:WaitForChild("UI_Merge")
+
+	local tradingGui = PlayerGui:WaitForChild("TradingSuite")
+	UI.Trading.Gui = tradingGui
+	UI.Trading.PlayerListFrame = tradingGui:WaitForChild("PlayerListFrame")
+
+	local settingsGui = PlayerGui:WaitForChild("SettingsUI")
+	UI.Settings.Gui = settingsGui
+	UI.Settings.MainFrame = settingsGui:WaitForChild("MainFrame")
+
 	local simulatorPopups = PlayerGui:WaitForChild("SimulatorPopups")
-	rebirthMenu = simulatorPopups:WaitForChild("RebirthMenu")
-	worldMenu = simulatorPopups:WaitForChild("WorldMenu")
-	local otherFrames = mainUi:WaitForChild("OtherFrames")
-	dailyFrame = otherFrames:WaitForChild("DailyFrame")
+	UI.RebirthMenu = simulatorPopups:WaitForChild("RebirthMenu")
+	UI.WorldMenu = simulatorPopups:WaitForChild("WorldMenu")
+
+	local otherFrames = UI.Main:WaitForChild("OtherFrames")
+	UI.DailyFrame = otherFrames:WaitForChild("DailyFrame")
 end
 
 function UIController:KnitStart()
