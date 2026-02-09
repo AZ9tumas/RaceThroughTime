@@ -440,18 +440,32 @@ Stats.Pets = {
 -- Calculate total fuel bonus from all equipped pets
 -- Returns the sum of all equipped pets' bonuses (0 if no pets equipped)
 -- The bonus is added to the base 1.0 multiplier in CalculateFuelFromStars
--- @param equippedPets table? - Array of equipped pet data { Multiplier: number, ... }
--- @return number - Total fuel bonus (sum of pet Multiplier values, or 0 if no pets)
+-- Pets with "Percentage" parameter boost the total multiplier of other pets
+-- Formula: totalBonus = baseTotal * (1 + percentage/100) for each percentage pet
+-- @param equippedPets table? - Array of equipped pet data { Multiplier: number, Percentage: number?, ... }
+-- @return number - Total fuel bonus (sum of pet Multiplier values with percentage bonuses applied)
 function Stats.CalculateFuelMultiplier(equippedPets: {any}?): number
 	if not equippedPets or #equippedPets == 0 then
 		return 0
 	end
 	
-	local totalBonus = 0
+	-- First pass: calculate base total from non-percentage pets
+	local baseTotal = 0
+	local totalPercentageBonus = 0
+	
 	for _, pet in ipairs(equippedPets) do
-		-- Each pet's Multiplier value is added directly as bonus
-		totalBonus = totalBonus + (pet.Multiplier or 0)
+		if pet.Percentage then
+			-- This is a percentage pet - accumulate its percentage bonus
+			totalPercentageBonus = totalPercentageBonus + (pet.Percentage or 0)
+		else
+			-- Regular pet - add its multiplier to base total
+			baseTotal = baseTotal + (pet.Multiplier or 0)
+		end
 	end
+	
+	-- Apply percentage bonus: baseTotal * (1 + totalPercentage/100)
+	-- Example: if baseTotal = 100 and percentage = 150, result = 100 * (1 + 1.5) = 250
+	local totalBonus = baseTotal * (1 + totalPercentageBonus / 100)
 	
 	return totalBonus
 end
