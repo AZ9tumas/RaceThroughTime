@@ -33,6 +33,7 @@ DevProducts.PurchasesManager = {}
 function DevProducts.Initialize(Knit)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
+	local EggService = Knit.GetService("EggService")
 	
 	DevProducts.PurchasesManager = {
 		[DevProducts.Ids.MediumCashPack] = {
@@ -95,81 +96,29 @@ function DevProducts.Initialize(Knit)
 		[DevProducts.Ids.BestFriendEgg] = {
 			Name = "BestFriendEgg",
 			OnPurchase = function(player)
-				DataService:Update(player, "Eggs", function(eggs)
-					eggs = eggs or {}
-					table.insert(eggs, "BestFriendEgg")
-					return eggs
-				end)
-				
-				if NotificationService then
-					NotificationService:SendNotification(
-						player,
-						"You received a Best Friend Egg!",
-						NotificationService.Category.Success
-					)
-				end
-				
-				return true
+				local success = EggService:HatchEgg(player, "BestFriendEgg")
+				return success
 			end
 		},
 		[DevProducts.Ids.LimitedHistoricalEgg] = {
 			Name = "LimitedHistoricalEgg",
 			OnPurchase = function(player)
-				DataService:Update(player, "Eggs", function(eggs)
-					eggs = eggs or {}
-					table.insert(eggs, "LimitedHistoricalEgg")
-					return eggs
-				end)
-				
-				if NotificationService then
-					NotificationService:SendNotification(
-						player,
-						"You received a Limited Historical Egg!",
-						NotificationService.Category.Success
-					)
-				end
-				
-				return true
+				local success = EggService:HatchEgg(player, "LimitedHistoricalEgg")
+				return success
 			end
 		},
 		[DevProducts.Ids.PremiumWorldEgg] = {
 			Name = "PremiumWorldEgg",
 			OnPurchase = function(player)
-				DataService:Update(player, "Eggs", function(eggs)
-					eggs = eggs or {}
-					table.insert(eggs, "PremiumWorldEgg")
-					return eggs
-				end)
-				
-				if NotificationService then
-					NotificationService:SendNotification(
-						player,
-						"You received a Premium World Egg!",
-						NotificationService.Category.Success
-					)
-				end
-				
-				return true
+				local success = EggService:HatchEgg(player, "PremiumWorldEgg")
+				return success
 			end
 		},
 		[DevProducts.Ids.GoldenChronoEgg] = {
 			Name = "GoldenChronoEgg",
 			OnPurchase = function(player)
-				DataService:Update(player, "Eggs", function(eggs)
-					eggs = eggs or {}
-					table.insert(eggs, "GoldenChronoEgg")
-					return eggs
-				end)
-				
-				if NotificationService then
-					NotificationService:SendNotification(
-						player,
-						"You received a Golden Chrono Egg!",
-						NotificationService.Category.Success
-					)
-				end
-				
-				return true
+				local success = EggService:HatchEgg(player, "GoldenChronoEgg")
+				return success
 			end
 		},
 	}
