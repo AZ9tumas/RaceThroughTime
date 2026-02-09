@@ -2,31 +2,33 @@
 	PotionsController - Client-side controller for checking potion effects
 ]]
 
-local PotionsController = {
-	Name = "PotionsController",
-}
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Knit = require(ReplicatedStorage.Packages.Knit)
 
-local Knit
+local PotionsController = Knit.CreateController({
+	Name = "PotionsController",
+})
+
 local PotionsService
 
-function PotionsController:HasActivePotion(potionName: string): boolean
+function PotionsController:HasActivePotion(potionName: string)
 	return PotionsService:HasActivePotion(potionName)
 end
 
-function PotionsController:GetProbabilityKey(): string?
+function PotionsController:GetProbabilityKey()
 	return PotionsService:GetProbabilityKey()
 end
 
-function PotionsController:GetPotionMultiplier(): number
+function PotionsController:GetPotionMultiplier()
 	return PotionsService:GetPotionMultiplier()
 end
 
-function PotionsController:GetRemainingTime(potionName: string): number
+function PotionsController:GetRemainingTime(potionName: string)
 	return PotionsService:GetRemainingTime(potionName)
 end
 
 function PotionsController:KnitInit()
-	Knit = require(game.ReplicatedStorage.Packages.Knit)
+	
 end
 
 function PotionsController:KnitStart()

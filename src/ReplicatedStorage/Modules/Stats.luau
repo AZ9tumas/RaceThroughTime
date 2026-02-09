@@ -357,7 +357,7 @@ Stats.Eggs = {
 		Currency = "Cash",
 		World = "Main",
 		Pets = {
-			{ Pet = "GoldenPet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 },
+			{ Pet = "LimitedPet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 },
 		},
 	},
 	GoldenChronoEgg = {
@@ -435,6 +435,19 @@ Stats.Pets = {
 		Rarity = "Exclusive", -- Standard, Premium, LimitedTime, or Exclusive
 		Percentage = 40
 	},
+	LimitedPet = {
+		Name = "Limited Pet",
+		TierLevel = 3, -- Required especially during merging pets
+		Multiplier = 135, -- x35
+		PickupRangeBonus = 2.5, -- Extended range
+		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
+		StarCollectionRadius = 18, -- Distance from star to collect it
+		Velocity = 28, -- Pet movement speed (studs/sec)
+		World = "Main", -- Associated world for merging
+		BaseTierLevel = 1, -- Starting tier level
+		Rarity = "LimitedTime", -- Standard, Premium, LimitedTime, or Exclusive
+		ExpireLength = 3600 * 24 * 7, -- 7 days in seconds
+	}
 }
 
 -- Calculate total fuel bonus from all equipped pets
