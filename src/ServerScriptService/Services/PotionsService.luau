@@ -19,7 +19,12 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 
 local PotionsService = Knit.CreateService({
 	Name = "PotionsService",
-	Client = {},
+	Client = {
+		HasActivePotion = Knit.CreateSignal(),
+		GetProbabilityKey = Knit.CreateSignal(),
+		GetPotionMultiplier = Knit.CreateSignal(),
+		GetRemainingTime = Knit.CreateSignal(),
+	},
 })
 
 -- Type definitions
