@@ -131,6 +131,13 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 	-- Generate pet ID and add pet to inventory immediately
 	local petID = GeneratePetID()
 	local newPetIndex = nil
+
+	local finalPetEntry = {}
+	for key, val in ipairs(petConfig) do
+		finalPetEntry[key] = val
+	end
+
+	finalPetEntry.ObtainedAt = os.time()
 	
 	DataService:Update(player, "Inventory", function(inventory)
 		if not inventory.PetInventory then
@@ -138,23 +145,7 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 		end
 		
 		-- Add pet with all stats from config
-		local petEntry = {
-			PetType = petType,
-			Name = petConfig.Name,
-			Multiplier = petConfig.Multiplier,
-			PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
-			RoamRange = petConfig.RoamRange,
-			StarCollectionRadius = petConfig.StarCollectionRadius or 5,
-			Velocity = petConfig.Velocity or 20,
-			World = petConfig.World or eggConfig.World,
-			Level = petConfig.BaseTierLevel or 1,
-			TierLevel = petConfig.BaseTierLevel or 1,
-			TierName = "Common", -- Starting tier name
-			Rarity = petConfig.Rarity or "Standard",
-			ObtainedAt = os.time(),
-			Percentage = petConfig.Percentage or 0,
-		}
-		table.insert(inventory.PetInventory, petEntry)
+		table.insert(inventory.PetInventory, finalPetEntry)
 		newPetIndex = #inventory.PetInventory
 		
 		return inventory
@@ -174,28 +165,11 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 		)
 	end
 	
-	local petInfo = {
-		Name = petConfig.Name,
-		ID = petID,
-		PetType = petType,
-		Multiplier = petConfig.Multiplier,
-		PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
-		RoamRange = petConfig.RoamRange or 30,
-		StarCollectionRadius = petConfig.StarCollectionRadius or 5,
-		Velocity = petConfig.Velocity or 20,
-		World = petConfig.World or eggConfig.World or "Main",
-		Level = petConfig.BaseTierLevel or 1,
-		TierLevel = petConfig.BaseTierLevel or 1,
-		TierName = "Common",
-		Rarity = petConfig.Rarity or "Standard",
-		Percentage = petConfig.Percentage or 0,
-	}
-	
 	-- Fire signal to client
-	EggService.Client.PetObtained:Fire(player, petInfo)
+	EggService.Client.PetObtained:Fire(player, finalPetEntry)
 	DataService:FireDataReady(player)
 	
-	return true, nil, petInfo
+	return true, nil, finalPetEntry
 end
 
 --[[
@@ -326,6 +300,13 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	-- Generate pet ID and add pet to inventory immediately
 	local petID = GeneratePetID()
 	local newPetIndex = nil
+
+	local finalPetEntry = {}
+	for key, val in ipairs(petConfig) do
+		finalPetEntry[key] = val
+	end
+
+	finalPetEntry.ObtainedAt = os.time()
 	
 	DataService:Update(player, "Inventory", function(inventory)
 		if not inventory.PetInventory then
@@ -333,23 +314,7 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		end
 		
 		-- Add pet with all stats from config
-		local petEntry = {
-			PetType = petType,
-			Name = petConfig.Name,
-			Multiplier = petConfig.Multiplier,
-			PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
-			RoamRange = petConfig.RoamRange,
-			StarCollectionRadius = petConfig.StarCollectionRadius or 5,
-			Velocity = petConfig.Velocity or 20,
-			World = petConfig.World or eggConfig.World,
-			Level = petConfig.BaseTierLevel or 1,
-			TierLevel = petConfig.BaseTierLevel or 1,
-			TierName = "Common", -- Starting tier name
-			Rarity = petConfig.Rarity or "Standard",
-			ObtainedAt = os.time(),
-			Percentage = petConfig.Percentage or 0,
-		}
-		table.insert(inventory.PetInventory, petEntry)
+		table.insert(inventory.PetInventory, finalPetEntry)
 		newPetIndex = #inventory.PetInventory
 		
 		return inventory
@@ -367,28 +332,11 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		NotificationService.Category.Success
 	)
 	
-	local petInfo = {
-		Name = petConfig.Name,
-		ID = petID,
-		PetType = petType,
-		Multiplier = petConfig.Multiplier,
-		PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
-		RoamRange = petConfig.RoamRange or 30,
-		StarCollectionRadius = petConfig.StarCollectionRadius or 5,
-		Velocity = petConfig.Velocity or 20,
-		World = petConfig.World or eggConfig.World or "Main",
-		Level = petConfig.BaseTierLevel or 1,
-		TierLevel = petConfig.BaseTierLevel or 1,
-		TierName = "Common",
-		Rarity = petConfig.Rarity or "Standard",
-		Percentage = petConfig.Percentage or 0,
-	}
-	
 	-- Fire signal to client
-	EggService.Client.PetObtained:Fire(player, petInfo)
+	EggService.Client.PetObtained:Fire(player, finalPetEntry)
 	DataService:FireDataReady(player)
 	
-	return true, nil, petInfo
+	return true, nil, finalPetEntry
 end
 
 -- Client request to purchase an egg (immediately hatches to pet)
