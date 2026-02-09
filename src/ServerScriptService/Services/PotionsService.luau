@@ -60,6 +60,13 @@ local PotionDefinitions: {[string]: PotionDefinition} = {
 		Multiplier = 1.5, -- 50% more fuel distance
 		ProbabilityKey = nil, -- Does not affect egg probabilities
 	},
+	
+	PointsOverload = {
+		Name = "Points Overload Potion",
+		Duration = 10 * 60, -- 10 minutes in seconds
+		Multiplier = 3.0, -- x3 the total distance produced from fuel
+		ProbabilityKey = nil, -- Does not affect egg probabilities
+	},
 }
 
 -- Expose Potions table for both server and client usage (like MonetizationService.Passes)

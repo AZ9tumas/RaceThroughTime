@@ -146,6 +146,7 @@ local function CalculateTrackParameters(player: Player, worldName: string):
 	{ initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
 	local DataService = Knit.GetService("DataService")
 	local LauncherService = Knit.GetService("LauncherService")
+	local PotionsService = Knit.GetService("PotionsService")
 	local playerData = DataService:Get(player, "Stats")
 	
 	if not playerData then
@@ -161,6 +162,12 @@ local function CalculateTrackParameters(player: Player, worldName: string):
 	local fuel = playerData.Fuel or 0
 	local launcherMultiplier = LauncherService:GetPlayerMultiplier(player)
 	local trackParams = Stats.CalculateTrackParameters(fuel, worldName, launcherMultiplier)
+	
+	-- Apply potion distance multiplier (e.g., PointsOverload gives x3 distance)
+	local potionMultiplier = PotionsService:GetPotionMultiplier(player)
+	if potionMultiplier > 1 then
+		trackParams.totalDistance = trackParams.totalDistance * potionMultiplier
+	end
 	
 	-- Apply rebirth speed multiplier
 	local rebirthLevel = playerData.Rebirths or 0

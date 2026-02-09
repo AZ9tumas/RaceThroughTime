@@ -28,6 +28,8 @@ DevProducts.Ids = {
 	MissingMergeStage1 = 3533428993, -- Fills 1 slot to create Tier 2 Pet
 	MissingMergeStage2 = 3533429099, -- Fills 1 slot to create Tier 3 Pet
 	MissingMergeStage3 = 3533429232, -- Fills 1 slot to create Tier 4 Pet
+	-- Boss Summon (summon boss without star requirement)
+	SummonBoss = 3533946740,
 }
 
 -- Purchases Manager - handlers are initialized when Initialize() is called
@@ -38,6 +40,7 @@ function DevProducts.Initialize(Knit)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
 	local EggService = Knit.GetService("EggService")
+	local BossService = Knit.GetService("BossService")
 	
 	DevProducts.PurchasesManager = {
 		[DevProducts.Ids.MediumCashPack] = {
@@ -169,6 +172,29 @@ function DevProducts.Initialize(Knit)
 					)
 				end
 				return success
+			end
+		},
+		-- Boss Summon (summon boss without star requirement)
+		[DevProducts.Ids.SummonBoss] = {
+			Name = "SummonBoss",
+			OnPurchase = function(player)
+				-- Summon the boss immediately without star requirement
+				local bossKey = BossService:SpawnBoss()
+				if bossKey then
+					NotificationService:SendNotification(
+						player,
+						"Boss summoned! Get ready to fight!",
+						NotificationService.Category.Success
+					)
+					return true
+				else
+					NotificationService:SendNotification(
+						player,
+						"Failed to summon boss. Please try again.",
+						NotificationService.Category.Error
+					)
+					return false
+				end
 			end
 		},
 	}
