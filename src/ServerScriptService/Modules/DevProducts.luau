@@ -30,7 +30,9 @@ DevProducts.Ids = {
 	MissingMergeStage3 = 3533429232, -- Fills 1 slot to create Tier 4 Pet
 	-- Boss Summon (summon boss without star requirement)
 	SummonBoss = 3533946740,
-	SuperLuck = 3534326409
+	-- Potions
+	SuperLuck = 3534326409,
+	PointsOverload = 3534331652,
 }
 
 -- Purchases Manager - handlers are initialized when Initialize() is called
@@ -204,8 +206,20 @@ function DevProducts.Initialize(Knit)
 			Name = "SuperLuck",
 			OnPurchase = function(player)
 				-- Apply Super Luck effect to player
+				local PotionsService = Knit.GetService("PotionsService")
+				local success = PotionsService:AddPotion(player, "SuperLuck")
+				return success
 			end
-		}
+		},
+		[DevProducts.Ids.PointsOverload] = {
+			Name = "PointsOverload",
+			OnPurchase = function(player)
+				-- Apply Points Overload effect to player (x3 distance multiplier)
+				local PotionsService = Knit.GetService("PotionsService")
+				local success = PotionsService:AddPotion(player, "PointsOverload")
+				return success
+			end
+		},
 	}
 end
 

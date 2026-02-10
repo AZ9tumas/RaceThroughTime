@@ -16,6 +16,7 @@ local EggService = Knit.CreateService({
 	Name = "EggService",
 	Client = {
 		PetObtained = Knit.CreateSignal(), -- Signal to notify client when a pet is obtained from egg purchase
+		PlayHatchAnimation = Knit.CreateSignal(), -- Signal to trigger hatch animation on client
 	},
 })
 
@@ -164,6 +165,9 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 			NotificationService.Category.Success
 		)
 	end
+	
+	-- Fire signal to trigger hatch animation on client
+	EggService.Client.PlayHatchAnimation:Fire(player, eggType, finalPetEntry)
 	
 	-- Fire signal to client
 	EggService.Client.PetObtained:Fire(player, finalPetEntry)
