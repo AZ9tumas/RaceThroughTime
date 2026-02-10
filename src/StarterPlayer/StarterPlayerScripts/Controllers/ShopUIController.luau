@@ -23,6 +23,12 @@ local UI = {
 		Main = nil,
 		ScrollingFrame = nil,
 
+		Potions = {
+			Frame = nil,
+			SuperLuck = nil,
+			PointsOverload = nil,
+		},
+
 		EggHatch = {
 			Gui = nil,
 			Dimmer = nil,
@@ -108,6 +114,11 @@ function ShopUIController:KnitInit()
 	UI.Frames.Eggs.PremiumWorldEgg = UI.Frames.Eggs.Frame:WaitForChild("PremiumWorldEgg")
 	UI.Frames.Eggs.GoldenChronoEgg = UI.Frames.Eggs.Frame:WaitForChild("GoldenChronoEgg")
 	UI.Frames.Eggs.LimitedHistoricalEgg = UI.Frames.Eggs.Frame:WaitForChild("LimitedHistoricalEgg")
+
+	-- potions
+	UI.Frames.Potions.Frame = UI.Frames.ScrollingFrame:WaitForChild("Potions"):WaitForChild("MainFrame")
+	UI.Frames.Potions.SuperLuck = UI.Frames.Potions.Frame:WaitForChild("SuperLuck")
+	UI.Frames.Potions.PointsOverload = UI.Frames.Potions.Frame:WaitForChild("PointsOverload")
 end
 
 function ShopUIController:KnitStart()
@@ -184,6 +195,24 @@ function ShopUIController:KnitStart()
 	_connections["LargeGemPack"] = UI.Frames.Currency.LargeGemPack.TextButton.MouseButton1Click:Connect(function()
 		local MonetizationService = Knit.GetService("MonetizationService")
 		MonetizationService:GetDevProductId("LargeGemPack"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
+	end)
+
+	_connections["SuperLuck"] = UI.Frames.Potions.SuperLuck.TextButton.MouseButton1Click:Connect(function()
+		local MonetizationService = Knit.GetService("MonetizationService")
+		MonetizationService:GetDevProductId("SuperLuck"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
+	end)
+
+	_connections["PointsOverload"] = UI.Frames.Potions.PointsOverload.TextButton.MouseButton1Click:Connect(function()
+		local MonetizationService = Knit.GetService("MonetizationService")
+		MonetizationService:GetDevProductId("PointsOverload"):andThen(function(productId)
 			if productId then
 				MarketplaceService:PromptProductPurchase(player, productId)
 			end

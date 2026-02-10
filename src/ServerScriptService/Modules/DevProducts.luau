@@ -30,6 +30,7 @@ DevProducts.Ids = {
 	MissingMergeStage3 = 3533429232, -- Fills 1 slot to create Tier 4 Pet
 	-- Boss Summon (summon boss without star requirement)
 	SummonBoss = 3533946740,
+	SuperLuck = 3534326409
 }
 
 -- Purchases Manager - handlers are initialized when Initialize() is called
@@ -197,6 +198,14 @@ function DevProducts.Initialize(Knit)
 				end
 			end
 		},
+
+		-- Potions
+		[DevProducts.Ids.SuperLuck] = {
+			Name = "SuperLuck",
+			OnPurchase = function(player)
+				-- Apply Super Luck effect to player
+			end
+		}
 	}
 end
 
