@@ -28,6 +28,9 @@ Stats.MinStarCollectionPlayerRadius = 20
 
 -- Magnet gamepass increased star range (15% more = 20 * 1.15 = 23)
 Stats.MagnetStarRange = 23
+
+-- Magnet Pulse potion star collection range (studs)
+Stats.MagnetPulseRange = 50
 Stats.BaseSpeed = 35 -- base track speed
 
 -- pet max limits
@@ -412,7 +415,7 @@ Stats.Pets = {
 	},
 	GoldenPet = {
 		Name = "Golden Pet",
-		TierLevel = 4, -- Required especially during merging pets
+		TierLevel = 3, -- Required especially during merging pets
 		Multiplier = 50, -- x50
 		PickupRangeBonus = 3.0, -- Extended range
 		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
@@ -424,7 +427,7 @@ Stats.Pets = {
 	},
 	PercentagePet = {
 		Name = "Percentage Pet",
-		TierLevel = 4, -- Required especially during merging pets
+		TierLevel = 3, -- Required especially during merging pets
 		Multiplier = 0,
 		PickupRangeBonus = 3.0, -- Extended range
 		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena
@@ -437,7 +440,7 @@ Stats.Pets = {
 	},
 	LimitedPet = {
 		Name = "Limited Pet",
-		TierLevel = 3, -- Required especially during merging pets
+		TierLevel = 4, -- Required especially during merging pets
 		Multiplier = 135, -- x35
 		PickupRangeBonus = 2.5, -- Extended range
 		RoamRange = 150, -- Maximum range pets can roam from player when collecting stars in arena

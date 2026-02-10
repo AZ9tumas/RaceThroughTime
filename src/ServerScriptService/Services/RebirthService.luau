@@ -254,6 +254,170 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 end
 
 --[[
+	Force a rebirth for a player without checking or spending cash.
+	Used by the InstantRebirth dev product.
+	
+	@param player Player - The player performing the rebirth
+	@return boolean, string?, table? - Success, error message, rebirth result data
+]]
+function RebirthService:ForceRebirth(player: Player): (boolean, string?, any?)
+	local DataService = Knit.GetService("DataService")
+	local NotificationService = Knit.GetService("NotificationService")
+	local PetService = Knit.GetService("PetService")
+
+	local stats = DataService:Get(player, "Stats")
+	if not stats then
+		return false, "Could not load player data", nil
+	end
+
+	local currentLevel = stats.Rebirths or 0
+	local nextRebirth = RebirthStats.GetNextRebirth(currentLevel)
+	if not nextRebirth then
+		return false, "Already at max rebirth level", nil
+	end
+
+	local newLevel = nextRebirth.Level
+
+	-- Reset stars and fuel (fresh start after rebirth) - NO cash deduction
+	DataService:Update(player, "Stats", function(s)
+		s.Stars = 0
+		s.Fuel = Stats.StartingFuel
+		s.Rebirths = newLevel
+		return s
+	end)
+
+	-- Handle KeepPets setting
+	local keptPets = nextRebirth.KeepPets
+	if not keptPets then
+		DataService:Update(player, "Inventory", function(inventory)
+			inventory.PetInventory = {}
+			inventory.EquippedPets = {}
+			return inventory
+		end)
+		Log(string.format("Player %s lost all pets on force rebirth (KeepPets = false)", player.Name))
+	end
+
+	-- Grant Bonus rewards (Gems, Cash, World)
+	local bonus = nextRebirth.Bonus
+	if bonus then
+		if bonus.Gems and bonus.Gems > 0 then
+			DataService:Update(player, "Currencies", function(currencies)
+				currencies.Gems = (currencies.Gems or 0) + bonus.Gems
+				return currencies
+			end)
+		end
+		if bonus.Cash and bonus.Cash > 0 then
+			DataService:Update(player, "Currencies", function(currencies)
+				currencies.Cash = (currencies.Cash or 0) + bonus.Cash
+				return currencies
+			end)
+		end
+		if bonus.World then
+			local WorldService = Knit.GetService("WorldService")
+			WorldService:GiveWorldToPlayer(player, bonus.World)
+		end
+	end
+
+	-- Grant pet reward
+	local petInfo = nil
+	if nextRebirth.PetReward then
+		local petType = nextRebirth.PetReward
+		local petConfig = Stats.Pets[petType]
+		if petConfig then
+			local petID = GeneratePetID()
+			local newPetIndex = nil
+
+			DataService:Update(player, "Inventory", function(inventory)
+				if not inventory.PetInventory then
+					inventory.PetInventory = {}
+				end
+				local petEntry = {
+					PetType = petType,
+					Name = petConfig.Name .. " (Rebirth)",
+					Multiplier = petConfig.Multiplier,
+					PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
+					RoamRange = petConfig.RoamRange or 30,
+					StarCollectionRadius = petConfig.StarCollectionRadius or 5,
+					Velocity = petConfig.Velocity or 20,
+					World = nextRebirth.World or "Main",
+					Level = petConfig.BaseTierLevel or 1,
+					TierLevel = petConfig.BaseTierLevel or 1,
+					TierName = "Common",
+					Rarity = "Rebirth",
+					ObtainedAt = os.time(),
+				}
+				table.insert(inventory.PetInventory, petEntry)
+				newPetIndex = #inventory.PetInventory
+				return inventory
+			end)
+
+			if newPetIndex then
+				PetService:RegisterPetID(player, newPetIndex, petID)
+				petInfo = {
+					Name = petConfig.Name .. " (Rebirth)",
+					ID = petID,
+					PetType = petType,
+					Multiplier = petConfig.Multiplier,
+					PickupRangeBonus = petConfig.PickupRangeBonus or 1.0,
+					RoamRange = petConfig.RoamRange or 30,
+					StarCollectionRadius = petConfig.StarCollectionRadius or 5,
+					Velocity = petConfig.Velocity or 20,
+					World = nextRebirth.World or "Main",
+					Level = petConfig.BaseTierLevel or 1,
+					TierLevel = petConfig.BaseTierLevel or 1,
+					TierName = "Common",
+					Rarity = "Rebirth",
+					ObtainedAt = os.time(),
+				}
+			end
+		end
+	end
+
+	-- Calculate new multipliers
+	local newCashMultiplier = RebirthStats.CalculateTotalCashMultiplier(newLevel)
+	local newSpeedMultiplier = RebirthStats.CalculateTotalSpeedMultiplier(newLevel)
+	local newMultiplier = RebirthStats.CalculateTotalMultiplier(newLevel)
+
+	Log(string.format(
+		"Player %s FORCE rebirthed to level %d (Cash: %.2fx, Speed: %.2fx, Multiplier: %.2fx, KeepPets: %s)",
+		player.Name, newLevel, newCashMultiplier, newSpeedMultiplier, newMultiplier, tostring(keptPets)
+	))
+
+	-- Recalculate fuel
+	local StarService = Knit.GetService("StarService")
+	StarService:RecalculateFuel(player)
+
+	-- Notification
+	NotificationService:SendNotification(
+		player,
+		string.format("🌟 Instant Rebirth Level %d Complete! 🌟", newLevel),
+		NotificationService.Category.Success,
+		5
+	)
+
+	-- Prepare result data
+	local resultData = {
+		NewRebirthLevel = newLevel,
+		CashMultiplier = newCashMultiplier,
+		SpeedMultiplier = newSpeedMultiplier,
+		Multiplier = newMultiplier,
+		CashMultiplierBonus = nextRebirth.CashMultiplierBonus,
+		SpeedBoostBonus = nextRebirth.SpeedBoostMultiplier,
+		MultiplierBonus = nextRebirth.Multiplier,
+		PetReward = petInfo,
+		FuelReset = true,
+		KeepPets = keptPets,
+		Bonus = bonus,
+	}
+
+	-- Update client data
+	DataService:FireDataReady(player)
+	self.Client.RebirthCompleted:Fire(player, resultData)
+
+	return true, nil, resultData
+end
+
+--[[
 	Get rebirth information for a player.
 	
 	@param player Player - The player to check

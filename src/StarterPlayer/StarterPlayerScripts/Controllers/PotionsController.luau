@@ -63,32 +63,26 @@ function PotionsController:HasActivePotion(potionName: string): boolean
 end
 
 --[[
-	Get the probability key if any active potion affects probabilities.
-	Used by EggController to determine which probability field to use.
-	
-	@return string? - The probability key (e.g., "LuckProbability") or nil
-]]
-function PotionsController:GetProbabilityKey()
-	return GetPotionsService():GetProbabilityKey()
-end
-
---[[
-	Get the combined fuel multiplier from all active potions.
-	
-	@return number - The total multiplier (1.0 if no active potions)
-]]
-function PotionsController:GetPotionMultiplier()
-	return GetPotionsService():GetPotionMultiplier()
-end
-
---[[
 	Get remaining time for a specific potion.
 	
 	@param potionName string - The name of the potion
 	@return number - Remaining time in seconds (0 if expired, -1 if infinite)
 ]]
-function PotionsController:GetRemainingTime(potionName: string)
-	return GetPotionsService():GetRemainingTime(potionName)
+function PotionsController:GetRemainingTime(potionName: string): number
+	local potion = ActivePotions[potionName]
+	if not potion then
+		return 0
+	end
+
+	if potion.Expiry == 0 then
+		return -1 -- Infinite
+	end
+
+	local currentTime = os.time()
+	local expiresAt = potion.UsedAt + potion.Expiry
+	local remaining = expiresAt - currentTime
+
+	return math.max(0, remaining)
 end
 
 --[[

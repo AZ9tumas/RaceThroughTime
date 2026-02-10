@@ -21,8 +21,6 @@ local PotionsService = Knit.CreateService({
 	Name = "PotionsService",
 	Client = {
 		HasActivePotion = Knit.CreateSignal(),
-		GetProbabilityKey = Knit.CreateSignal(),
-		GetPotionMultiplier = Knit.CreateSignal(),
 		GetRemainingTime = Knit.CreateSignal(),
 	},
 })
@@ -65,6 +63,13 @@ local PotionDefinitions: {[string]: PotionDefinition} = {
 		Name = "Points Overload Potion",
 		Duration = 10 * 60, -- 10 minutes in seconds
 		Multiplier = 3.0, -- x3 multiplier applied to total distance in track runs
+		ProbabilityKey = nil, -- Does not affect egg probabilities
+	},
+
+	MagnetPulse = {
+		Name = "Magnet Pulse Potion",
+		Duration = 10 * 60, -- 10 minutes in seconds
+		Multiplier = 1.0, -- No distance multiplier, just affects star collection range
 		ProbabilityKey = nil, -- Does not affect egg probabilities
 	},
 }
@@ -182,11 +187,11 @@ function PotionsService:AddPotion(player: Player, potionName: string): boolean
 	ActivePotions[player][potionName] = potionData
 	
 	-- Send notification
-	NotificationService:SendNotification(player, {
-		Title = "Potion Activated",
-		Message = definition.Name .. " is now active!",
-		Type = "Success",
-	})
+	NotificationService:SendNotification(
+		player,
+		definition.Name .. " potion is now active!",
+		NotificationService.Category.Success
+	)
 	
 	-- Save to datastore
 	self:SavePotions(player)
@@ -232,59 +237,9 @@ function PotionsService:GetActivePotion(player: Player, potionName: string): Pot
 	return ActivePotions[player][potionName]
 end
 
---[[
-	Check if player has any active potion that affects probabilities.
-	Returns the probability key to use from pet config.
-	
-	@param player Player - The player to check
-	@return (boolean, string?) - Whether they have a probability potion and which key to use
-]]
-function PotionsService:HasProbabilityPotion(player: Player): (boolean, string?)
-	if not ActivePotions[player] then
-		return false, nil
-	end
-	
-	for potionName, potionData in pairs(ActivePotions[player]) do
-		local definition = GetPotionDefinition(potionName)
-		if definition and definition.ProbabilityKey then
-			if IsPotionActive(potionData, definition) then
-				return true, definition.ProbabilityKey
-			end
-		end
-	end
-	
-	return false, nil
-end
 
--- Get the fuel multiplier from all active potions
-function PotionsService:GetPotionMultiplier(player: Player, potionName: string?): number
-	if not ActivePotions[player] then
-		return 1.0
-	end
-	
-	-- If specific potion requested
-	if potionName then
-		local potionData = ActivePotions[player][potionName]
-		if potionData then
-			local definition = GetPotionDefinition(potionName)
-			if definition and IsPotionActive(potionData, definition) then
-				return definition.Multiplier or 1.0
-			end
-		end
-		return 1.0
-	end
-	
-	-- Get combined multiplier from all active potions
-	local totalMultiplier = 1.0
-	for pName, potionData in pairs(ActivePotions[player]) do
-		local definition = GetPotionDefinition(pName)
-		if definition and definition.Multiplier and IsPotionActive(potionData, definition) then
-			totalMultiplier = totalMultiplier * definition.Multiplier
-		end
-	end
-	
-	return totalMultiplier
-end
+
+
 
 --[[
 	Get the potion definition for a given potion name.
@@ -314,6 +269,7 @@ end
 function PotionsService:GetRemainingTime(player: Player, potionName: string): number
 	local potion = self:GetActivePotion(player, potionName)
 	if not potion then
+		warn("No potion found for player:", player, "potionName:", potionName)
 		return 0
 	end
 	
@@ -331,11 +287,11 @@ end
 -- Save potions to datastore
 function PotionsService:SavePotions(player: Player)
 	local potions = self:GetActivePotions(player)
-	local playerData = DataService:Get(player)
 	
-	if playerData then
-		playerData.Potions = potions
-	end
+	DataService:Update(player, "Inventory", function(inventory)
+		inventory.Potions = potions
+		return inventory
+	end)
 end
 
 -- Get all active potions for a player (for client UI)
@@ -366,19 +322,7 @@ function PotionsService.Client:HasActivePotion(player: Player, potionName: strin
 	return PotionsService:HasPotionEffect(player, potionName)
 end
 
--- Client function to get probability key if potion affects it
-function PotionsService.Client:GetProbabilityKey(player: Player): string?
-	local hasPotion, probabilityKey = PotionsService:HasProbabilityPotion(player)
-	if hasPotion then
-		return probabilityKey
-	end
-	return nil
-end
 
--- Client function to get potion multiplier
-function PotionsService.Client:GetPotionMultiplier(player: Player): number
-	return PotionsService:GetPotionMultiplier(player)
-end
 
 -- Client function to get remaining time for a potion
 function PotionsService.Client:GetRemainingTime(player: Player, potionName: string): number

@@ -27,6 +27,7 @@ local UI = {
 			Frame = nil,
 			SuperLuck = nil,
 			PointsOverload = nil,
+			MagnetPulse = nil,
 		},
 
 		EggHatch = {
@@ -119,6 +120,7 @@ function ShopUIController:KnitInit()
 	UI.Frames.Potions.Frame = UI.Frames.ScrollingFrame:WaitForChild("Potions"):WaitForChild("MainFrame")
 	UI.Frames.Potions.SuperLuck = UI.Frames.Potions.Frame:WaitForChild("SuperLuck")
 	UI.Frames.Potions.PointsOverload = UI.Frames.Potions.Frame:WaitForChild("PointsOverload")
+	UI.Frames.Potions.MagnetPulse = UI.Frames.Potions.Frame:WaitForChild("MagnetPulse")
 end
 
 function ShopUIController:KnitStart()
@@ -213,6 +215,15 @@ function ShopUIController:KnitStart()
 	_connections["PointsOverload"] = UI.Frames.Potions.PointsOverload.TextButton.MouseButton1Click:Connect(function()
 		local MonetizationService = Knit.GetService("MonetizationService")
 		MonetizationService:GetDevProductId("PointsOverload"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
+	end)
+
+	_connections["MagnetPulse"] = UI.Frames.Potions.MagnetPulse.TextButton.MouseButton1Click:Connect(function()
+		local MonetizationService = Knit.GetService("MonetizationService")
+		MonetizationService:GetDevProductId("MagnetPulse"):andThen(function(productId)
 			if productId then
 				MarketplaceService:PromptProductPurchase(player, productId)
 			end

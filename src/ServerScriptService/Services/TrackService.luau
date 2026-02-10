@@ -163,10 +163,12 @@ local function CalculateTrackParameters(player: Player, worldName: string):
 	local launcherMultiplier = LauncherService:GetPlayerMultiplier(player)
 	local trackParams = Stats.CalculateTrackParameters(fuel, worldName, launcherMultiplier)
 	
-	-- Apply potion distance multiplier (e.g., PointsOverload gives x3 distance)
-	local potionMultiplier = PotionsService:GetPotionMultiplier(player)
-	if potionMultiplier > 1 then
-		trackParams.totalDistance = trackParams.totalDistance * potionMultiplier
+	-- Apply potion distance multipliers
+	if PotionsService:HasPotionEffect(player, "FuelBoost") then
+		trackParams.totalDistance = trackParams.totalDistance * 1.5
+	end
+	if PotionsService:HasPotionEffect(player, "PointsOverload") then
+		trackParams.totalDistance = trackParams.totalDistance * 3.0
 	end
 	
 	-- Apply rebirth speed multiplier

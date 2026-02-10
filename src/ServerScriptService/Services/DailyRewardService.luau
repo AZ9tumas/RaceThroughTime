@@ -74,7 +74,7 @@ local function ApplyRewardItems(player: Player, items: { { ItemType: string, Qua
 					-- Add pet with unique ID and full stats
 					local petEntry = {}
 
-					for key, val in ipairs(petConfig) do
+					for key, val in pairs(petConfig) do
 						petEntry[key] = val
 					end
 

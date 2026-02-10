@@ -197,9 +197,11 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 	local hasSuperLuck = MonetizationController and MonetizationController:HasGamePass("SuperLuck")
 	local hasLuck = MonetizationController and MonetizationController:HasGamePass("Luck")
 	
-	-- Check if player has active potion that affects probabilities
+	-- Check if player has active SuperLuck potion
 	local PotionsController = Knit.GetController("PotionsController")
-	local potionProbabilityKey = PotionsController and PotionsController:GetProbabilityKey()
+	local hasSuperLuckPotion = PotionsController and PotionsController:HasPotionEffect("SuperLuck")
+
+	print(hasSuperLuckPotion, "hasSuperLuckPotion in EggController")
 
 	for _, child in ipairs(contentFrame:GetChildren()) do
 		if child:IsA("GuiObject") and child.Name ~= "Template" and child ~= gridLayout and not child:IsA("UIGridLayout") then
@@ -208,14 +210,14 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 	end
 
 	for i, petOption in ipairs(eggConfig.Pets) do
+		print(petOption.LuckProbability, "luck probability for", petOption.Pet)
 		local petName = petOption.Pet
-		-- Priority: Potion > SuperLuck gamepass > Luck gamepass > Default
+		-- Priority: SuperLuck gamepass > Luck gamepass > Potion > Default
 		local probability = petOption.Probability
-		if potionProbabilityKey and petOption[potionProbabilityKey] then
-			probability = petOption[potionProbabilityKey]
-		elseif hasSuperLuck and petOption.SuperLuckProbability then
+		
+		if hasSuperLuck then
 			probability = petOption.SuperLuckProbability
-		elseif hasLuck and petOption.LuckProbability then
+		elseif hasLuck or hasSuperLuckPotion then
 			probability = petOption.LuckProbability
 		end
 		local petConfig = GetPetConfig(petName)

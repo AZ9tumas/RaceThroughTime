@@ -286,7 +286,7 @@ function PetService:InitializePets(player: Player)
 			PlayerPetIDs[userId].idToPetIndex[petID] = index
 
 			-- for those pets that have an expiry date and have expired, remove.
-			if petdata.ExpireLength ~= nil and petdata.obtainedAt + petdata.ExpireLength < os.time() then
+			if petdata.ExpireLength ~= nil and petdata.ObtainedAt + petdata.ExpireLength < os.time() then
 				print("removed", petdata)
 				inventory.PetInventory[index] = nil
 			end
@@ -375,6 +375,13 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 		NotificationService:SendNotification(player, string.format("Maximum %d pets can be equipped.", maxPets), NotificationService.Category.Warning)
 		return false, "Max equipped"
 	end
+
+	-- check if expired
+	local petData = inventory.PetInventory[petIndex]
+	if petData.ExpireLength ~= nil and petData.ObtainedAt + petData.ExpireLength < os.time() then
+		NotificationService:SendNotification(player, "This pet has expired and cannot be equipped.", NotificationService.Category.Warning)
+		return false, "Pet expired"
+	end
 	
 	-- Equip the pet (save to data)
 	DataService:Update(player, "Inventory", function(inv)
@@ -385,7 +392,6 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 		return inv
 	end)
 	
-	local petData = inventory.PetInventory[petIndex]
 	Log(string.format("Player %s equipped %s", player.Name, petData.Name))
 	
 	-- Get pet stats from Stats.Pets (petData may not have these values saved)
@@ -1266,6 +1272,7 @@ function PetService:KnitInit()
 	
 	-- Create collision group for pets
 	local PhysicsService = game:GetService("PhysicsService")
+	
 	local success = pcall(function()
 		PhysicsService:RegisterCollisionGroup("Pets")
 		PhysicsService:CollisionGroupSetCollidable("Pets", "Default", false)
@@ -1277,6 +1284,59 @@ function PetService:KnitInit()
 	else
 		Log("Failed to create Pets collision group, using CanCollide=false fallback")
 	end
+
+	-- a thread that executes every one minute to check for expired pets and unequip them (and remove them)
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			
+			for _, player in ipairs(Players:GetPlayers()) do
+				local DataService = Knit.GetService("DataService")
+				local NotificationService = Knit.GetService("NotificationService")
+
+				if not DataService or not NotificationService then
+					continue
+				end
+				
+				local inventory = DataService:Get(player, "Inventory")
+				if inventory and inventory.PetInventory and inventory.EquippedPets then
+					local equippedPets = inventory.EquippedPets
+					local petInventory = inventory.PetInventory
+					local hasExpiredPets = false
+					
+					for i = #equippedPets, 1, -1 do
+						local petIndex = equippedPets[i]
+						local petData = petInventory[petIndex]
+						
+						if petData and petData.ExpireLength and petData.ObtainedAt and (petData.ObtainedAt + petData.ExpireLength < os.time()) then
+							-- This pet has expired - unequip it
+							DespawnPetModel(player, petIndex)
+							table.remove(equippedPets, i)
+							table.remove(petInventory, petIndex) -- Remove the expired pet from inventory
+							hasExpiredPets = true
+						end
+					end
+					
+					if hasExpiredPets then
+						-- Update inventory with expired pets removed from equipped list
+						DataService:Update(player, "Inventory", function(inv)
+							inv.EquippedPets = equippedPets
+							inv.PetInventory = petInventory
+							return inv
+						end)
+						
+						NotificationService:SendNotification(player, "One or more of your pets have expired and were unequipped.", NotificationService.Category.Warning)
+						
+						-- Recalculate fuel since multiplier may have changed
+						local StarService = Knit.GetService("StarService")
+						StarService:RecalculateFuel(player)
+
+						DataService:FireDataReady(player) -- Refresh client data to reflect changes
+					end
+				end
+			end
+		end
+	end)
 	
 	Log("PetService initialized")
 end
