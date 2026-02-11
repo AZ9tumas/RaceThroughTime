@@ -38,7 +38,11 @@ DevProducts.Ids = {
 	MagnetPulse = 3534480721,
 
 	-- skip to next world
-	SkipWorld = 3534609808
+	SkipWorld = 3534609808,
+
+	-- server bonuses
+	ServerLuckParty = 3534615338,
+	ServerPointsParty = 3534631451
 }
 
 -- Purchases Manager - handlers are initialized when Initialize() is called
@@ -53,6 +57,40 @@ function DevProducts.Initialize(Knit)
 	local TrackService = Knit.GetService("TrackService")
 	
 	DevProducts.PurchasesManager = {
+		[DevProducts.Ids.ServerPointsParty] = {
+			Name = "ServerPointsParty",
+			OnPurchase = function(player)
+				local ServerBonusService = Knit.GetService("ServerBonusService")
+				ServerBonusService:UpdateBonus("PointsParty", true)
+
+				-- Notify player of successful purchase
+				if NotificationService then
+					NotificationService:SendNotification(
+						player,
+						"You've contributed to the Server Points Party! Enjoy increased points for everyone!",
+						NotificationService.Category.Success
+					)
+				end
+				return true
+			end
+		},
+		[DevProducts.Ids.ServerLuckParty] = {
+			Name = "ServerLuckParty",
+			OnPurchase = function(player)
+				local ServerBonusService = Knit.GetService("ServerBonusService")
+				ServerBonusService:UpdateBonus("LuckParty", true)
+
+				-- Notify player of successful purchase
+				if NotificationService then
+					NotificationService:SendNotification(
+						player,
+						"You've contributed to the Server Luck Party! Enjoy increased luck for everyone!",
+						NotificationService.Category.Success
+					)
+				end
+				return true
+			end
+		},
 		[DevProducts.Ids.SkipWorld] = {
 			Name = "SkipWorld",
 			OnPurchase = function(player)

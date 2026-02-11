@@ -171,6 +171,12 @@ local function CalculateTrackParameters(player: Player, worldName: string):
 		trackParams.totalDistance = trackParams.totalDistance * 3.0
 	end
 	
+	-- Apply server bonus multipliers
+	local ServerBonusService = Knit.GetService("ServerBonusService")
+	if ServerBonusService:IsBonusEnabled("PointsParty") then
+		trackParams.totalDistance = trackParams.totalDistance * 2.0
+	end
+	
 	-- Apply rebirth speed multiplier
 	local rebirthLevel = playerData.Rebirths or 0
 	local rebirthSpeedMultiplier = RebirthStats.CalculateTotalSpeedMultiplier(rebirthLevel)

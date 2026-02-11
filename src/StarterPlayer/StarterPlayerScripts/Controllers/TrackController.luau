@@ -38,7 +38,7 @@ local playerIndicatorTemplate: ImageLabel = globalView:WaitForChild("Templates")
 local localView: Frame = RaceHUDMainFrame:WaitForChild("LocalView")
 local progressFrameFill: Frame = localView:WaitForChild("Progress"):WaitForChild("Fill")
 local progressHeadshotImage: ImageLabel = progressFrameFill:WaitForChild("Frame"):WaitForChild("ImageLabel")
-local skipButton: TextButton = RaceHUDMainFrame:WaitForChild("Skip")
+local skipButton: TextButton = RaceHUD:WaitForChild("Skip")
 local skipButtonConnection: RBXScriptConnection? = nil
 
 -- Track cancel button UI
