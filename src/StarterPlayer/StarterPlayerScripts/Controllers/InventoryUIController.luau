@@ -25,6 +25,7 @@ local inventoryPetTemplate: Frame
 local inventoryCloseButton: TextButton
 
 local _connections = {}
+local constantUpdateLabels: { [number]: TextLabel } = {}
 
 function InventoryUIController:GetBackgroundColors()
 	return {
@@ -82,16 +83,11 @@ function InventoryUIController:UpdatePetsInventory()
 		if timeFrame and petData.ExpireLength then
 			local timeLabel = timeFrame:FindFirstChild("TextLabel")
 			if timeLabel then
-				local remainingTime = petData.obtainedAt + petData.ExpireLength - os.time()
-				if remainingTime > 0 then
-					local hours = math.floor(remainingTime / 3600)
-					local minutes = math.floor((remainingTime % 3600) / 60)
-					local seconds = remainingTime % 60
-					timeLabel.Text = string.format("%02dh %02dm %02ds", hours, minutes, seconds)
-				else
-					timeLabel.Text = "Expired"
-				end
+				timeLabel.Visible = true
+				table.insert(constantUpdateLabels, {Label = timeLabel, petData = petData})
 			end
+		else
+			timeFrame.Visible = false
 		end
 
 		local multiplierFrame = petFrame:FindFirstChild("Multiplier")
@@ -181,6 +177,24 @@ function InventoryUIController:KnitStart()
 	end)
 	_connections["InventoryClose"] = inventoryCloseButton.MouseButton1Click:Connect(function()
 		self:CloseInventory()
+	end)
+
+	_connections["RunService"] = game:GetService("RunService").Heartbeat:Connect(function()
+		for _, entry in ipairs(constantUpdateLabels) do
+			local petData = entry.petData
+			local timeLabel = entry.Label
+			if petData.ExpireLength then
+				local remainingTime = petData.ObtainedAt + petData.ExpireLength - os.time()
+				if remainingTime > 0 then
+					local hours = math.floor(remainingTime / 3600)
+					local minutes = math.floor((remainingTime % 3600) / 60)
+					local seconds = remainingTime % 60
+					timeLabel.Text = string.format("%02dh %02dm %02ds", hours, minutes, seconds)
+				else
+					timeLabel.Text = "Expired"
+				end
+			end
+		end
 	end)
 end
 

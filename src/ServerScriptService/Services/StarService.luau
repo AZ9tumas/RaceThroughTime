@@ -475,10 +475,14 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 		return false
 	end
 
-	-- Use StarCollectionPlayerRadius for player collection distance check
+	-- Use MagnetPulse potion range if active, otherwise use max player radius
+	local PotionsService = Knit.GetService("PotionsService")
+	local maxCollectionRadius = PotionsService:HasPotionEffect(player, "MagnetPulse")
+		and Stats.MagnetPulseRange
+		or Stats.MaxStarCollectionPlayerRadius
 	local distance = (rootPart.Position - starInfo.Position).Magnitude
-	if distance > Stats.MaxStarCollectionPlayerRadius then
-		warn(string.format("[StarService]: Player %s is too far from star (distance: %.2f, max: %.2f)", player.Name, distance, Stats.MaxStarCollectionPlayerRadius))
+	if distance > maxCollectionRadius then
+		warn(string.format("[StarService]: Player %s is too far from star (distance: %.2f, max: %.2f)", player.Name, distance, maxCollectionRadius))
 		return false
 	end
 

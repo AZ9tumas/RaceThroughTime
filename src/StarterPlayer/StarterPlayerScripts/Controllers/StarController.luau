@@ -299,9 +299,13 @@ local function CheckProximityCollection()
 	if not rootPart then return end
 	
 	local playerPosition = rootPart.Position
-	-- Use Magnet range if gamepass owned, otherwise use base range
+	-- Priority: MagnetPulse potion (50 studs) > Magnet gamepass (23 studs) > base (20 studs)
+	local PotionsController = Knit.GetController("PotionsController")
+	local hasMagnetPulse = PotionsController and PotionsController:HasPotionEffect("MagnetPulse")
 	local hasMagnet = MonetizationController and MonetizationController:HasGamePass("Magnet")
-	local collectionRadius = hasMagnet and Stats.MagnetStarRange or Stats.MinStarCollectionPlayerRadius
+	local collectionRadius = hasMagnetPulse and Stats.MagnetPulseRange
+		or hasMagnet and Stats.MagnetStarRange
+		or Stats.MinStarCollectionPlayerRadius
 	
 	-- Check each star for proximity
 	for starId, starData in pairs(SpawnedStars) do

@@ -28,6 +28,17 @@ DevProducts.Ids = {
 	MissingMergeStage1 = 3533428993, -- Fills 1 slot to create Tier 2 Pet
 	MissingMergeStage2 = 3533429099, -- Fills 1 slot to create Tier 3 Pet
 	MissingMergeStage3 = 3533429232, -- Fills 1 slot to create Tier 4 Pet
+	-- Boss Summon (summon boss without star requirement)
+	SummonBoss = 3534498740,
+	-- Instant Rebirth (rebirth without cash requirement)
+	InstantRebirth = 3534514453,
+	-- Potions
+	SuperLuck = 3534326409,
+	PointsOverload = 3534331652,
+	MagnetPulse = 3534480721,
+
+	-- skip to next world
+	SkipWorld = 3534609808
 }
 
 -- Purchases Manager - handlers are initialized when Initialize() is called
@@ -38,8 +49,25 @@ function DevProducts.Initialize(Knit)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
 	local EggService = Knit.GetService("EggService")
+	local BossService = Knit.GetService("BossService")
+	local TrackService = Knit.GetService("TrackService")
 	
 	DevProducts.PurchasesManager = {
+		[DevProducts.Ids.SkipWorld] = {
+			Name = "SkipWorld",
+			OnPurchase = function(player)
+				local success, errorMsg = TrackService:UnlockWorld(player)
+				if not success and errorMsg then
+					NotificationService:SendNotification(
+						player,
+						errorMsg,
+						NotificationService.Category.Warning
+					)
+				end
+				return success
+			end
+		},
+
 		[DevProducts.Ids.MediumCashPack] = {
 			Name = "MediumCashPack",
 			OnPurchase = function(player)
@@ -168,6 +196,75 @@ function DevProducts.Initialize(Knit)
 						NotificationService.Category.Success
 					)
 				end
+				return success
+			end
+		},
+		-- Boss Summon (summon boss without star requirement)
+		[DevProducts.Ids.SummonBoss] = {
+			Name = "SummonBoss",
+			OnPurchase = function(player)
+				-- Summon the boss immediately without star requirement
+				local bossKey = BossService:SpawnBoss()
+				if bossKey then
+					NotificationService:SendNotification(
+						player,
+						"Boss summoned! Get ready to fight!",
+						NotificationService.Category.Success
+					)
+					return true
+				else
+					NotificationService:SendNotification(
+						player,
+						"Failed to summon boss. Please try again.",
+						NotificationService.Category.Error
+					)
+					return false
+				end
+			end
+		},
+
+		-- Instant Rebirth (rebirth without cash requirement)
+		[DevProducts.Ids.InstantRebirth] = {
+			Name = "InstantRebirth",
+			OnPurchase = function(player)
+				local RebirthService = Knit.GetService("RebirthService")
+				local success, errorMsg, resultData = RebirthService:ForceRebirth(player)
+				if not success then
+					NotificationService:SendNotification(
+						player,
+						errorMsg or "Rebirth failed. You may be at max level.",
+						NotificationService.Category.Warning
+					)
+				end
+				return success
+			end
+		},
+
+		-- Potions
+		[DevProducts.Ids.SuperLuck] = {
+			Name = "SuperLuck",
+			OnPurchase = function(player)
+				-- Apply Super Luck effect to player
+				local PotionsService = Knit.GetService("PotionsService")
+				local success = PotionsService:AddPotion(player, "SuperLuck")
+				return success
+			end
+		},
+		[DevProducts.Ids.PointsOverload] = {
+			Name = "PointsOverload",
+			OnPurchase = function(player)
+				-- Apply Points Overload effect to player (x3 distance multiplier)
+				local PotionsService = Knit.GetService("PotionsService")
+				local success = PotionsService:AddPotion(player, "PointsOverload")
+				return success
+			end
+		},
+		[DevProducts.Ids.MagnetPulse] = {
+			Name = "MagnetPulse",
+			OnPurchase = function(player)
+				-- Apply Magnet Pulse effect to player (50 stud star collection range)
+				local PotionsService = Knit.GetService("PotionsService")
+				local success = PotionsService:AddPotion(player, "MagnetPulse")
 				return success
 			end
 		},

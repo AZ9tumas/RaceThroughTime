@@ -19,6 +19,7 @@ local mainUi: ScreenGui
 local topBar: Frame
 local serverBar: Frame
 local Unlockfill: Frame
+local summonButton: TextButton
 
 local starConnections = {}
 local healthConnection = nil
@@ -268,6 +269,7 @@ function MainBossController:KnitInit()
 	topBar = mainUi:WaitForChild("TopInfo")
 	serverBar = topBar:WaitForChild("ServerBar")
 	Unlockfill = serverBar:WaitForChild("Fill")
+	summonButton = topBar:WaitForChild("Summon")
 end
 
 function MainBossController:KnitStart()

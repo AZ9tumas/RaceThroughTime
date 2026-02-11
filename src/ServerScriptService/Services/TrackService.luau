@@ -146,6 +146,7 @@ local function CalculateTrackParameters(player: Player, worldName: string):
 	{ initialSpeed: number, acceleration: number, maxSpeed: number, totalTime: number, totalDistance: number }
 	local DataService = Knit.GetService("DataService")
 	local LauncherService = Knit.GetService("LauncherService")
+	local PotionsService = Knit.GetService("PotionsService")
 	local playerData = DataService:Get(player, "Stats")
 	
 	if not playerData then
@@ -161,6 +162,14 @@ local function CalculateTrackParameters(player: Player, worldName: string):
 	local fuel = playerData.Fuel or 0
 	local launcherMultiplier = LauncherService:GetPlayerMultiplier(player)
 	local trackParams = Stats.CalculateTrackParameters(fuel, worldName, launcherMultiplier)
+	
+	-- Apply potion distance multipliers
+	if PotionsService:HasPotionEffect(player, "FuelBoost") then
+		trackParams.totalDistance = trackParams.totalDistance * 1.5
+	end
+	if PotionsService:HasPotionEffect(player, "PointsOverload") then
+		trackParams.totalDistance = trackParams.totalDistance * 3.0
+	end
 	
 	-- Apply rebirth speed multiplier
 	local rebirthLevel = playerData.Rebirths or 0
@@ -486,7 +495,7 @@ local function EstimateDistanceTraveled(trackData): number
 end
 
 -- Handle early world unlock during track run (simplified - reuses cancel track run)
-local function HandleEarlyWorldUnlock(player: Player, trackData, nextWorld: string, estimatedDistance: number)
+local function HandleEarlyWorldUnlock(player: Player, nextWorld: string, estimatedDistance: number)
 	Log(string.format("Player %s early world unlock! Distance: %.2f, new world: %s", player.Name, estimatedDistance, nextWorld))
 
 	-- Fire early world unlock signal to client (for client-side handling)
@@ -528,6 +537,17 @@ local function HandleEarlyWorldUnlock(player: Player, trackData, nextWorld: stri
 	DataService:FireDataReady(player)
 end
 
+function TrackService:UnlockWorld(player: Player)
+	local trackData = PlayersOnTrack[player.UserId]
+	if not trackData then return false, "Player not found on track" end
+
+	local nextWorld = trackData.nextWorld
+	if not nextWorld then return false, "No next world to unlock" end
+
+	local estimatedDistance = EstimateDistanceTraveled(trackData)
+	HandleEarlyWorldUnlock(player, nextWorld, estimatedDistance)
+end
+
 -- Check if a player is currently on the track
 function TrackService:IsPlayerOnTrack(player: Player): boolean
 	return PlayersOnTrack[player.UserId] ~= nil
@@ -561,6 +581,7 @@ function TrackService:EndTrackRun(player: Player, clientDistanceTraveled: number
 	local distanceTraveled = clientDistanceTraveled or 0
 	
 	-- Clamp distance to the maximum possible (prevents cheating)
+	if distanceTraveled == nil then distanceTraveled = maxPossibleDistance end
 	distanceTraveled = math.clamp(distanceTraveled, 0, maxPossibleDistance)
 	
 	local worldName = trackData.worldName
@@ -981,7 +1002,7 @@ function TrackService:KnitStart()
 				local worldExistsInWorkspace = Workspace:FindFirstChild(nextWorld)
 				if worldExistsInWorkspace then
 					-- Early world unlock!
-					HandleEarlyWorldUnlock(player, trackData, nextWorld, estimatedDistance)
+					HandleEarlyWorldUnlock(player, nextWorld, estimatedDistance)
 				end
 			end
 		end

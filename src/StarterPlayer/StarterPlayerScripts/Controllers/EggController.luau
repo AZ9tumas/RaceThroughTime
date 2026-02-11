@@ -30,9 +30,88 @@ local EggConnections: { [string]: { RBXScriptConnection } } = {}
 local AutoHatchActive: { [string]: boolean } = {}
 local IsHatching = false
 
+-- Hatch animation queue system
+local HatchAnimationQueue: { { eggName: string, petInfo: any } } = {}
+local IsPlayingQueuedAnimation = false
+
 local MULTI_HATCH_COUNT = 4
 local AUTO_HATCH_DELAY = 0.5
 local AUTO_HATCH_RANGE = 30
+
+-- Process the hatch animation queue
+local function ProcessHatchAnimationQueue()
+	if IsPlayingQueuedAnimation then
+		return
+	end
+	
+	if #HatchAnimationQueue == 0 then
+		return
+	end
+	
+	IsPlayingQueuedAnimation = true
+	
+	-- Get next item from queue
+	local queueItem = table.remove(HatchAnimationQueue, 1)
+	if not queueItem then
+		IsPlayingQueuedAnimation = false
+		return
+	end
+	
+	local eggName = queueItem.eggName
+	local petInfo = queueItem.petInfo
+	
+	-- Check if we have InstantHatch gamepass
+	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass("InstantHatch")
+	
+	if hasInstantHatch then
+		-- Skip animation, just update UI
+		if InventoryUIController then
+			InventoryUIController:UpdatePetsInventory()
+		end
+		IsPlayingQueuedAnimation = false
+		-- Process next in queue
+		task.defer(ProcessHatchAnimationQueue)
+	else
+		-- Play hatch animation
+		if UIFramesController then
+			UIFramesController:DisableFrames(true)
+		end
+		eggviewport.Parent.Visible = true
+		
+		EggHatchAnimation.PlayHatch(
+			eggviewport,
+			eggName,
+			eggHatchDimmer,
+			eggHatchFlash,
+			function(_animationSuccess)
+				eggviewport.Parent.Visible = false
+				if UIFramesController then
+					UIFramesController:DisableFrames(false)
+				end
+				
+				-- Update inventory UI
+				if InventoryUIController then
+					InventoryUIController:UpdatePetsInventory()
+				end
+				
+				IsPlayingQueuedAnimation = false
+				-- Process next in queue after a small delay
+				task.delay(0.1, ProcessHatchAnimationQueue)
+			end
+		)
+	end
+end
+
+-- Add hatch animation request to queue
+local function QueueHatchAnimation(eggName: string, petInfo: any)
+	table.insert(HatchAnimationQueue, {
+		eggName = eggName,
+		petInfo = petInfo,
+	})
+	
+	-- Start processing if not already
+	ProcessHatchAnimationQueue()
+end
 
 local function GetCurrentWorld(): string
 	local worldAttr = Player:GetAttribute("CurrentWorld")
@@ -118,9 +197,11 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 	local hasSuperLuck = MonetizationController and MonetizationController:HasGamePass("SuperLuck")
 	local hasLuck = MonetizationController and MonetizationController:HasGamePass("Luck")
 	
-	-- Check if player has active potion that affects probabilities
+	-- Check if player has active SuperLuck potion
 	local PotionsController = Knit.GetController("PotionsController")
-	local potionProbabilityKey = PotionsController and PotionsController:GetProbabilityKey()
+	local hasSuperLuckPotion = PotionsController and PotionsController:HasPotionEffect("SuperLuck")
+
+	print(hasSuperLuckPotion, "hasSuperLuckPotion in EggController")
 
 	for _, child in ipairs(contentFrame:GetChildren()) do
 		if child:IsA("GuiObject") and child.Name ~= "Template" and child ~= gridLayout and not child:IsA("UIGridLayout") then
@@ -129,14 +210,14 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 	end
 
 	for i, petOption in ipairs(eggConfig.Pets) do
+		print(petOption.LuckProbability, "luck probability for", petOption.Pet)
 		local petName = petOption.Pet
-		-- Priority: Potion > SuperLuck gamepass > Luck gamepass > Default
+		-- Priority: SuperLuck gamepass > Luck gamepass > Potion > Default
 		local probability = petOption.Probability
-		if potionProbabilityKey and petOption[potionProbabilityKey] then
-			probability = petOption[potionProbabilityKey]
-		elseif hasSuperLuck and petOption.SuperLuckProbability then
+		
+		if hasSuperLuck then
 			probability = petOption.SuperLuckProbability
-		elseif hasLuck and petOption.LuckProbability then
+		elseif hasLuck or hasSuperLuckPotion then
 			probability = petOption.LuckProbability
 		end
 		local petConfig = GetPetConfig(petName)
@@ -642,6 +723,12 @@ function EggController:KnitStart()
 				3
 			)
 		end
+	end)
+	
+	-- Listen for hatch animation requests from server (for shop purchases)
+	EggService.PlayHatchAnimation:Connect(function(eggName: string, petInfo: any)
+		-- Queue the animation
+		QueueHatchAnimation(eggName, petInfo)
 	end)
 end
 

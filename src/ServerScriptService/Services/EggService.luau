@@ -16,6 +16,7 @@ local EggService = Knit.CreateService({
 	Name = "EggService",
 	Client = {
 		PetObtained = Knit.CreateSignal(), -- Signal to notify client when a pet is obtained from egg purchase
+		PlayHatchAnimation = Knit.CreateSignal(), -- Signal to trigger hatch animation on client
 	},
 })
 
@@ -83,21 +84,21 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
 		local hasLuck = MonetizationService:HasGamePass(player, "Luck")
 		
-		-- Check if player has active potion that affects probabilities
+		-- Check if player has active SuperLuck potion
 		local PotionsService = Knit.GetService("PotionsService")
-		local hasPotion, potionProbabilityKey = PotionsService:HasProbabilityPotion(player)
+		local hasSuperLuckPotion = PotionsService:HasPotionEffect(player, "SuperLuck")
+		print(hasSuperLuckPotion, "hasSuperLuckPotion in EggService")
 		
 		local random = math.random()
 		local cumulativeProbability = 0
 		
 		for _, petOption in ipairs(eggConfig.Pets) do
-			-- Priority: Potion > SuperLuck gamepass > Luck gamepass > Default
+			print(petOption.LuckProbability, "luck probability for", petOption.Pet)
+			-- Priority: SuperLuck gamepass > Luck gamepass > Potion > Default
 			local probability = petOption.Probability
-			if hasPotion and potionProbabilityKey and petOption[potionProbabilityKey] then
-				probability = petOption[potionProbabilityKey]
-			elseif hasSuperLuck and petOption.SuperLuckProbability then
+			if hasSuperLuck then
 				probability = petOption.SuperLuckProbability
-			elseif hasLuck and petOption.LuckProbability then
+			elseif hasLuck or hasSuperLuckPotion then
 				probability = petOption.LuckProbability
 			end
 			cumulativeProbability = cumulativeProbability + probability
@@ -133,7 +134,7 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 	local newPetIndex = nil
 
 	local finalPetEntry = {}
-	for key, val in ipairs(petConfig) do
+	for key, val in pairs(petConfig) do
 		finalPetEntry[key] = val
 	end
 
@@ -164,6 +165,9 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 			NotificationService.Category.Success
 		)
 	end
+	
+	-- Fire signal to trigger hatch animation on client
+	EggService.Client.PlayHatchAnimation:Fire(player, eggType, finalPetEntry)
 	
 	-- Fire signal to client
 	EggService.Client.PetObtained:Fire(player, finalPetEntry)
@@ -206,9 +210,9 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
 		local hasLuck = MonetizationService:HasGamePass(player, "Luck")
 		
-		-- Check if player has active potion that affects probabilities
+		-- Check if player has active SuperLuck potion
 		local PotionsService = Knit.GetService("PotionsService")
-		local hasPotion, potionProbabilityKey = PotionsService:HasProbabilityPotion(player)
+		local hasSuperLuckPotion = PotionsService:HasPotionEffect(player, "SuperLuck")
 		
 		local random = math.random()
 		local cumulativeProbability = 0
@@ -216,8 +220,8 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		for _, petOption in ipairs(eggConfig.Pets) do
 			-- Priority: Potion > SuperLuck gamepass > Luck gamepass > Default
 			local probability = petOption.Probability
-			if hasPotion and potionProbabilityKey and petOption[potionProbabilityKey] then
-				probability = petOption[potionProbabilityKey]
+			if hasSuperLuckPotion and petOption.LuckProbability then
+				probability = petOption.LuckProbability
 			elseif hasSuperLuck and petOption.SuperLuckProbability then
 				probability = petOption.SuperLuckProbability
 			elseif hasLuck and petOption.LuckProbability then
@@ -302,7 +306,7 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	local newPetIndex = nil
 
 	local finalPetEntry = {}
-	for key, val in ipairs(petConfig) do
+	for key, val in pairs(petConfig) do
 		finalPetEntry[key] = val
 	end
 
