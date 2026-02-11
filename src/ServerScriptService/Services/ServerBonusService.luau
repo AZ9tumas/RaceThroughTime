@@ -27,6 +27,10 @@ local function Log(message: string)
 	print(string.format("[ServerBonusService]: %s", message))
 end
 
+-- Track expiry timers to prevent race conditions from overlapping enables
+local ExpiryTimers: { [string]: number } = {}
+local NextTimerId = 0
+
 -- Bonus definitions (similar to DevProducts/PotionDefinitions pattern)
 ServerBonusService.Bonuses = {
 	LuckParty = {
@@ -46,6 +50,11 @@ ServerBonusService.Bonuses = {
 					ServerBonusService:DisableBonus(ServerBonusService.Bonuses.LuckParty)
 				end
 			end)
+
+			local DataService = Knit.GetService("DataService")
+			for _, plr in pairs(game.Players:GetPlayers()) do
+				DataService:FireDataReady(plr)
+			end
 		end,
 	},
 	PointsParty = {
@@ -65,16 +74,17 @@ ServerBonusService.Bonuses = {
 					ServerBonusService:DisableBonus(ServerBonusService.Bonuses.PointsParty)
 				end
 			end)
+
+			local DataService = Knit.GetService("DataService")
+			for _, plr in pairs(game.Players:GetPlayers()) do
+				DataService:FireDataReady(plr)
+			end
 		end,
 	},
 }
 
 -- Active bonus states (runtime)
 local ActiveBonuses: { [string]: boolean } = {}
-
--- Track expiry timers to prevent race conditions from overlapping enables
-local ExpiryTimers: { [string]: number } = {}
-local NextTimerId = 0
 
 -- Helper to find bonus key from bonus definition
 local function GetBonusKey(bonusDef: { Name: string }): string?
