@@ -61,7 +61,7 @@ function DevProducts.Initialize(Knit)
 			Name = "ServerPointsParty",
 			OnPurchase = function(player)
 				local ServerBonusService = Knit.GetService("ServerBonusService")
-				ServerBonusService:UpdateBonus("PointsParty", true)
+				ServerBonusService:EnableBonus(ServerBonusService.Bonuses.PointsParty)
 
 				-- Notify player of successful purchase
 				if NotificationService then
@@ -78,7 +78,7 @@ function DevProducts.Initialize(Knit)
 			Name = "ServerLuckParty",
 			OnPurchase = function(player)
 				local ServerBonusService = Knit.GetService("ServerBonusService")
-				ServerBonusService:UpdateBonus("LuckParty", true)
+				ServerBonusService:EnableBonus(ServerBonusService.Bonuses.LuckParty)
 
 				-- Notify player of successful purchase
 				if NotificationService then
