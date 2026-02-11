@@ -36,6 +36,9 @@ DevProducts.Ids = {
 	SuperLuck = 3534326409,
 	PointsOverload = 3534331652,
 	MagnetPulse = 3534480721,
+
+	-- skip to next world
+	SkipWorld = 3534609808
 }
 
 -- Purchases Manager - handlers are initialized when Initialize() is called
@@ -47,8 +50,24 @@ function DevProducts.Initialize(Knit)
 	local NotificationService = Knit.GetService("NotificationService")
 	local EggService = Knit.GetService("EggService")
 	local BossService = Knit.GetService("BossService")
+	local TrackService = Knit.GetService("TrackService")
 	
 	DevProducts.PurchasesManager = {
+		[DevProducts.Ids.SkipWorld] = {
+			Name = "SkipWorld",
+			OnPurchase = function(player)
+				local success, errorMsg = TrackService:UnlockWorld(player)
+				if not success and errorMsg then
+					NotificationService:SendNotification(
+						player,
+						errorMsg,
+						NotificationService.Category.Warning
+					)
+				end
+				return success
+			end
+		},
+
 		[DevProducts.Ids.MediumCashPack] = {
 			Name = "MediumCashPack",
 			OnPurchase = function(player)

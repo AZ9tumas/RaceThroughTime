@@ -38,6 +38,8 @@ local playerIndicatorTemplate: ImageLabel = globalView:WaitForChild("Templates")
 local localView: Frame = RaceHUDMainFrame:WaitForChild("LocalView")
 local progressFrameFill: Frame = localView:WaitForChild("Progress"):WaitForChild("Fill")
 local progressHeadshotImage: ImageLabel = progressFrameFill:WaitForChild("Frame"):WaitForChild("ImageLabel")
+local skipButton: TextButton = RaceHUDMainFrame:WaitForChild("Skip")
+local skipButtonConnection: RBXScriptConnection? = nil
 
 -- Track cancel button UI
 local trackCancelUI: ScreenGui = PlayerGui:WaitForChild("UI_CancelTrackButton")
@@ -118,6 +120,33 @@ local PlayerLapsFolder: Folder = nil
 -- Helper function for logging
 local function Log(message: string)
 	--print(string.format("[TrackController]: %s", message))
+end
+
+local function DisableSkipWorldButton()
+	skipButton.Visible = false
+
+	if skipButtonConnection then
+		skipButtonConnection:Disconnect()
+		skipButtonConnection = nil
+	end
+end
+
+local function SetupSkipWorldButton()
+	if not TrackData.nextWorld then return DisableSkipWorldButton() end
+	skipButton.Visible = true
+
+	if skipButtonConnection then skipButtonConnection:Disconnect() end
+
+	skipButtonConnection = skipButton.MouseButton1Click:Connect(function()
+		-- prompt purchase
+		local MonetizationService = Knit.GetService("MonetizationService")
+		local MarketplaceService = game:GetService("MarketplaceService")
+		MonetizationService:GetDevProductId("SkipWorld"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
+	end)
 end
 
 -- Find all pet models in workspace that belong to the local player and are in track mode
@@ -609,7 +638,7 @@ local function OnTrackStarted(trackData: {
 	
 	Log(string.format("Track started at %s, total distance: %.2f, initialSpeed: %.2f", trackData.gateName, trackData.totalDistance, trackData.initialSpeed or 0))
 	
-	-- Notify PetController that track run has started (pets should follow, not collect stars)
+	-- (pets should follow, not collect stars)
 	local PetController = Knit.GetController("PetController")
 	if PetController then
 		PetController:SetOnTrack(true)
@@ -620,6 +649,8 @@ local function OnTrackStarted(trackData: {
 	if LoadingScreenController then
 		LoadingScreenController:HideLoadingScreen()
 	end
+
+	SetupSkipWorldButton()
 	
 	-- Increase camera FOV for speed effect
 	TweenCameraFOV(TRACK_FOV, FOV_TWEEN_TIME)
@@ -817,6 +848,8 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	DistanceTraveled = 0
 	LapCount = 0
 	WorldUnlocked = false
+
+	DisableSkipWorldButton()
 	
 	-- Reset camera FOV to default
 	TweenCameraFOV(DEFAULT_FOV, FOV_TWEEN_TIME)
