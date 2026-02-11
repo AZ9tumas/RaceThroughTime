@@ -89,16 +89,20 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 		local hasSuperLuckPotion = PotionsService:HasPotionEffect(player, "SuperLuck")
 		print(hasSuperLuckPotion, "hasSuperLuckPotion in EggService")
 		
+		-- Check if LuckParty bonus is enabled
+		local ServerBonusService = Knit.GetService("ServerBonusService")
+		local hasLuckParty = ServerBonusService:IsBonusEnabled("LuckParty")
+		
 		local random = math.random()
 		local cumulativeProbability = 0
 		
 		for _, petOption in ipairs(eggConfig.Pets) do
 			print(petOption.LuckProbability, "luck probability for", petOption.Pet)
-			-- Priority: SuperLuck gamepass > Luck gamepass > Potion > Default
+			-- Priority: SuperLuck gamepass > Luck gamepass > Potion > LuckParty bonus > Default
 			local probability = petOption.Probability
 			if hasSuperLuck then
 				probability = petOption.SuperLuckProbability
-			elseif hasLuck or hasSuperLuckPotion then
+			elseif hasLuck or hasSuperLuckPotion or hasLuckParty then
 				probability = petOption.LuckProbability
 			end
 			cumulativeProbability = cumulativeProbability + probability
@@ -214,17 +218,21 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 		local PotionsService = Knit.GetService("PotionsService")
 		local hasSuperLuckPotion = PotionsService:HasPotionEffect(player, "SuperLuck")
 		
+		-- Check if LuckParty bonus is enabled
+		local ServerBonusService = Knit.GetService("ServerBonusService")
+		local hasLuckParty = ServerBonusService:IsBonusEnabled("LuckParty")
+		
 		local random = math.random()
 		local cumulativeProbability = 0
 		
 		for _, petOption in ipairs(eggConfig.Pets) do
-			-- Priority: Potion > SuperLuck gamepass > Luck gamepass > Default
+			-- Priority: SuperLuck potion > SuperLuck gamepass > Luck gamepass OR LuckParty bonus > Default
 			local probability = petOption.Probability
 			if hasSuperLuckPotion and petOption.LuckProbability then
 				probability = petOption.LuckProbability
 			elseif hasSuperLuck and petOption.SuperLuckProbability then
 				probability = petOption.SuperLuckProbability
-			elseif hasLuck and petOption.LuckProbability then
+			elseif (hasLuck or hasLuckParty) and petOption.LuckProbability then
 				probability = petOption.LuckProbability
 			end
 			cumulativeProbability = cumulativeProbability + probability

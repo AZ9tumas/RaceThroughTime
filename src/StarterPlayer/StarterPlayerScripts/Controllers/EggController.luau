@@ -201,6 +201,10 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 	local PotionsController = Knit.GetController("PotionsController")
 	local hasSuperLuckPotion = PotionsController and PotionsController:HasPotionEffect("SuperLuck")
 
+	-- Check if LuckParty bonus is enabled
+	local ServerBonusController = Knit.GetController("ServerBonusController")
+	local hasLuckParty = ServerBonusController and ServerBonusController:IsBonusEnabled("LuckParty")
+
 	print(hasSuperLuckPotion, "hasSuperLuckPotion in EggController")
 
 	for _, child in ipairs(contentFrame:GetChildren()) do
@@ -212,12 +216,12 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 	for i, petOption in ipairs(eggConfig.Pets) do
 		print(petOption.LuckProbability, "luck probability for", petOption.Pet)
 		local petName = petOption.Pet
-		-- Priority: SuperLuck gamepass > Luck gamepass > Potion > Default
+		-- Priority: SuperLuck gamepass > Luck gamepass > Potion > LuckParty bonus > Default
 		local probability = petOption.Probability
 		
 		if hasSuperLuck then
 			probability = petOption.SuperLuckProbability
-		elseif hasLuck or hasSuperLuckPotion then
+		elseif hasLuck or hasSuperLuckPotion or hasLuckParty then
 			probability = petOption.LuckProbability
 		end
 		local petConfig = GetPetConfig(petName)
@@ -729,6 +733,12 @@ function EggController:KnitStart()
 	EggService.PlayHatchAnimation:Connect(function(eggName: string, petInfo: any)
 		-- Queue the animation
 		QueueHatchAnimation(eggName, petInfo)
+	end)
+	
+	-- Listen for bonus updates to refresh egg UI (e.g., LuckParty changes probabilities)
+	local ServerBonusService = Knit.GetService("ServerBonusService")
+	ServerBonusService.BonusUpdated:Connect(function(_BonusName: string, _value: boolean)
+		self:UpdateEggUI()
 	end)
 end
 
