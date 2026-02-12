@@ -545,7 +545,7 @@ end
 
 function TrackService:UnlockWorld(player: Player)
 	local trackData = PlayersOnTrack[player.UserId]
-	if not trackData then return false, "Player not found on track" end
+	if not trackData then return false, nil end
 
 	local nextWorld = trackData.nextWorld
 	if not nextWorld then return false, "No next world to unlock" end
