@@ -44,6 +44,7 @@ local Template = {
 		DailyStreak = 0,
 		LastClaim = 0,
 		CollectedRewards = {}, -- Tracks which daily reward IDs have been collected
+		RedeemedCodes = {}, -- Tracks which codes have been redeemed by the player
 		UpdateVersion = 0,
 		Settings = {
 			Music = true,
