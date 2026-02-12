@@ -61,6 +61,13 @@ local UI = {
 			PremiumWorldEgg = nil,
 			GoldenChronoEgg = nil,
 			LimitedHistoricalEgg = nil
+		},
+
+		Redeem = {
+			Frame = nil,
+
+			RedeemButton = nil,
+			TextBox = nil
 		}
 	},
 }
@@ -121,6 +128,11 @@ function ShopUIController:KnitInit()
 	UI.Frames.Potions.SuperLuck = UI.Frames.Potions.Frame:WaitForChild("SuperLuck")
 	UI.Frames.Potions.PointsOverload = UI.Frames.Potions.Frame:WaitForChild("PointsOverload")
 	UI.Frames.Potions.MagnetPulse = UI.Frames.Potions.Frame:WaitForChild("MagnetPulse")
+
+	-- redeem
+	UI.Frames.Redeem.Frame = UI.Frames.ScrollingFrame:WaitForChild("Redeem"):WaitForChild("MainFrame")
+	UI.Frames.Redeem.RedeemButton = UI.Frames.Redeem.Frame:WaitForChild("RedeemButton")
+	UI.Frames.Redeem.TextBox = UI.Frames.Redeem.Frame:WaitForChild("CodeTextBox")
 end
 
 function ShopUIController:KnitStart()
@@ -228,6 +240,16 @@ function ShopUIController:KnitStart()
 				MarketplaceService:PromptProductPurchase(player, productId)
 			end
 		end)
+	end)
+
+	-- redeem button setup
+	_connections["RedeemButton"] = UI.Frames.Redeem.RedeemButton.MouseButton1Click:Connect(function()
+		local text = UI.Frames.Redeem.TextBox.Text
+		if text == "" then return end
+
+		local RedeemCodeService = Knit.GetService("RedeemCodeService")
+		RedeemCodeService:RedeemCode(text)
+		UI.Frames.Redeem.TextBox.Text = ""
 	end)
 end
 
