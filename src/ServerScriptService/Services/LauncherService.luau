@@ -43,7 +43,7 @@ end
 
 --[[
 	Calculate the minimum max distance required to upgrade to a target level.
-	Requirement = 1000 * (1.89) ^ (Level - 2)
+	Requirement = 1000 * (1.6) ^ ((Level - 2) ^ 2)
 	
 	@param targetLevel number - The target level to upgrade to (must be > 1)
 	@return number - The minimum max distance required
@@ -52,7 +52,7 @@ function LauncherService:GetUpgradeRequirement(targetLevel: number): number
 	if targetLevel <= 1 then
 		return 0 -- No requirement for level 1
 	end
-	return 1000 * math.pow(1.89, targetLevel - 2)
+	return 1000 * math.pow(1.6, math.pow((targetLevel - 2), 2))
 end
 
 --[[
