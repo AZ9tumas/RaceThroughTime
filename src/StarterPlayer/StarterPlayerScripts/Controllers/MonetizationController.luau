@@ -5,10 +5,14 @@ local RunService = game:GetService("RunService")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 local GamePassIds = require(ReplicatedStorage.GamePassIds)
+local Signal = require(ReplicatedStorage.Packages.Signal)
 
 local MonetizationController = Knit.CreateController({
 	Name = "MonetizationController",
 })
+
+-- Signal fired whenever gamepass ownership changes (name: string, owned: boolean)
+MonetizationController.GamePassChanged = Signal.new()
 
 -- Expose Passes table for easy access
 MonetizationController.Passes = GamePassIds
@@ -85,10 +89,12 @@ function MonetizationController:KnitStart()
 			for name, id in pairs(GamePassIds) do
 				if id == gamePassId then
 					OwnedPasses[name] = true
+					MonetizationController.GamePassChanged:Fire(name, true)
 					-- Also refresh from server to be safe
 					MonetizationService:GetPlayerPasses():andThen(function(passes)
 						if passes then
 							OwnedPasses = passes
+							MonetizationController.GamePassChanged:Fire(name, true)
 						end
 					end)
 					break

@@ -96,7 +96,7 @@ Stats.DefaultPetAttackRate = 1 -- 1 attack per second
 -- Format: { Distance = number, Rebirth = number? }
 Stats.WorldUnlockRequirements = {
 	-- Main is unlocked by default
-	StoneAge = { Distance = 100510, Rebirth = 1 },
+	StoneAge = { Distance = 5510, Rebirth = 1 },
 	AncientEgypt = { Distance = 510110, Rebirth = 2 },
 	Medieval = { Distance = 1250000, Rebirth = 5 },
 	Industrial = { Distance = 5250000, Rebirth = 7 },

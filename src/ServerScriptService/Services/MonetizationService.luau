@@ -36,7 +36,7 @@ local function CheckAllGamePasses(player: Player)
 		end
 	end
 
-	print(PlayerGamePasses[userId], "monetization, assets")
+	warn(PlayerGamePasses, "monetization, assets")
 end
 
 function MonetizationService:HasGamePass(player: Player, gamePassName: string): boolean
@@ -49,13 +49,14 @@ function MonetizationService:HasGamePass(player: Player, gamePassName: string): 
 
 	local debugPanel = DebugOverrides[userId] and DebugOverrides[userId][gamePassName]
 	local actual = PlayerGamePasses[userId][gamePassName] or false
-	
-	-- In Studio, check debug overrides first
-	if RunService:IsStudio() then
-		return if debugPanel == true then debugPanel else actual
-	end
 
-	return actual
+	if debugPanel then
+		warn("Choosing debug panel")
+		return debugPanel
+	else
+		warn("Choosing actual value")
+		return actual
+	end
 end
 
 function MonetizationService:GetStarsMultiplier(player: Player): number
@@ -115,6 +116,7 @@ function MonetizationService:KnitInit()
 			if not PlayerGamePasses[userId] then
 				PlayerGamePasses[userId] = {}
 			end
+			warn("Here")
 			
 			for gamePassName, id in pairs(GamePassIds) do
 				if id == gamePassId then

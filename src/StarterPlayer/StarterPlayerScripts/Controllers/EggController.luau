@@ -712,6 +712,11 @@ function EggController:KnitStart()
 		self:UpdateEggUI()
 	end)
 
+	-- Refresh egg percentages when gamepass ownership changes (e.g., Luck/SuperLuck purchased)
+	MonetizationController.GamePassChanged:Connect(function(_gamePassName, _owned)
+		self:UpdateEggUI()
+	end)
+
 	Player:GetAttributeChangedSignal("CurrentWorld"):Connect(function()
 		local newWorld = Player:GetAttribute("CurrentWorld")
 		if newWorld and newWorld ~= CurrentWorldName then
