@@ -251,6 +251,19 @@ function ShopUIController:KnitStart()
 		RedeemCodeService:RedeemCode(text)
 		UI.Frames.Redeem.TextBox.Text = ""
 	end)
+
+	-- get gamepasses
+	_connections["VIPGamepass"] = UI.Frames.Gamepasses.VIPFrame.TextButton.MouseButton1Click:Connect(function()
+		MonetizationController:PromptPurchase("VIP")
+	end)
+
+	_connections["MagnetGamepass"] = UI.Frames.Gamepasses.MagnetFrame.TextButton.MouseButton1Click:Connect(function()
+		MonetizationController:PromptPurchase("Magnet")
+	end)
+
+	_connections["LuckGamepass"] = UI.Frames.Gamepasses.LuckFrame.TextButton.MouseButton1Click:Connect(function()
+		MonetizationController:PromptPurchase("Luck")
+	end)
 end
 
 return ShopUIController

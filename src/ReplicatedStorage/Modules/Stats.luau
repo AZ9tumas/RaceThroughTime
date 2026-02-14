@@ -479,7 +479,7 @@ function Stats.CalculateFuelMultiplier(equippedPets: {any}?, potionMultiplier: n
 			highestMultiplier = math.max(highestMultiplier, pet.Multiplier or 0)
 		end
 	end
-	warn(totalPercentageBonus, highestMultiplier)
+	
 	local totalBonus = baseTotal + (highestMultiplier * (totalPercentageBonus / 100))
 	
 	-- Apply potion multiplier if provided

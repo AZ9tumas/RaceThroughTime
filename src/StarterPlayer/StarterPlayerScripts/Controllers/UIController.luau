@@ -248,22 +248,30 @@ function UIController:GetUIReferences()
 	}
 end
 
+-- only calculates the pet multiplier
+-- @return number - Total multiplier from pets, including percentage bonuses
 function UIController:CalculateTotalMultiplier(): number
-	local currentRebirthLevel = data.Stats.Rebirths or 0
-	local rebirthBonus = rebirthStatsM.CalculateTotalMultiplier(currentRebirthLevel)
-	local equippedPetsList = {}
+	local highestMultiplier = 0
+	local baseTotal = 0
+	local totalPercentageBonus = 0
+
 	if data.Inventory and data.Inventory.EquippedPets and data.Inventory.PetInventory then
 		for _, petIndex in ipairs(data.Inventory.EquippedPets) do
 			local pet = data.Inventory.PetInventory[petIndex]
-			if pet then
-				table.insert(equippedPetsList, pet)
+			if not pet then continue end
+
+			if pet.Percentage then
+				-- This is a percentage pet - accumulate its percentage bonus
+				totalPercentageBonus = totalPercentageBonus + (pet.Percentage or 0)
+			else
+				baseTotal += pet.Multiplier or 0
+				highestMultiplier = math.max(highestMultiplier, pet.Multiplier or 0)
 			end
 		end
 	end
-	local petBonus = statsM.CalculateFuelMultiplier(equippedPetsList)
-	local otherBonus = statsM.CalculateOtherBonus()
-	local totalBonuses = petBonus + rebirthBonus + otherBonus
-	return totalBonuses > 0 and totalBonuses or 1
+	
+	local totalBonus = baseTotal + (highestMultiplier * (totalPercentageBonus / 100))
+	return totalBonus
 end
 
 function UIController:SetupServerBonusUI()

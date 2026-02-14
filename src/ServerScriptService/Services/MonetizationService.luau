@@ -41,16 +41,21 @@ end
 
 function MonetizationService:HasGamePass(player: Player, gamePassName: string): boolean
 	local userId = player.UserId
+
+	if not PlayerGamePasses[userId] then
+		warn("PlayerGamePasses not initialized for userId:", userId)
+		CheckAllGamePasses(player)
+	end
+
+	local debugPanel = DebugOverrides[userId] and DebugOverrides[userId][gamePassName]
+	local actual = PlayerGamePasses[userId][gamePassName] or false
 	
 	-- In Studio, check debug overrides first
-	if RunService:IsStudio() and DebugOverrides[userId] then
-		return DebugOverrides[userId][gamePassName] or false
+	if RunService:IsStudio() then
+		return if debugPanel == true then debugPanel else actual
 	end
-	
-	if not PlayerGamePasses[userId] then
-		return false
-	end
-	return PlayerGamePasses[userId][gamePassName] or false
+
+	return actual
 end
 
 function MonetizationService:GetStarsMultiplier(player: Player): number

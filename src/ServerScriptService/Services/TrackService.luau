@@ -739,7 +739,7 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	local radius = Stats.WorldRadius[worldName] or Stats.WorldRadius.Main
 
 	local fuel = DataService:Get(player, "Stats").Fuel
-	if fuel <= 25 then
+	if fuel < 25 then
 		return false, string.format("Not enough fuel, need at least 25 fuel")
 	end
 	
