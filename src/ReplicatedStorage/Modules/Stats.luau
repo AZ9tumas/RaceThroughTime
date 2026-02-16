@@ -341,7 +341,6 @@ Stats.Eggs = {
 		World = "Main",
 		-- Pets array contains possible pets with their spawn probabilities (must sum to 1.0)
 		Pets = {
-			{ Pet = "StandardPet", Probability = 0.00, LuckProbability = 0.00, SuperLuckProbability = 0.00 }, -- 0% chance
 			{ Pet = "PercentagePet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 }, -- 100% chance
 		},
 	},
@@ -391,6 +390,7 @@ Stats.TierColors = setmetatable({
 Stats.Pets = {
 	StandardPet = {
 		Name = "Standard Pet",
+		Egg = {"StandardEgg"},
 		TierLevel = 1, -- Required especially during merging pets
 		Multiplier = 10, -- x10
 		PickupRangeBonus = 1.0, -- No range extension (base range)
@@ -403,6 +403,7 @@ Stats.Pets = {
 	},
 	PremiumPet = {
 		Name = "Premium Pet",
+		Egg = {"StandardEgg", "PremiumWorldEgg"},
 		TierLevel = 2, -- Required especially during merging pets
 		Multiplier = 20, -- x10
 		PickupRangeBonus = 2.0, -- No range extension (base range)
@@ -415,6 +416,7 @@ Stats.Pets = {
 	},
 	GoldenPet = {
 		Name = "Golden Pet",
+		Egg = {"GoldenChronoEgg"},
 		TierLevel = 3, -- Required especially during merging pets
 		Multiplier = 50, -- x50
 		PickupRangeBonus = 3.0, -- Extended range
@@ -427,6 +429,7 @@ Stats.Pets = {
 	},
 	PercentagePet = {
 		Name = "Percentage Pet",
+		Egg = {"BestFriendEgg"},
 		TierLevel = 3, -- Required especially during merging pets
 		Multiplier = 0,
 		PickupRangeBonus = 3.0, -- Extended range
@@ -440,6 +443,7 @@ Stats.Pets = {
 	},
 	LimitedPet = {
 		Name = "Limited Pet",
+		Egg = {"LimitedHistoricalEgg"},
 		TierLevel = 4, -- Required especially during merging pets
 		Multiplier = 135, -- x35
 		PickupRangeBonus = 2.5, -- Extended range

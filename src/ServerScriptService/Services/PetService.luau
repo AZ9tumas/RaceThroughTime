@@ -898,7 +898,6 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 	-- Recalculate fuel based on new Stars count and current multipliers
 	StarService:RecalculateFuel(player)
 	
-	Log(string.format("Pet collected star for player %s, gained %d star equivalents", player.Name, starEquivalent))
 	
 	-- Notify client that star was collected
 	--[[

@@ -104,6 +104,8 @@ local function RecalculateFuelForPlayer(player: Player)
 		currentStats.Fuel = newFuel
 		return currentStats
 	end)
+
+	DataService:FireDataReady(player)
 end
 
 -- Helper function for logging
@@ -537,8 +539,6 @@ function StarService.Client:CollectStar(player: Player, starId: string): boolean
 			icon = "⭐", sound = "CollectStar", name = "Custom"
 		}, 2)
 	end
-
-	DataService:FireDataReady(player)
 
 	-- Process counts and boss spawning logic
 	ProcessGlobalStarCollection(player)
