@@ -52,6 +52,13 @@ Stats.MaxPhysicalSpeed = 130
 -- Base acceleration for track movement (studs/sec²)
 Stats.BaseAcceleration = 20
 
+-- Overdrive: time window (seconds from run start) during which overdrive can be activated
+Stats.OverdriveTimeframe = 5
+-- Overdrive: speed multiplier applied to initialSpeed, maxSpeed, and acceleration
+Stats.OverdriveSpeedMultiplier = 1.5
+-- Overdrive: duration in seconds the boost lasts
+Stats.OverdriveDuration = 3
+
 -- World radius values for track movement (distance from center)
 Stats.WorldRadius = {
 	Main = 205,

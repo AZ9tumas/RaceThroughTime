@@ -637,6 +637,10 @@ function PetService:MergePets(player: Player, selectedIndexes: { number }?, sele
 	local petType = firstPet.PetType
 	local world = firstPet.World
 	
+	-- Get the Egg list for the first pet from Stats.Pets to enforce same-egg merging
+	local firstPetStats = Stats.Pets[petType] or Stats.Pets.StandardPet
+	local firstPetEggs = firstPetStats.Egg or {}
+	
 	if PetMergeStats.IsMaxTier(tierLevel) then
 		NotificationService:SendNotification(player, "Pets are already at maximum tier.", NotificationService.Category.Warning)
 		return false, "Max tier reached", nil
@@ -666,6 +670,27 @@ function PetService:MergePets(player: Player, selectedIndexes: { number }?, sele
 		if petTierLevel ~= tierLevel then
 			NotificationService:SendNotification(player, "Selected pets must all be the same tier.", NotificationService.Category.Error)
 			return false, "Tier level mismatch", nil
+		end
+		
+		-- Ensure pets are from the same egg using the Egg field in Stats.Pets
+		local otherPetType = pet.PetType or "StandardPet"
+		local otherPetStats = Stats.Pets[otherPetType] or Stats.Pets.StandardPet
+		local otherPetEggs = otherPetStats.Egg or {}
+		
+		local sharesEgg = false
+		for _, egg1 in ipairs(firstPetEggs) do
+			for _, egg2 in ipairs(otherPetEggs) do
+				if egg1 == egg2 then
+					sharesEgg = true
+					break
+				end
+			end
+			if sharesEgg then break end
+		end
+		
+		if not sharesEgg then
+			NotificationService:SendNotification(player, "Selected pets must all be from the same egg.", NotificationService.Category.Error)
+			return false, "Egg type mismatch", nil
 		end
 	end
 	

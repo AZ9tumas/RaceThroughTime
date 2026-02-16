@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
@@ -64,6 +65,7 @@ local UIFramesController = nil
 -- Camera settings
 local DEFAULT_FOV = 70
 local TRACK_FOV = 90
+local OVERDRIVE_FOV = 110
 local FOV_TWEEN_TIME = 0.5
 local TRACK_END_LOADING_DELAY = 0.8 -- Seconds to show loading screen after track ends
 
@@ -1238,6 +1240,59 @@ function TrackController:KnitStart()
 	
 	-- Update player position indicators on RenderStepped
 	RunService.RenderStepped:Connect(UpdatePlayerPositionIndicators)
+
+	-- Listen for Overdrive signal from server to apply client-side speed boost and effects
+	TrackService.Overdrive:Connect(function(overdriveData)
+		if not IsOnTrack or not TrackData then return end
+
+		-- Update client-side track parameters with boosted values
+		TrackData.initialSpeed = overdriveData.initialSpeed
+		TrackData.maxSpeed = overdriveData.maxSpeed
+		TrackData.acceleration = overdriveData.acceleration
+
+		Log(string.format("Overdrive activated! Speed x%.1f for %.1fs", overdriveData.multiplier, overdriveData.duration))
+
+		-- Zoom out camera for immersive speed effect
+		TweenCameraFOV(OVERDRIVE_FOV, 0.3)
+
+		local NotificationController = Knit.GetController("NotificationController")
+		if NotificationController then
+			NotificationController:ShowNotification(
+				string.format("OVERDRIVE! x%.1f Speed Boost!", overdriveData.multiplier),
+				NotificationController.Category.Success,
+				overdriveData.duration
+			)
+		end
+
+		-- Revert client-side speeds and camera after duration
+		task.delay(overdriveData.duration, function()
+			if IsOnTrack and TrackData then
+				local m = overdriveData.multiplier
+				TrackData.initialSpeed = TrackData.initialSpeed / m
+				TrackData.maxSpeed = TrackData.maxSpeed / m
+				TrackData.acceleration = TrackData.acceleration / m
+				TweenCameraFOV(TRACK_FOV, 0.5)
+				Log("Overdrive expired, speed and FOV reverted")
+			end
+		end)
+	end)
+
+	UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+		if gameProcessedEvent then return end
+
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if not IsOnTrack or not TrackData then return end
+
+			-- Only allow overdrive within the configured timeframe
+			if ElapsedTime > Stats.OverdriveTimeframe then return end
+
+			TrackService:RequestOverdrive():andThen(function(success, errorMsg)
+				if not success then
+					Log(string.format("Overdrive request failed: %s", errorMsg or "Unknown"))
+				end
+			end)
+		end
+	end)
 	
 	Log("TrackController started")
 end

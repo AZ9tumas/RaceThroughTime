@@ -20,6 +20,7 @@ local TrackService = Knit.CreateService({
 	Client = {
 		TrackStarted = Knit.CreateSignal(), -- Signal to notify client when track run starts
 		TrackEnded = Knit.CreateSignal(), -- Signal to notify client when track run ends
+		Overdrive = Knit.CreateSignal(), -- Signal to trigger overdrive effects on client
 		EarlyWorldUnlock = Knit.CreateSignal(), -- Signal when world is unlocked mid-run
 	},
 })
@@ -897,6 +898,62 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 	return true, nil, {
 		distanceTraveled = distanceTraveled,
 	}
+end
+
+-- Client request to activate overdrive speed boost
+-- Only allowed within the first OverdriveTimeframe seconds of a track run
+function TrackService.Client:RequestOverdrive(player: Player): (boolean, string?)
+	local userId = player.UserId
+	local trackData = PlayersOnTrack[userId]
+
+	if not trackData then
+		return false, "Not currently on track"
+	end
+
+	-- Check if overdrive was already used this run
+	if trackData.overdriveUsed then
+		return false, "Overdrive already used"
+	end
+
+	-- Check if within the allowed timeframe
+	local elapsed = tick() - trackData.startTime
+	if elapsed > Stats.OverdriveTimeframe then
+		return false, "Overdrive timeframe expired"
+	end
+
+	-- Mark as used
+	trackData.overdriveUsed = true
+
+	-- Apply the speed boost to the track parameters
+	local multiplier = Stats.OverdriveSpeedMultiplier
+	trackData.initialSpeed = trackData.initialSpeed * multiplier
+	trackData.maxSpeed = trackData.maxSpeed * multiplier
+	trackData.acceleration = trackData.acceleration * multiplier
+
+	Log(string.format("Player %s activated Overdrive! Speed multiplied by %.1fx", player.Name, multiplier))
+
+	-- Fire the Overdrive signal to the client so it can apply visual effects and updated speeds
+	TrackService.Client.Overdrive:Fire(player, {
+		initialSpeed = trackData.initialSpeed,
+		maxSpeed = trackData.maxSpeed,
+		acceleration = trackData.acceleration,
+		duration = Stats.OverdriveDuration,
+		multiplier = multiplier,
+	})
+
+	-- Schedule reverting the speed boost after the duration
+	task.delay(Stats.OverdriveDuration, function()
+		-- Only revert if the player is still on this same track run
+		local currentTrackData = PlayersOnTrack[userId]
+		if currentTrackData and currentTrackData == trackData then
+			currentTrackData.initialSpeed = currentTrackData.initialSpeed / multiplier
+			currentTrackData.maxSpeed = currentTrackData.maxSpeed / multiplier
+			currentTrackData.acceleration = currentTrackData.acceleration / multiplier
+			Log(string.format("Player %s Overdrive expired, speed reverted", player.Name))
+		end
+	end)
+
+	return true, nil
 end
 
 -- Client request to end track run (with distance traveled and world unlock info)
