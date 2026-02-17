@@ -505,9 +505,45 @@ end
 local function HandleEarlyWorldUnlock(player: Player, nextWorld: string, estimatedDistance: number)
 	Log(string.format("Player %s early world unlock! Distance: %.2f, new world: %s", player.Name, estimatedDistance, nextWorld))
 
+	local userId = player.UserId
+	local trackData = PlayersOnTrack[userId]
+	local worldName = trackData and trackData.worldName or "Main"
+	local DataService = Knit.GetService("DataService")
+
+	-- Award cash for distance traveled before the world unlock
+	local distanceTraveled = math.clamp(estimatedDistance, 0, trackData and trackData.totalDistance or estimatedDistance)
+	
+	local playerStats = DataService:Get(player, "Stats")
+	local rebirthLevel = (playerStats and playerStats.Rebirths) or 0
+	local rebirthCashMultiplier = RebirthStats.CalculateTotalCashMultiplier(rebirthLevel)
+	
+	local cashRate = Stats.WorldCashRates[worldName] or Stats.WorldCashRates.Main
+	local baseCashEarned = (distanceTraveled / 1000) * cashRate
+	local cashEarned = math.floor(baseCashEarned * rebirthCashMultiplier)
+	
+	if cashEarned > 0 then
+		DataService:Update(player, "Currencies", function(currencies)
+			currencies.Cash = (currencies.Cash or 0) + cashEarned
+			return currencies
+		end)
+	end
+	
+	-- Update MaxDistanceTraveled if this run beat the previous record
+	DataService:Update(player, "Stats", function(stats)
+		local currentMax = stats.MaxDistanceTraveled or 0
+		if distanceTraveled > currentMax then
+			stats.MaxDistanceTraveled = distanceTraveled
+			Log(string.format("Player %s set new max distance record: %.2f (previous: %.2f) [early world unlock]", player.Name, distanceTraveled, currentMax))
+		end
+		return stats
+	end)
+	
+	Log(string.format("Player %s earned %d cash for %.2f distance before early world unlock (rebirth multiplier: %.2fx)", player.Name, cashEarned, distanceTraveled, rebirthCashMultiplier))
+
 	-- Fire early world unlock signal to client (for client-side handling)
 	TrackService.Client.EarlyWorldUnlock:Fire(player, {
-		distanceTraveled = estimatedDistance,
+		distanceTraveled = distanceTraveled,
+		cashEarned = cashEarned,
 		newWorld = nextWorld,
 	})
 
@@ -515,18 +551,38 @@ local function HandleEarlyWorldUnlock(player: Player, nextWorld: string, estimat
 	local WorldService = Knit.GetService("WorldService")
 	WorldService:GiveWorldToPlayer(player, nextWorld)
 	
-	-- Reuse the cancel track run logic to clean up the track run
-	TrackService.Client:CancelTrackRun(player)
+	-- Clean up track run (body movers, pet movers, track state, laps)
+	local character = player.Character
+	if character then
+		CleanupBodyMovers(character)
+	end
+	CleanupPetBodyMoversForTrack(player)
+	PlayersOnTrack[userId] = nil
+	
+	local LapService = Knit.GetService("LapService")
+	LapService:StopTracking(player)
+	
+	-- Fire TrackEnded with actual rewards (world was unlocked, so 100% progress)
+	local unlockRequirement = Stats.GetWorldDistanceRequirement(nextWorld)
+	TrackService.Client.TrackEnded:Fire(player, {
+		distanceTraveled = distanceTraveled,
+		cashEarned = cashEarned,
+		percentageToNextWorld = 100,
+		unlockRequirement = unlockRequirement,
+	})
+	
+	-- Clear and restart stars
+	local StarService = Knit.GetService("StarService")
+	StarService:RemoveAllStarsForPlayer(player)
+	StarService:Start(player)
 
 	-- Open up the white frame (Loading screen handler) here for 1s
 	local LoadingScreenService = Knit.GetService("LoadingScreenService")
 	LoadingScreenService:ShowLoadingScreen(player, 2.5)
 
-	warn("Here.")
-
 	WorldService:TeleportPlayerToWorld(player, nextWorld)
 
-	task.delay(1.5, function()
+	task.delay(2.5, function()
 		LoadingScreenService:HideLoadingScreen(player)
 	end)
 
@@ -540,7 +596,6 @@ local function HandleEarlyWorldUnlock(player: Player, nextWorld: string, estimat
 	)
 	
 	-- Update client data
-	local DataService = Knit.GetService("DataService")
 	DataService:FireDataReady(player)
 end
 

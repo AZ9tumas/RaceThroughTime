@@ -21,7 +21,6 @@ local Template = {
 		Gems = 0,
 	},
 	Stats = {
-		TotalDistance = 0,
 		Points = 0,
 		Rebirths = 0,
 		Fuel = 0, -- Starting fuel for players

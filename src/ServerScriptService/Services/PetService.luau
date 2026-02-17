@@ -153,20 +153,37 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		petModel.PrimaryPart = part
 	end
 	
-	-- Position near player initially
-	local world = player:GetAttribute("CurrentWorld")
-	local spawnPart = workspace:FindFirstChild(world):FindFirstChild("SpawnLocation")
-	print(spawnPart)
-	petModel:PivotTo(CFrame.new(spawnPart.Position))
-
+	-- Position near player initially (use same circular offset pattern as PetController)
+	local spawnPosition: Vector3
+	local spawnCFrame: CFrame
+	
 	local character = player.Character
-	if character then
-		local rootPart = character:FindFirstChild("HumanoidRootPart")
-		if rootPart then
-			local offset = Vector3.new(3 + (petIndex - 1) * PET_FOLLOW_OFFSET_SPACING, 0, 3)
-			--petModel:PivotTo(CFrame.new(rootPart.Position + offset))
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	
+	if rootPart then
+		-- Spawn around the player using circular offset (matches PetController follow formation)
+		local offset = Vector3.new(
+			math.cos(petIndex * math.pi / 2) * 8,
+			2,
+			math.sin(petIndex * math.pi / 2) * 8
+		)
+		spawnPosition = rootPart.Position + offset
+		spawnCFrame = CFrame.new(spawnPosition, rootPart.Position) -- Face toward the player
+		print("PET SPAWN POSITION:", spawnPosition)
+	else
+		-- Fallback to world spawn location if character hasn't loaded yet
+		local world = player:GetAttribute("CurrentWorld")
+		local worldFolder = workspace:FindFirstChild(world)
+		local spawnPart = worldFolder and worldFolder:FindFirstChild("SpawnLocation")
+		if spawnPart then
+			spawnPosition = spawnPart.Position
+		else
+			spawnPosition = Vector3.new(0, 10, 0)
 		end
+		spawnCFrame = CFrame.new(spawnPosition)
 	end
+	
+	petModel:PivotTo(spawnCFrame)
 	
 	local primaryPart = petModel.PrimaryPart
 	if primaryPart then
@@ -184,7 +201,7 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		alignPosition.MaxVelocity = petVelocity
 		alignPosition.Responsiveness = petVelocity
 		-- IMPORTANT: Set initial position to current pet position (not 0,0,0)
-		alignPosition.Position = spawnPart.Position
+		alignPosition.Position = spawnPosition
 		alignPosition.Parent = primaryPart
 		
 		-- Create AlignOrientation for smooth rotation (controlled by client)
