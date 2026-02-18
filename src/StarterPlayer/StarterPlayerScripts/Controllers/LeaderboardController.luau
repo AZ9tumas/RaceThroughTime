@@ -86,6 +86,7 @@ local function PopulateLeaderboard(surfaceGui: SurfaceGui, entries: { { UserId: 
 	-- Create entries
 	local UIController = Knit.GetController("UIController")
 	for rank, entry in ipairs(entries) do
+		if entry.UserId < 0 then continue end
 		local clone = template:Clone()
 		clone.Name = "Entry_" .. rank
 		local valueStr = UIController and UIController:TruncateNumber(entry.Value) or tostring(entry.Value)

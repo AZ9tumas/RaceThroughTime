@@ -109,6 +109,7 @@ local ElapsedTime = 0
 local DistanceTraveled = 0
 local LapCount = 0
 local WorldUnlocked = false
+local MilestoneReached = false
 
 -- Pet follow constants (same as PetController and TrackService)
 local PET_FOLLOW_DISTANCE = 8
@@ -634,6 +635,7 @@ local function OnTrackStarted(trackData: {
 	DistanceTraveled = 0
 	LapCount = 0
 	WorldUnlocked = false
+	MilestoneReached = false
 	
 	-- Reset progress bar
 	progressFrameFill.Size = UDim2.new(1, 0, 0, 0)
@@ -784,6 +786,36 @@ local function OnTrackStarted(trackData: {
 			if DistanceTraveled >= unlockRequirement and not WorldUnlocked then
 				WorldUnlocked = true
 				Log(string.format("World unlock threshold reached: %.2f", DistanceTraveled))
+				
+				-- Check for milestone: distance reached but rebirth requirement not met
+				if not MilestoneReached then
+					local rebirthReq = TrackData.rebirthRequirement
+					if rebirthReq and rebirthReq > 0 then
+						local data = UIController and UIController:GetData()
+						local playerRebirths = data and data.Stats and data.Stats.Rebirths or 0
+						if playerRebirths < rebirthReq then
+							MilestoneReached = true
+							
+							-- Camera FOV tween effect (same as overdrive)
+							TweenCameraFOV(OVERDRIVE_FOV, 0.3)
+							task.delay(1.5, function()
+								if IsOnTrack then
+									TweenCameraFOV(TRACK_FOV, 0.5)
+								end
+							end)
+							
+							-- Notification
+							local NotifController = Knit.GetController("NotificationController")
+							if NotifController then
+								NotifController:ShowNotification(
+									string.format("Milestone Complete! Need Rebirth %d to unlock %s", rebirthReq, TrackData.nextWorld or "next world"),
+									NotifController.Category.Success,
+									4
+								)
+							end
+						end
+					end
+				end
 			end
 		end
 		
@@ -850,6 +882,7 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	DistanceTraveled = 0
 	LapCount = 0
 	WorldUnlocked = false
+	MilestoneReached = false
 
 	DisableSkipWorldButton()
 	
@@ -969,6 +1002,7 @@ function TrackController:StopTrack()
 	DistanceTraveled = 0
 	LapCount = 0
 	WorldUnlocked = false
+	MilestoneReached = false
 	
 	-- Reset camera FOV
 	TweenCameraFOV(DEFAULT_FOV, FOV_TWEEN_TIME)
