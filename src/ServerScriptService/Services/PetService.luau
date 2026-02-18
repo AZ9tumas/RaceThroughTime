@@ -1187,6 +1187,67 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 	return true, nil
 end
 
+-- Equip the best pets by multiplier, replacing any currently equipped pets
+function PetService:EquipBestPets(player: Player): (boolean, string?)
+	local DataService = Knit.GetService("DataService")
+	local MonetizationService = Knit.GetService("MonetizationService")
+
+	local inventory = DataService:Get(player, "Inventory")
+	if not inventory or not inventory.PetInventory then
+		return false, "No inventory"
+	end
+
+	-- Determine max equipped slots
+	local maxPets = Stats.MaxEquippedPets
+	if MonetizationService:HasGamePass(player, "ExtraPets") then
+		maxPets = maxPets + Stats.ExtraPetsBonus
+	end
+
+	-- Unequip all currently equipped pets first
+	local currentEquipped = inventory.EquippedPets and table.clone(inventory.EquippedPets) or {}
+	for _, petIndex in ipairs(currentEquipped) do
+		self:UnequipPetByIndex(player, petIndex)
+	end
+
+	-- Re-fetch inventory after unequips
+	inventory = DataService:Get(player, "Inventory")
+
+	-- Build a list of valid (non-expired) pets with their indices
+	local candidates = {}
+	for index, petData in ipairs(inventory.PetInventory) do
+		if petData then
+			-- Skip expired pets
+			if petData.ExpireLength and petData.ObtainedAt + petData.ExpireLength < os.time() then
+				continue
+			end
+			table.insert(candidates, { Index = index, Multiplier = petData.Multiplier or 0 })
+		end
+	end
+
+	-- Sort by multiplier descending
+	table.sort(candidates, function(a, b)
+		return a.Multiplier > b.Multiplier
+	end)
+
+	-- Equip the top N pets using existing EquipPet
+	local equipped = 0
+	for _, candidate in ipairs(candidates) do
+		if equipped >= maxPets then break end
+		local petID = self:GetPetIDByIndex(player, candidate.Index)
+		if petID then
+			local success = self:EquipPet(player, petID)
+			if success then
+				equipped = equipped + 1
+			end
+		end
+	end
+
+	Log(string.format("Player %s equipped best %d pets", player.Name, equipped))
+
+	DataService:FireDataReady(player)
+	return true, nil
+end
+
 -- Client request to equip a pet
 function PetService.Client:RequestEquipPet(player: Player, petID: string): (boolean, string?)
 	return PetService:EquipPet(player, petID)
@@ -1195,6 +1256,11 @@ end
 -- Client request to unequip a pet
 function PetService.Client:RequestUnequipPet(player: Player, petID: string): (boolean, string?)
 	return PetService:UnequipPet(player, petID)
+end
+
+-- Client request to equip best pets
+function PetService.Client:RequestEquipBestPets(player: Player): (boolean, string?)
+	return PetService:EquipBestPets(player)
 end
 
 function PetService.Client:RequestMergePets(player: Player, selectedIDs: { string }?)

@@ -23,6 +23,7 @@ local inventoryItemCount: TextLabel
 local inventoryScrollingFrame: ScrollingFrame
 local inventoryPetTemplate: Frame
 local inventoryCloseButton: TextButton
+local equipBestButton: TextButton
 
 local _connections = {}
 local constantUpdateLabels: { [number]: TextLabel } = {}
@@ -170,6 +171,7 @@ function InventoryUIController:KnitInit()
 	inventoryScrollingFrame = inventoryMainFrame:WaitForChild("ScrollingFrame")
 	inventoryPetTemplate = inventoryScrollingFrame:WaitForChild("UIGridLayout"):WaitForChild("Template")
 	inventoryCloseButton = inventoryMainFrame:WaitForChild("CloseButton")
+	equipBestButton = inventoryMainFrame:WaitForChild("Frame"):WaitForChild("BestButton")
 end
 
 function InventoryUIController:KnitStart()
@@ -178,6 +180,24 @@ function InventoryUIController:KnitStart()
 	end)
 	_connections["InventoryClose"] = inventoryCloseButton.MouseButton1Click:Connect(function()
 		self:CloseInventory()
+	end)
+
+	_connections["EquipBestButton"] = equipBestButton.MouseButton1Click:Connect(function()
+		local PetService = Knit.GetService("PetService")
+		PetService:RequestEquipBestPets():andThen(function(success, errorMsg)
+			if success then
+				self:UpdatePetsInventory()
+			else
+				local NotificationController = Knit.GetController("NotificationController")
+				if NotificationController then
+					NotificationController:ShowNotification(
+						errorMsg or "Failed to equip best pets",
+						NotificationController.Category.Warning,
+						3
+					)
+				end
+			end
+		end)
 	end)
 
 	_connections["RunService"] = game:GetService("RunService").Heartbeat:Connect(function()

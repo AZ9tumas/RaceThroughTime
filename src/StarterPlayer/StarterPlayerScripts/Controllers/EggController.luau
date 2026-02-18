@@ -309,118 +309,60 @@ local function PurchaseMultipleEggs(eggName: string, count: number)
 	if EggHatchAnimation.IsPlaying() then return end
 	
 	IsHatching = true
-	local purchasedCount = 0
-	local currentIndex = 0
 	
 	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass("InstantHatch")
 	
 	if hasInstantHatch then
-		local function PurchaseNextInstant()
-			currentIndex = currentIndex + 1
-			if currentIndex > count then
-				if purchasedCount > 0 and NotificationController then
-					NotificationController:ShowNotification(
-						string.format("Hatched %d eggs!", purchasedCount),
-						NotificationController.Category.Success,
-						3
-					)
+		-- No animation, batch purchase all at once from server
+		EggService:RequestPurchaseMultipleEggs(eggName, count):andThen(function(purchasedCount, pets)
+			if purchasedCount > 0 then
+				local data = UIController:GetData()
+				if not data.Inventory.PetInventory then
+					data.Inventory.PetInventory = {}
 				end
-				IsHatching = false
-				return
-			end
-			
-			EggService:RequestPurchaseEgg(eggName):andThen(function(success, _errorMsg, petInfo)
-				if success and petInfo then
-					purchasedCount = purchasedCount + 1
-					local data = UIController:GetData()
-					if not data.Inventory.PetInventory then
-						data.Inventory.PetInventory = {}
-					end
+				for _, petInfo in ipairs(pets) do
 					table.insert(data.Inventory.PetInventory, petInfo)
-					if InventoryUIController then
-						InventoryUIController:UpdatePetsInventory()
-					end
-					task.wait(0.05)
-					PurchaseNextInstant()
-				else
-					if purchasedCount > 0 and NotificationController then
-						NotificationController:ShowNotification(
-							string.format("Hatched %d eggs!", purchasedCount),
-							NotificationController.Category.Success,
-							3
-						)
-					end
-					IsHatching = false
 				end
-			end)
-		end
-		
-		PurchaseNextInstant()
+				if InventoryUIController then
+					InventoryUIController:UpdatePetsInventory()
+				end
+			end
+			IsHatching = false
+		end)
 		return
 	end
 	
-	local function HatchNext()
-		currentIndex = currentIndex + 1
-		if currentIndex > count then
-			if purchasedCount > 0 and NotificationController then
-				NotificationController:ShowNotification(
-					string.format("Hatched %d eggs!", purchasedCount),
-					NotificationController.Category.Success,
-					3
-				)
-			end
-			IsHatching = false
-			return
-		end
-		
-		UIFramesController:DisableFrames(true)
-		eggviewport.Parent.Visible = true
-		
-		EggHatchAnimation.PlayHatch(
-			eggviewport,
-			eggName,
-			eggHatchDimmer,
-			eggHatchFlash,
-			function(animationSuccess)
-				if animationSuccess then
-					EggService:RequestPurchaseEgg(eggName):andThen(function(success, _errorMsg, petInfo)
-						if success and petInfo then
-							purchasedCount = purchasedCount + 1
-							local data = UIController:GetData()
-							if not data.Inventory.PetInventory then
-								data.Inventory.PetInventory = {}
-							end
-							table.insert(data.Inventory.PetInventory, petInfo)
-							if InventoryUIController then
-								InventoryUIController:UpdatePetsInventory()
-							end
-							eggviewport.Parent.Visible = false
-							UIFramesController:DisableFrames(false)
-							task.wait(0.1)
-							HatchNext()
-						else
-							eggviewport.Parent.Visible = false
-							UIFramesController:DisableFrames(false)
-							if purchasedCount > 0 and NotificationController then
-								NotificationController:ShowNotification(
-									string.format("Hatched %d eggs!", purchasedCount),
-									NotificationController.Category.Success,
-									3
-								)
-							end
-							IsHatching = false
-						end
-					end)
-				else
-					eggviewport.Parent.Visible = false
-					UIFramesController:DisableFrames(false)
-					IsHatching = false
-				end
-			end
-		)
-	end
+	-- Play animation ONCE, then batch purchase all eggs from server
+	UIFramesController:DisableFrames(true)
+	eggviewport.Parent.Visible = true
 	
-	HatchNext()
+	EggHatchAnimation.PlayHatch(
+		eggviewport,
+		eggName,
+		eggHatchDimmer,
+		eggHatchFlash,
+		function(animationSuccess)
+			if animationSuccess then
+				EggService:RequestPurchaseMultipleEggs(eggName, count):andThen(function(purchasedCount, pets)
+					if purchasedCount > 0 then
+						local data = UIController:GetData()
+						if not data.Inventory.PetInventory then
+							data.Inventory.PetInventory = {}
+						end
+						for _, petInfo in ipairs(pets) do
+							table.insert(data.Inventory.PetInventory, petInfo)
+						end
+						if InventoryUIController then
+							InventoryUIController:UpdatePetsInventory()
+						end
+					end
+				end)
+			end
+			eggviewport.Parent.Visible = false
+			UIFramesController:DisableFrames(false)
+			IsHatching = false
+		end
+	)
 end
 
 local function StartAutoHatch(eggName: string)

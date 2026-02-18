@@ -183,7 +183,7 @@ end
 	@param eggType string - The type of egg to purchase (e.g., "StandardEgg")
 	@return (boolean, string?, { Name: string, ID: string, Multiplier: number }?) - Success status, error message if failed, pet info if successful
 ]]
-function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, string?, { Name: string, ID: string, Multiplier: number }?)
+function EggService:PurchaseEgg(player: Player, eggType: string, silent: boolean?): (boolean, string?, { Name: string, ID: string, Multiplier: number }?)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
 	local PetService = Knit.GetService("PetService")
@@ -330,14 +330,18 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	Log(string.format("Player %s purchased %s and obtained %s (ID: %s) for %d %s", 
 		player.Name, eggType, petConfig.Name, petID, cost, currencyType))
 	
-	NotificationService:SendNotification(
-		player,
-		string.format("Obtained %s!", petConfig.Name),
-		NotificationService.Category.Success
-	)
+	if not silent then
+		NotificationService:SendNotification(
+			player,
+			string.format("Obtained %s!", petConfig.Name),
+			NotificationService.Category.Success
+		)
+	end
 	
 	-- Fire signal to client
-	EggService.Client.PetObtained:Fire(player, finalPetEntry)
+	if not silent then
+		EggService.Client.PetObtained:Fire(player, finalPetEntry)
+	end
 	DataService:FireDataReady(player)
 	
 	return true, nil, finalPetEntry
@@ -350,19 +354,42 @@ end
 
 -- Client request to purchase multiple eggs at once
 function EggService.Client:RequestPurchaseMultipleEggs(player: Player, eggType: string, count: number): (number, { any })
+	local NotificationService = Knit.GetService("NotificationService")
 	local purchasedCount = 0
 	local pets = {}
 	
 	count = math.min(count, 10)
 	
 	for _ = 1, count do
-		local success, _errorMsg, petInfo = EggService:PurchaseEgg(player, eggType)
+		local success, _errorMsg, petInfo = EggService:PurchaseEgg(player, eggType, true)
 		if success and petInfo then
 			purchasedCount = purchasedCount + 1
 			table.insert(pets, petInfo)
 		else
 			break
 		end
+	end
+	
+	if purchasedCount > 0 then
+		-- Build a summary of hatched pets
+		local petCounts = {}
+		for _, petInfo in ipairs(pets) do
+			local name = petInfo.Name or "Unknown"
+			petCounts[name] = (petCounts[name] or 0) + 1
+		end
+		local parts = {}
+		for name, c in pairs(petCounts) do
+			if c > 1 then
+				table.insert(parts, string.format("%s x%d", name, c))
+			else
+				table.insert(parts, name)
+			end
+		end
+		NotificationService:SendNotification(
+			player,
+			string.format("Hatched %d eggs: %s", purchasedCount, table.concat(parts, ", ")),
+			NotificationService.Category.Success
+		)
 	end
 	
 	return purchasedCount, pets
