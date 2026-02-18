@@ -25,6 +25,8 @@ local summonButton: TextButton
 local starConnections = {}
 local healthConnection = nil
 local bossFightConnection = nil
+local playerDamageLoop = nil
+local BossService = nil
 
 local COLOR_HEALTH_ACTIVE = Color3.fromRGB(46, 204, 113)
 local COLOR_INACTIVE = Color3.fromRGB(255, 100, 50)
@@ -94,6 +96,26 @@ function MainBossController:IsPlayerInArena()
 	return playerInArena
 end
 
+function MainBossController:StartPlayerDamageLoop()
+	if playerDamageLoop then return end
+	playerDamageLoop = task.spawn(function()
+		while playerInArena and MainBossController:IsBossFightActive() do
+			if BossService then
+				BossService:PlayerDamageBoss()
+			end
+			task.wait(1)
+		end
+		playerDamageLoop = nil
+	end)
+end
+
+function MainBossController:StopPlayerDamageLoop()
+	if playerDamageLoop then
+		task.cancel(playerDamageLoop)
+		playerDamageLoop = nil
+	end
+end
+
 function MainBossController:SetInArena(inArena: boolean, arenaPart: BasePart?)
 	if playerInArena == inArena and lastArenaPart == arenaPart then return end
 	
@@ -114,7 +136,15 @@ function MainBossController:SetInArena(inArena: boolean, arenaPart: BasePart?)
 		
 		arenaPart.Material = Enum.Material.Neon
 		arenaPart.Color = Color3.fromRGB(255, 255, 0) -- Yellow
+
+		-- Start passive player damage while in arena
+		if self:IsBossFightActive() then
+			self:StartPlayerDamageLoop()
+		end
 	else
+		-- Stop passive player damage
+		self:StopPlayerDamageLoop()
+
 		-- Restore
 		if lastArenaPart then
 			lastArenaPart.Material = originalArenaMaterial
@@ -229,8 +259,14 @@ function MainBossController:SetupBossFightListener()
 	
 	local bossFight = statsFolder:FindFirstChild("BossFight")
 	if bossFight and bossFight:IsA("BoolValue") then
-		bossFightConnection = bossFight.Changed:Connect(function()
+		bossFightConnection = bossFight.Changed:Connect(function(active)
 			self:UpdateUnlockProgress()
+			-- Start or stop player damage loop based on fight state + arena presence
+			if active and playerInArena then
+				self:StartPlayerDamageLoop()
+			else
+				self:StopPlayerDamageLoop()
+			end
 		end)
 	end
 end
@@ -281,6 +317,8 @@ function MainBossController:KnitStart()
 		self:SetupBossFightListener()
 		self:UpdateUnlockProgress()
 	end)
+
+	BossService = Knit.GetService("BossService")
 
 	summonButton.MouseButton1Click:Connect(function()
 		local MonetizationService = Knit.GetService("MonetizationService")

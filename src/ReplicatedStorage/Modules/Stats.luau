@@ -95,6 +95,15 @@ end
 -- Boss spawn requirement (stars needed to trigger boss fight)
 Stats.BossUnlockRequirement = { Stars = 250 }
 
+-- Rewards given to all online players when a boss is defeated
+Stats.BossDefeatRewards = {
+	Cash = 500,           -- Flat cash reward per player
+	Potion = "SuperLuck", -- Potion granted on defeat (key from PotionsService definitions)
+}
+
+-- Player passive boss damage per second (while standing in arena)
+Stats.PlayerBossDamagePerSecond = 5
+
 -- Default pet attack rate against bosses (attacks per second)
 Stats.DefaultPetAttackRate = 1 -- 1 attack per second
 
