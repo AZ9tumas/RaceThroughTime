@@ -1,6 +1,7 @@
 -- client handler for main boss (single global boss system)
 
 local Players = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -279,6 +280,15 @@ function MainBossController:KnitStart()
 		self:SetupHealthListener()
 		self:SetupBossFightListener()
 		self:UpdateUnlockProgress()
+	end)
+
+	summonButton.MouseButton1Click:Connect(function()
+		local MonetizationService = Knit.GetService("MonetizationService")
+		MonetizationService:GetDevProductId("SummonBoss"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
 	end)
 
 	RunService.RenderStepped:Connect(CheckArenaOverlap)
