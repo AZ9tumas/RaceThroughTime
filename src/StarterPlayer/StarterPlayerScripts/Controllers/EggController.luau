@@ -25,6 +25,11 @@ local eggHatchDimmer: Frame = nil
 local eggviewport: ViewportFrame = nil
 local eggHatchFlash: Frame? = nil
 
+local multiEggHatchScreenGui: ScreenGui = nil
+local multiEggHatchDimmer: Frame = nil
+local multiEggViewports: { ViewportFrame } = {}
+local multiEggHatchFlash: Frame? = nil
+
 local CurrentWorldName = "Main"
 local EggConnections: { [string]: { RBXScriptConnection } } = {}
 local AutoHatchActive: { [string]: boolean } = {}
@@ -332,15 +337,15 @@ local function PurchaseMultipleEggs(eggName: string, count: number)
 		return
 	end
 	
-	-- Play animation ONCE, then batch purchase all eggs from server
+	-- Play animation on all 4 viewports simultaneously, then batch purchase
 	UIFramesController:DisableFrames(true)
-	eggviewport.Parent.Visible = true
+	multiEggHatchScreenGui.Dimmer.Visible = true
 	
-	EggHatchAnimation.PlayHatch(
-		eggviewport,
+	EggHatchAnimation.PlayMultiHatch(
+		multiEggViewports,
 		eggName,
-		eggHatchDimmer,
-		eggHatchFlash,
+		multiEggHatchDimmer,
+		multiEggHatchFlash,
 		function(animationSuccess)
 			if animationSuccess then
 				EggService:RequestPurchaseMultipleEggs(eggName, count):andThen(function(purchasedCount, pets)
@@ -358,7 +363,7 @@ local function PurchaseMultipleEggs(eggName: string, count: number)
 					end
 				end)
 			end
-			eggviewport.Parent.Visible = false
+			multiEggHatchScreenGui.Dimmer.Visible = false
 			UIFramesController:DisableFrames(false)
 			IsHatching = false
 		end
@@ -632,6 +637,15 @@ function EggController:KnitInit()
 	eggHatchDimmer = eggHatchScreenGui:WaitForChild("Dimmer")
 	eggviewport = eggHatchDimmer:WaitForChild("Viewport")
 	eggHatchFlash = eggHatchScreenGui:FindFirstChild("Flash")
+	
+	multiEggHatchScreenGui = PlayerGui:WaitForChild("MultipleEggHatchScreen")
+	multiEggHatchDimmer = multiEggHatchScreenGui:WaitForChild("Dimmer")
+	multiEggHatchFlash = multiEggHatchScreenGui:FindFirstChild("Flash")
+	multiEggViewports = {}
+	for i = 1, MULTI_HATCH_COUNT do
+		local frame = multiEggHatchDimmer:WaitForChild("Frame" .. i)
+		table.insert(multiEggViewports, frame:WaitForChild("ViewportFrame"))
+	end
 	
 	SetupUIButtons()
 end

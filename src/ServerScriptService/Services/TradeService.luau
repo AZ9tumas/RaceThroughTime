@@ -77,7 +77,7 @@ local PlayerTradingEnabled: { [number]: boolean } = {}
 
 -- Helper function for logging
 local function Log(message: string)
-	print(string.format("[TradeService]: %s", message))
+	--print(string.format("[TradeService]: %s", message))
 end
 
 -- Check if a player has trading enabled

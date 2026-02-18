@@ -287,6 +287,146 @@ function EggHatchAnimation.IsPlaying(): boolean
 	return isPlaying
 end
 
+--[[
+	Play the egg hatch animation on multiple viewports simultaneously.
+	All viewports animate in sync with sounds played once.
+	@param viewports - Array of ViewportFrames to render in
+	@param eggName - Name of the egg model to use from Assets/Eggs
+	@param dimmer - Optional Frame for dimming effect
+	@param flash - Optional Frame for flash effect
+	@param onComplete - Callback when animation is complete, receives true if successful
+]]
+function EggHatchAnimation.PlayMultiHatch(
+	viewports: { ViewportFrame },
+	eggName: string,
+	dimmer: Frame?,
+	flash: Frame?,
+	onComplete: ((success: boolean) -> ())?
+)
+	if isPlaying then
+		if onComplete then onComplete(false) end
+		return
+	end
+	
+	isPlaying = true
+	
+	local eggModels = {}
+	local primaryParts = {}
+	local cameras = {}
+	
+	-- Setup all viewports
+	for i, viewport in ipairs(viewports) do
+		local eggModel, primaryPart = setupEggModel(viewport, eggName)
+		if not eggModel or not primaryPart then
+			-- Clean up already-created models and fail
+			for _, model in ipairs(eggModels) do model:Destroy() end
+			for _, cam in ipairs(cameras) do cam:Destroy() end
+			isPlaying = false
+			if onComplete then onComplete(false) end
+			return
+		end
+		
+		local camera = setupCamera(viewport, primaryPart)
+		eggModels[i] = eggModel
+		primaryParts[i] = primaryPart
+		cameras[i] = camera
+		
+		scaleModel(eggModel, EggHatchStats.Effects.SpawnScaleStart)
+	end
+	
+	-- Dim background
+	if dimmer then
+		dimmer.BackgroundTransparency = 1
+		TweenService:Create(dimmer, TweenInfo.new(0.3), {BackgroundTransparency = 0.6}):Play()
+	end
+	
+	-- Play equip sound once
+	playSound(EggHatchStats.Sounds.Equip)
+	
+	-- Animate all eggs scale up simultaneously
+	local scaleUpDuration = EggHatchStats.Effects.SpawnScaleDuration
+	local scaleStart = EggHatchStats.Effects.SpawnScaleStart
+	local scaleEnd = EggHatchStats.Effects.SpawnScaleEnd
+	local scaleStartTime = tick()
+	
+	local scaleConnection
+	scaleConnection = RunService.RenderStepped:Connect(function()
+		local elapsed = tick() - scaleStartTime
+		local progress = math.min(elapsed / scaleUpDuration, 1)
+		
+		local t = 1 - progress
+		local overshoot = 1.70158
+		local easedProgress = 1 - (t * t * ((overshoot + 1) * t + overshoot))
+		
+		local currentScale = scaleStart + (scaleEnd - scaleStart) * easedProgress
+		for _, eggModel in ipairs(eggModels) do
+			scaleModel(eggModel, currentScale)
+		end
+		
+		if progress >= 1 then
+			scaleConnection:Disconnect()
+			
+			-- Shake all eggs in a single RenderStepped connection
+			local hatchTime = EggHatchStats.HatchTime
+			local shakeStart = tick()
+			local shakeConnection
+			
+			shakeConnection = RunService.RenderStepped:Connect(function()
+				local shakeElapsed = tick() - shakeStart
+				local shakeProgress = math.min(shakeElapsed / hatchTime, 1)
+				
+				local rotX, rotZ = EggHatchStats.CalculateShakeRotation(shakeElapsed, shakeProgress)
+				
+				for i, eggModel in ipairs(eggModels) do
+					applyShake(eggModel, primaryParts[i], rotX, rotZ)
+				end
+				
+				-- Crack sounds (once per frame, not per egg)
+				if math.random() < EggHatchStats.Sounds.CrackProbability then
+					playSound(EggHatchStats.Sounds.Crack)
+				end
+				
+				if shakeProgress >= 1 then
+					shakeConnection:Disconnect()
+					
+					-- Explosion sounds once
+					playSound(EggHatchStats.Sounds.Explode)
+					playSound(EggHatchStats.Sounds.Tada)
+					
+					-- Flash effect
+					if flash then
+						flash.BackgroundTransparency = 0
+						TweenService:Create(flash, TweenInfo.new(EggHatchStats.Effects.FlashDuration), {BackgroundTransparency = 1}):Play()
+					end
+					
+					-- Destroy all egg models
+					for _, model in ipairs(eggModels) do
+						model:Destroy()
+					end
+					
+					-- Wait for result display then fade out
+					task.delay(EggHatchStats.Effects.ResultDisplayTime, function()
+						if dimmer then
+							TweenService:Create(dimmer, TweenInfo.new(EggHatchStats.Effects.FadeOutDuration), {BackgroundTransparency = 1}):Play()
+						end
+						
+						task.delay(EggHatchStats.Effects.FadeOutDuration, function()
+							for _, cam in ipairs(cameras) do
+								cam:Destroy()
+							end
+							isPlaying = false
+							
+							if onComplete then
+								onComplete(true)
+							end
+						end)
+					end)
+				end
+			end)
+		end
+	end)
+end
+
 -- Force stop any playing animation
 function EggHatchAnimation.Stop()
 	isPlaying = false

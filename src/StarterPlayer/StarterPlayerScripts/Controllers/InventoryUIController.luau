@@ -55,7 +55,6 @@ function InventoryUIController:UpdatePetsInventory()
 	end
 	-- Calculate max equipped pets based on gamepass
 	local maxEquipped = statsM.MaxEquippedPets
-	warn(MonetizationController:HasGamePass("ExtraPets"), "ExtraPets")
 
 	if MonetizationController:HasGamePass("ExtraPets") then
 		maxEquipped = maxEquipped + statsM.ExtraPetsBonus
@@ -123,6 +122,7 @@ function InventoryUIController:UpdatePetsInventory()
 			TierName = petData.TierName,
 			Rarity = petData.Rarity,
 			Equipped = isEquipped,
+			Locked = petData.Locked,
 			Index = index,
 		}
 		

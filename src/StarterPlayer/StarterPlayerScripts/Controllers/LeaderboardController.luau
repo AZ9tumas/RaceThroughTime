@@ -54,11 +54,7 @@ local LeaderboardConfig = {
 	@param part BasePart - The part to clear
 ]]
 local function ClearPartChildren(part: BasePart)
-	for _, child in ipairs(part:GetChildren()) do
-		if child:IsA("SurfaceGui") then
-			child:Destroy()
-		end
-	end
+	part:ClearAllChildren()
 end
 
 --[[
@@ -74,7 +70,7 @@ local function PopulateLeaderboard(surfaceGui: SurfaceGui, entries: { { UserId: 
 	local scrollingFrame = frame:FindFirstChild("ScrollingFrame")
 	if not scrollingFrame then return end
 	
-	local template = scrollingFrame:FindFirstChild("Template")
+	local template = scrollingFrame.UIListLayout:FindFirstChild("Template")
 	if not template then return end
 	
 	-- Clear existing cloned entries (keep Template and UIListLayout)
@@ -88,10 +84,12 @@ local function PopulateLeaderboard(surfaceGui: SurfaceGui, entries: { { UserId: 
 	template.Visible = false
 	
 	-- Create entries
+	local UIController = Knit.GetController("UIController")
 	for rank, entry in ipairs(entries) do
 		local clone = template:Clone()
 		clone.Name = "Entry_" .. rank
-		clone.Text = string.format("#%d %s %s", rank, entry.Name, tostring(entry.Value))
+		local valueStr = UIController and UIController:TruncateNumber(entry.Value) or tostring(entry.Value)
+		clone.Text = string.format("#%d %s %s", rank, entry.Name, valueStr)
 		clone.Visible = true
 		clone.Parent = scrollingFrame
 	end
@@ -104,6 +102,7 @@ end
 	@param config table - Config with FetchMethod and Title
 ]]
 local function SetupLeaderboardOnPart(part: BasePart, config: { FetchMethod: string, Title: string })
+	--print(config, "fetch method") --- IGNORE ---
 	-- Clear existing SurfaceGuis
 	ClearPartChildren(part)
 	
@@ -115,18 +114,17 @@ local function SetupLeaderboardOnPart(part: BasePart, config: { FetchMethod: str
 	end
 	
 	-- Clone the SurfaceGui
-	local surfaceGui = leaderboardUITemplate:Clone()
+	local surfaceGui = leaderboardUITemplate:Clone() :: SurfaceGui
 	surfaceGui.Adornee = part
 	surfaceGui.Parent = part
 	
 	-- Set the title
-	local titleLabel = surfaceGui:FindFirstChild("TextLabel")
-	if titleLabel and titleLabel:IsA("TextLabel") then
-		titleLabel.Text = config.Title
-	end
+	local titleLabel = surfaceGui.Frame:FindFirstChild("TextLabel")
+	titleLabel.Text = config.Title
 	
 	-- Fetch data from server and populate
 	LeaderboardService[config.FetchMethod](LeaderboardService):andThen(function(entries)
+		--warn("Entries", entries)
 		if entries then
 			PopulateLeaderboard(surfaceGui, entries)
 		end

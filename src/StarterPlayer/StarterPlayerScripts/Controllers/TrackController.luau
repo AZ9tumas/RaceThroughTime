@@ -1017,7 +1017,6 @@ function TrackController:UpdateWorldFrameColors()
 	local nextWorld = Stats.WorldOrder[nextWorldIndex] and Stats.WorldUnlockRequirements[nextworldname] or {Rebirth = 0}
 	local worldProgress: Frame = globalView.Parent:FindFirstChild("WorldProgress")
 	local rebirths: TextLabel = worldProgress:WaitForChild("Rebirths")
-	warn(data.Stats.Rebirths, nextWorld.Rebirth)
 
 	rebirths.Text = data.Stats.Rebirths .. "/" .. nextWorld.Rebirth
 	worldProgress.WorldName.Text = nextworldname or "MAX"

@@ -27,7 +27,7 @@ local CachedLeaderboards = {
 
 -- Helper function for logging
 local function Log(message: string)
-	print(string.format("[LeaderboardService]: %s", message))
+	--print(string.format("[LeaderboardService]: %s", message))
 end
 
 
