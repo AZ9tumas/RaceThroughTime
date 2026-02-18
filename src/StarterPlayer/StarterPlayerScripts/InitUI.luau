@@ -25,10 +25,10 @@ function handler.UpdatePetsInventory()
 	end
 end
 
-function handler.UpdateMergedUI(petID: string)
+function handler.UpdateMergedUI(tierLevel: number, petType: string, world: string)
 	local PetModalUIController = Knit.GetController("PetModalUIController")
 	if PetModalUIController then
-		PetModalUIController:UpdateMergeUI(petID)
+		PetModalUIController:UpdateMergeUI(tierLevel, petType, world)
 	end
 end
 

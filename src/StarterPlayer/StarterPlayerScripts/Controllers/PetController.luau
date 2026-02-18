@@ -151,13 +151,13 @@ local function RefreshPetObjects()
 					PetObjects[model] = {
 						Player = owner,
 						PetParams = {
-							ID = model:GetAttribute("PetID") or "",
-							Name = model:GetAttribute("PetName") or "Pet",
-							PetType = model:GetAttribute("PetType") or "StandardPet",
-							Multiplier = model:GetAttribute("Multiplier") or 1.0,
+							ID = model:GetAttribute("PetID"),
+							Name = model:GetAttribute("PetName"),
+							PetType = model:GetAttribute("PetType"),
+							Multiplier = model:GetAttribute("Multiplier"),
 							RoamRange = model:GetAttribute("RoamRange"),
-							StarCollectionRadius = model:GetAttribute("StarCollectionRadius") or 5,
-							PetIndex = model:GetAttribute("PetIndex") or 1,
+							StarCollectionRadius = model:GetAttribute("StarCollectionRadius"),
+							PetIndex = model:GetAttribute("PetIndex"),
 						},
 						PetModel = model,
 					}

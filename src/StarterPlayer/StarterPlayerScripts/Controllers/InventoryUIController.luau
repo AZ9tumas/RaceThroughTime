@@ -110,6 +110,7 @@ function InventoryUIController:UpdatePetsInventory()
 		local fullPetData = {
 			ID = petData.ID,
 			Name = petData.Name,
+			PetType = petData.PetType,
 			Multiplier = petData.Multiplier,
 			PickupRangeBonus = petData.PickupRangeBonus,
 			RoamRange = petData.RoamRange,

@@ -464,6 +464,20 @@ Stats.Pets = {
 	}
 }
 
+do
+	for key, pet in pairs(Stats.Pets) do
+		pet.PetType = key
+	end
+	Stats.Pets = setmetatable(Stats.Pets, {
+		__newindex = function(self, key, value)
+			if type(value) == "table" then
+				value.PetType = key
+			end
+			rawset(self, key, value)
+		end,
+	})
+end
+
 -- Calculate total fuel bonus from all equipped pets
 -- Returns the sum of all equipped pets' bonuses (0 if no pets equipped)
 -- The bonus is added to the base 1.0 multiplier in CalculateFuelFromStars
