@@ -380,17 +380,32 @@ Stats.Eggs = {
 	},
 }
 
-Stats.TierColors = setmetatable({
-	[1] = Color3.fromRGB(255, 255, 255), -- Standard - White
-	[2] = Color3.fromRGB(0, 255, 255),   -- Premium - Cyan
-	[3] = Color3.fromRGB(255, 215, 0),   -- Limited Time - Gold
-	[4] = Color3.fromRGB(255, 0, 255),   -- Exclusive - Magenta
+Stats.Rarity = setmetatable({
+	[1] = {Name = "Common", Color = Color3.fromRGB(255, 255, 255)},   -- White
+	[2] = {Name = "Uncommon", Color = Color3.fromRGB(0, 255, 255)},   -- Cyan
+	[3] = {Name = "Rare", Color = Color3.fromRGB(255, 215, 0)},       -- Gold
+	[4] = {Name = "Epic", Color = Color3.fromRGB(255, 0, 255)},       -- Magenta
+	[5] = {Name = "Legendary", Color = Color3.fromRGB(255, 152, 0)},  -- Orange
+	[6] = {Name = "Mythic", Color = Color3.fromRGB(244, 67, 54)},     -- Red
+	[7] = {Name = "Divine", Color = Color3.fromRGB(255, 215, 0)},     -- Gold
 }, {
 	__index = function()
 		warn("Could not find tier color, defaulting to White")
 		return Color3.fromRGB(255, 255, 255) -- Default to White
 	end,
 })
+
+-- Get the maximum rarity tier level dynamically from Stats.Rarity
+-- Removing entries from Stats.Rarity will lower the max tier level
+function Stats.GetMaxRarityTierLevel(): number
+	local maxLevel = 0
+	for level in Stats.Rarity do
+		if level > maxLevel then
+			maxLevel = level
+		end
+	end
+	return maxLevel
+end
 
 -- Pet Configuration
 -- Pet types with their base stats
@@ -406,7 +421,7 @@ Stats.Pets = {
 		Velocity = 20, -- Pet movement speed (studs/sec)
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
-		Rarity = "Standard", -- Standard, Premium, or LimitedTime
+		Rarity = "Common", -- Common, Uncommon, Rare, or Epic
 	},
 	PremiumPet = {
 		Name = "Premium Pet",
@@ -419,7 +434,7 @@ Stats.Pets = {
 		Velocity = 25, -- Pet movement speed (studs/sec)
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
-		Rarity = "Premium", -- Standard, Premium, or LimitedTime
+		Rarity = "Uncommon", -- Common, Uncommon, Rare, or Epic
 	},
 	GoldenPet = {
 		Name = "Golden Pet",
@@ -432,7 +447,7 @@ Stats.Pets = {
 		Velocity = 30, -- Pet movement speed (studs/sec)
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
-		Rarity = "Exclusive", -- Standard, Premium, LimitedTime, or Exclusive
+		Rarity = "Rare", -- Common, Uncommon, Rare, or Epic
 	},
 	PercentagePet = {
 		Name = "Percentage Pet",
@@ -445,7 +460,7 @@ Stats.Pets = {
 		Velocity = 35, -- Pet movement speed (studs/sec)
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
-		Rarity = "Exclusive", -- Standard, Premium, LimitedTime, or Exclusive
+		Rarity = "Rare", -- Common, Uncommon, Rare, or Epic
 		Percentage = 40
 	},
 	LimitedPet = {
@@ -459,7 +474,7 @@ Stats.Pets = {
 		Velocity = 28, -- Pet movement speed (studs/sec)
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
-		Rarity = "LimitedTime", -- Standard, Premium, LimitedTime, or Exclusive
+		Rarity = "Epic", -- Common, Uncommon, Rare, or Epic
 		ExpireLength = 30, -- debug time: 30s
 	}
 }
@@ -557,6 +572,36 @@ function Stats.CalculateFuelFromStars(stars: number, petBonus: number, rebirthBo
 	-- If all bonuses are 0, use 1 as default multiplier
 	local totalMultiplier = totalBonuses > 0 and totalBonuses or 1
 	return math.floor(stars * totalMultiplier)
+end
+
+-- Calculate the effective probability for a pet option based on which luck distributions are active.
+-- There are exactly 4 states:
+--   1. No luck:       use Probability (base)
+--   2. Luck only:     use LuckProbability
+--   3. SuperLuck only: use SuperLuckProbability
+--   4. Both active:   stack — continue the Luck→SuperLuck progression by half a step
+--                     Formula: SuperLuckProb + (SuperLuckProb - LuckProb) * 0.5
+-- Sources (gamepass, potion, server bonus) only determine WHETHER a distribution is available.
+-- They do NOT affect the magnitude of the stacking.
+-- Sum-to-1.0 is preserved across all pet options because interpolation/extrapolation
+-- of distributions that each sum to 1.0 always produces a valid distribution.
+-- @param defaultProb number - The base Probability for this pet option
+-- @param luckProb number - The LuckProbability for this pet option
+-- @param superLuckProb number - The SuperLuckProbability for this pet option
+-- @param hasLuck boolean - Whether any Luck source is active (Luck gamepass, LuckParty, etc.)
+-- @param hasSuperLuck boolean - Whether any SuperLuck source is active (SuperLuck gamepass, SuperLuck potion, etc.)
+-- @return number - The effective probability
+function Stats.CalculateStackedProbability(defaultProb: number, luckProb: number, superLuckProb: number, hasLuck: boolean, hasSuperLuck: boolean): number
+	if hasLuck and hasSuperLuck then
+		-- Both active: continue the Luck→SuperLuck direction by half a step past SuperLuck
+		return superLuckProb + (superLuckProb - luckProb) * 0.5
+	elseif hasSuperLuck then
+		return superLuckProb
+	elseif hasLuck then
+		return luckProb
+	else
+		return defaultProb
+	end
 end
 
 return Stats

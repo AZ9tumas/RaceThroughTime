@@ -193,19 +193,14 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 		return
 	end
 
-	-- Check if player has Luck or SuperLuck gamepass for displaying updated probabilities
-	local hasSuperLuck = MonetizationController and MonetizationController:HasGamePass("SuperLuck")
+	-- Determine which probability distributions are available
 	local hasLuck = MonetizationController and MonetizationController:HasGamePass("Luck")
-	
-	-- Check if player has active SuperLuck potion
-	local PotionsController = Knit.GetController("PotionsController")
-	local hasSuperLuckPotion = PotionsController and PotionsController:HasPotionEffect("SuperLuck")
-
-	-- Check if LuckParty bonus is enabled
 	local ServerBonusController = Knit.GetController("ServerBonusController")
-	local hasLuckParty = ServerBonusController and ServerBonusController:IsBonusEnabled("LuckParty")
+	if not hasLuck then hasLuck = ServerBonusController and ServerBonusController:IsBonusEnabled("LuckParty") end
 
-	print(hasSuperLuckPotion, "hasSuperLuckPotion in EggController")
+	local hasSuperLuck = MonetizationController and MonetizationController:HasGamePass("SuperLuck")
+	local PotionsController = Knit.GetController("PotionsController")
+	if not hasSuperLuck then hasSuperLuck = PotionsController and PotionsController:HasPotionEffect("SuperLuck") end
 
 	for _, child in ipairs(contentFrame:GetChildren()) do
 		if child:IsA("GuiObject") and child.Name ~= "Template" and child ~= gridLayout and not child:IsA("UIGridLayout") then
@@ -214,16 +209,14 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 	end
 
 	for i, petOption in ipairs(eggConfig.Pets) do
-		print(petOption.LuckProbability, "luck probability for", petOption.Pet)
 		local petName = petOption.Pet
-		-- Priority: SuperLuck gamepass > Luck gamepass > Potion > LuckParty bonus > Default
-		local probability = petOption.Probability
-		
-		if hasSuperLuck then
-			probability = petOption.SuperLuckProbability
-		elseif hasLuck or hasSuperLuckPotion or hasLuckParty then
-			probability = petOption.LuckProbability
-		end
+		local probability = Stats.CalculateStackedProbability(
+			petOption.Probability,
+			petOption.LuckProbability or petOption.Probability,
+			petOption.SuperLuckProbability or petOption.Probability,
+			hasLuck,
+			hasSuperLuck
+		)
 		local petConfig = GetPetConfig(petName)
 
 		local newTemplate = template:Clone()

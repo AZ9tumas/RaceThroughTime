@@ -10,7 +10,9 @@ local DevProducts = require(ServerScriptService.Modules.DevProducts)
 
 local MonetizationService = Knit.CreateService({
 	Name = "MonetizationService",
-	Client = {},
+	Client = {
+		GamePassOwnershipChanged = Knit.CreateSignal(), -- (gamePassName: string, owned: boolean)
+	},
 })
 
 -- Expose Passes table for both server and client usage
@@ -47,16 +49,12 @@ function MonetizationService:HasGamePass(player: Player, gamePassName: string): 
 		CheckAllGamePasses(player)
 	end
 
-	local debugPanel = DebugOverrides[userId] and DebugOverrides[userId][gamePassName]
-	local actual = PlayerGamePasses[userId][gamePassName] or false
+	-- Debug override is additive: if debug says true OR marketplace says true, player owns it.
+	-- This allows testing gamepasses via debug panel while also testing the real purchase flow.
+	local debugOwned = DebugOverrides[userId] and DebugOverrides[userId][gamePassName] == true
+	local actual = PlayerGamePasses[userId][gamePassName] == true
 
-	if debugPanel then
-		warn("Choosing debug panel")
-		return debugPanel
-	else
-		warn("Choosing actual value")
-		return actual
-	end
+	return debugOwned or actual
 end
 
 function MonetizationService:GetStarsMultiplier(player: Player): number
@@ -87,6 +85,9 @@ function MonetizationService.Client:SetDebugGamePass(player: Player, gamePassNam
 		end
 		DebugOverrides[userId][gamePassName] = owned
 		print("[MonetizationService]: ", DebugOverrides)
+		
+		-- Notify the client with the combined result (debug OR actual)
+		MonetizationService.Client.GamePassOwnershipChanged:Fire(player, gamePassName, MonetizationService:HasGamePass(player, gamePassName))
 		
 		-- Fire DataReady to update client UI when gamepass ownership changes
 		local DataService = Knit.GetService("DataService")
@@ -121,6 +122,9 @@ function MonetizationService:KnitInit()
 			for gamePassName, id in pairs(GamePassIds) do
 				if id == gamePassId then
 					PlayerGamePasses[userId][gamePassName] = true
+					
+					-- Notify the client that ownership changed (server is authoritative)
+					MonetizationService.Client.GamePassOwnershipChanged:Fire(player, gamePassName, true)
 					
 					-- Fire DataReady to update client UI when gamepass is purchased
 					local DataService = Knit.GetService("DataService")

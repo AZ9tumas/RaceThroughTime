@@ -25,6 +25,7 @@ export type PetData = {
 	TierName: string?,
 	Rarity: string?,
 	Equipped: boolean?,
+	Locked: boolean?,
 	Index: number,
 }
 
@@ -85,6 +86,8 @@ export type UIColors = {
 	StrokeDefault: Color3,
 	EquipEnabled: Color3,
 	EquipDisabled: Color3,
+	LockEnabled: Color3,
+	LockDisabled: Color3,
 }
 
 local PetModalUIController = Knit.CreateController({
@@ -101,6 +104,8 @@ local Colors: UIColors = {
 	StrokeDefault = Color3.fromRGB(49, 49, 49),
 	EquipEnabled = Color3.fromRGB(80, 200, 80),
 	EquipDisabled = Color3.fromRGB(200, 80, 80),
+	LockEnabled = Color3.fromRGB(200, 160, 40),
+	LockDisabled = Color3.fromRGB(100, 100, 100),
 }
 
 local DEBUG_COLORS = {
@@ -158,6 +163,22 @@ local function UpdateEquipButtonAppearance(isEquipped: boolean)
 		UI.PetModal.EquipEmoji.Text = "✅"
 		UI.PetModal.EquipLabel.Text = "Equip"
 		UI.PetModal.EquipButton.BackgroundColor3 = Colors.EquipEnabled
+	end
+end
+
+local function UpdateLockButtonAppearance(isLocked: boolean)
+	local lockButton = UI.PetModal.LockButton
+	if not lockButton then return end
+	local emoji = lockButton:FindFirstChild("Emoji")
+	local label = lockButton:FindFirstChild("TextLabel")
+	if isLocked then
+		if emoji then emoji.Text = "🔒" end
+		if label then label.Text = "Locked" end
+		lockButton.BackgroundColor3 = Colors.LockEnabled
+	else
+		if emoji then emoji.Text = "🔓" end
+		if label then label.Text = "Unlocked" end
+		lockButton.BackgroundColor3 = Colors.LockDisabled
 	end
 end
 
@@ -567,8 +588,10 @@ end
 function PetModalUIController:OpenPetModal(petData: PetData)
 	local UIFramesController = Knit.GetController("UIFramesController")
 	State.SelectedPetData = petData
+	UI.PetModal.NameLabel.Text = petData.Name or "Unknown"
 	UI.PetModal.Multiplier.Text = string.format("x%.1f Multiplier", petData.Multiplier)
 	UpdateEquipButtonAppearance(petData.Equipped or false)
+	UpdateLockButtonAppearance(petData.Locked or false)
 	UIFramesController:OpenFrame("PetModal")
 end
 
@@ -637,6 +660,9 @@ function PetModalUIController:KnitInit()
 		EquipLabel = nil :: any,
 		MergeButton = nil :: any,
 		Multiplier = nil :: any,
+		NameLabel = nil :: any,
+		DeleteButton = nil :: any,
+		LockButton = nil :: any,
 	}
 	
 	UI.PetModal.DarkOverlay = UI.PetModal.ScreenGui:WaitForChild("DarkOverlay")
@@ -647,6 +673,9 @@ function PetModalUIController:KnitInit()
 	UI.PetModal.EquipLabel = UI.PetModal.EquipButton:WaitForChild("TextLabel")
 	UI.PetModal.MergeButton = UI.PetModal.MainFrame:WaitForChild("MergeButton")
 	UI.PetModal.Multiplier = UI.PetModal.MainFrame:WaitForChild("Multiplier")
+	UI.PetModal.NameLabel = UI.PetModal.MainFrame:WaitForChild("Name")
+	UI.PetModal.DeleteButton = UI.PetModal.MainFrame:WaitForChild("Delete")
+	UI.PetModal.LockButton = UI.PetModal.MainFrame:WaitForChild("Lock")
 
 	-- Debug button already exists in the MainFrame
 	UI.PetModal.DebugButton = UI.PetModal.MainFrame:WaitForChild("Debug")
@@ -758,6 +787,11 @@ function PetModalUIController:KnitStart()
 		end
 		
 		local tierLevel = State.SelectedPetData.TierLevel or State.SelectedPetData.Level or 1
+		local maxRarityTier = Stats.GetMaxRarityTierLevel()
+		if tierLevel >= maxRarityTier then
+			warn("[PetModalUIController] Pet is already at maximum rarity tier level.")
+			return
+		end
 		local petType = State.SelectedPetData.PetType
 		local world = State.SelectedPetData.World
 		if not petType or not world then
@@ -777,7 +811,77 @@ function PetModalUIController:KnitStart()
 			debugFrame.Visible = not debugFrame.Visible
 		end
 	end)
+
+	Connections["PetModalDelete"] = UI.PetModal.DeleteButton.MouseButton1Click:Connect(function()
+		if not State.SelectedPetData then
+			return
+		end
+
+		if State.Debounce.EquipAction then
+			return
+		end
+
+		State.Debounce.EquipAction = true
+
+		local petID = State.SelectedPetData.ID
+		services.Pet:RequestDeletePet(petID):andThen(function(success, errorMsg)
+			if success then
+				self:ClosePetModal()
+				controllers.Inventory:UpdatePetsInventory()
+			else
+				controllers.Notification:ShowNotification(
+					"Failed to delete pet: " .. (errorMsg or "Unknown error"),
+					controllers.Notification.Category.Error,
+					3
+				)
+			end
+
+			State.Debounce.EquipAction = false
+		end)
+	end)
 	
+	Connections["PetModalLock"] = UI.PetModal.LockButton.MouseButton1Click:Connect(function()
+		if not State.SelectedPetData then
+			return
+		end
+
+		if State.Debounce.EquipAction then
+			return
+		end
+
+		State.Debounce.EquipAction = true
+
+		local petID = State.SelectedPetData.ID
+		services.Pet:RequestToggleLockPet(petID):andThen(function(success, errorMsg)
+			if not success then
+				controllers.Notification:ShowNotification(
+					"Failed to toggle lock: " .. (errorMsg or "Unknown error"),
+					controllers.Notification.Category.Error,
+					3
+				)
+			end
+			-- Do NOT update lock button here - DataReady will handle it
+
+			State.Debounce.EquipAction = false
+		end)
+	end)
+
+	-- Listen for DataReady to refresh lock button when pet modal is open
+	local DataService = Knit.GetService("DataService")
+	Connections["DataReadyLockRefresh"] = DataService.DataReady:Connect(function(newData)
+		if not State.SelectedPetData then return end
+		-- Find the currently selected pet in the new data by ID
+		local petInventory = newData and newData.Inventory and newData.Inventory.PetInventory
+		if not petInventory then return end
+		for _, petData in ipairs(petInventory) do
+			if petData.ID == State.SelectedPetData.ID then
+				State.SelectedPetData.Locked = petData.Locked == true
+				UpdateLockButtonAppearance(State.SelectedPetData.Locked)
+				break
+			end
+		end
+	end)
+
 	Connections["MergeSelectAll"] = UI.Merge.SelectAllButton.MouseButton1Click:Connect(function()
 		SelectAllPets()
 	end)
@@ -798,11 +902,10 @@ function PetModalUIController:KnitStart()
 			if tierLevel >= 1 and tierLevel <= 3 then
 				State.Debounce.MergeExecution = true
 				
-				local selectedIndexes = GetSelectedPetIndexes()
 				local selectedIDs = GetSelectedPetIDs()
 				
 				-- Store pending merge data on server
-				services.Pet:StorePendingMerge(tierLevel, selectedIndexes, selectedIDs):andThen(function(stored)
+				services.Pet:StorePendingMerge(tierLevel, selectedIDs):andThen(function(stored)
 					if stored then
 						-- Get the appropriate dev product ID
 						local MonetizationService = Knit.GetService("MonetizationService")
@@ -851,10 +954,9 @@ function PetModalUIController:KnitStart()
 		
 		State.Debounce.MergeExecution = true
 		
-		local selectedIndexes = GetSelectedPetIndexes()
 		local selectedIDs = GetSelectedPetIDs()
 		
-		services.Pet:RequestMergePets(selectedIndexes, selectedIDs):andThen(function(success, errorMsg, resultData)
+		services.Pet:RequestMergePets(selectedIDs):andThen(function(success, errorMsg, resultData)
 			if success then
 				UIFramesController:CloseAllFrames()
 				

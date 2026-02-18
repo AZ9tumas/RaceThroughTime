@@ -80,31 +80,26 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 	-- Support both old format (single Pet) and new format (Pets array with probabilities)
 	if eggConfig.Pets and #eggConfig.Pets > 0 then
 		-- New format: select pet based on probability
-		-- Check if player has Luck or SuperLuck gamepass for better probabilities
-		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
+		-- Determine which probability distributions are available
 		local hasLuck = MonetizationService:HasGamePass(player, "Luck")
-		
-		-- Check if player has active SuperLuck potion
-		local PotionsService = Knit.GetService("PotionsService")
-		local hasSuperLuckPotion = PotionsService:HasPotionEffect(player, "SuperLuck")
-		print(hasSuperLuckPotion, "hasSuperLuckPotion in EggService")
-		
-		-- Check if LuckParty bonus is enabled
 		local ServerBonusService = Knit.GetService("ServerBonusService")
-		local hasLuckParty = ServerBonusService:IsBonusEnabled("LuckParty")
+		if not hasLuck then hasLuck = ServerBonusService:IsBonusEnabled("LuckParty") end
+		
+		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
+		local PotionsService = Knit.GetService("PotionsService")
+		if not hasSuperLuck then hasSuperLuck = PotionsService:HasPotionEffect(player, "SuperLuck") end
 		
 		local random = math.random()
 		local cumulativeProbability = 0
 		
 		for _, petOption in ipairs(eggConfig.Pets) do
-			print(petOption.LuckProbability, "luck probability for", petOption.Pet)
-			-- Priority: SuperLuck gamepass > Luck gamepass > Potion > LuckParty bonus > Default
-			local probability = petOption.Probability
-			if hasSuperLuck then
-				probability = petOption.SuperLuckProbability
-			elseif hasLuck or hasSuperLuckPotion or hasLuckParty then
-				probability = petOption.LuckProbability
-			end
+			local probability = Stats.CalculateStackedProbability(
+				petOption.Probability,
+				petOption.LuckProbability or petOption.Probability,
+				petOption.SuperLuckProbability or petOption.Probability,
+				hasLuck,
+				hasSuperLuck
+			)
 			cumulativeProbability = cumulativeProbability + probability
 			if random <= cumulativeProbability then
 				petType = petOption.Pet
@@ -143,6 +138,7 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 	end
 
 	finalPetEntry.ObtainedAt = os.time()
+	finalPetEntry.Locked = false
 	
 	DataService:Update(player, "Inventory", function(inventory)
 		if not inventory.PetInventory then
@@ -209,32 +205,27 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	-- Support both old format (single Pet) and new format (Pets array with probabilities)
 	if eggConfig.Pets and #eggConfig.Pets > 0 then
 		-- New format: select pet based on probability
-		-- Check if player has Luck or SuperLuck gamepass for better probabilities
+		-- Determine which probability distributions are available
 		local MonetizationService = Knit.GetService("MonetizationService")
-		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
 		local hasLuck = MonetizationService:HasGamePass(player, "Luck")
-		
-		-- Check if player has active SuperLuck potion
-		local PotionsService = Knit.GetService("PotionsService")
-		local hasSuperLuckPotion = PotionsService:HasPotionEffect(player, "SuperLuck")
-		
-		-- Check if LuckParty bonus is enabled
 		local ServerBonusService = Knit.GetService("ServerBonusService")
-		local hasLuckParty = ServerBonusService:IsBonusEnabled("LuckParty")
+		if not hasLuck then hasLuck = ServerBonusService:IsBonusEnabled("LuckParty") end
+		
+		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
+		local PotionsService = Knit.GetService("PotionsService")
+		if not hasSuperLuck then hasSuperLuck = PotionsService:HasPotionEffect(player, "SuperLuck") end
 		
 		local random = math.random()
 		local cumulativeProbability = 0
 		
 		for _, petOption in ipairs(eggConfig.Pets) do
-			-- Priority: SuperLuck potion > SuperLuck gamepass > Luck gamepass OR LuckParty bonus > Default
-			local probability = petOption.Probability
-			if hasSuperLuckPotion and petOption.LuckProbability then
-				probability = petOption.LuckProbability
-			elseif hasSuperLuck and petOption.SuperLuckProbability then
-				probability = petOption.SuperLuckProbability
-			elseif (hasLuck or hasLuckParty) and petOption.LuckProbability then
-				probability = petOption.LuckProbability
-			end
+			local probability = Stats.CalculateStackedProbability(
+				petOption.Probability,
+				petOption.LuckProbability or petOption.Probability,
+				petOption.SuperLuckProbability or petOption.Probability,
+				hasLuck,
+				hasSuperLuck
+			)
 			cumulativeProbability = cumulativeProbability + probability
 			if random <= cumulativeProbability then
 				petType = petOption.Pet
@@ -319,6 +310,7 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	end
 
 	finalPetEntry.ObtainedAt = os.time()
+	finalPetEntry.Locked = false
 	
 	DataService:Update(player, "Inventory", function(inventory)
 		if not inventory.PetInventory then

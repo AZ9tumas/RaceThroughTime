@@ -172,6 +172,7 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 					TierName = "Common",
 					Rarity = "Rebirth", -- Special rarity for rebirth pets
 					ObtainedAt = os.time(),
+					Locked = false,
 				}
 				table.insert(inventory.PetInventory, petEntry)
 				newPetIndex = #inventory.PetInventory
@@ -197,6 +198,7 @@ function RebirthService:PerformRebirth(player: Player): (boolean, string?, any?)
 					TierName = "Common",
 					Rarity = "Rebirth",
 					ObtainedAt = os.time(),
+					Locked = false,
 				}
 			end
 		end
@@ -345,6 +347,7 @@ function RebirthService:ForceRebirth(player: Player): (boolean, string?, any?)
 					TierName = "Common",
 					Rarity = "Rebirth",
 					ObtainedAt = os.time(),
+					Locked = false,
 				}
 				table.insert(inventory.PetInventory, petEntry)
 				newPetIndex = #inventory.PetInventory
@@ -368,6 +371,7 @@ function RebirthService:ForceRebirth(player: Player): (boolean, string?, any?)
 					TierName = "Common",
 					Rarity = "Rebirth",
 					ObtainedAt = os.time(),
+					Locked = false,
 				}
 			end
 		end

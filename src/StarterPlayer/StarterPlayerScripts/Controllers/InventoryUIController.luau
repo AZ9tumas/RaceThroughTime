@@ -99,7 +99,7 @@ function InventoryUIController:UpdatePetsInventory()
 		end
 		
 		local isEquipped = equippedSet[index] == true
-		petFrame.UIStroke.Color = statsM.TierColors[petData.TierLevel]
+		petFrame.UIStroke.Color = statsM.Rarity[petData.TierLevel].Color
 		
 		if isEquipped then
 			petFrame.BackgroundColor3 = DefaultBackgroundColorSelected

@@ -67,6 +67,10 @@ local function ApplyRewardItems(player: Player, items: { { ItemType: string, Qua
 			local petConfig = Stats.Pets[item.PetId]
 			
 			if petConfig then
+				local HttpService = game:GetService("HttpService")
+				local petID = HttpService:GenerateGUID(false)
+				local newPetIndex = nil
+				
 				DataService:Update(player, "Inventory", function(inventory)
 					if not inventory.PetInventory then
 						inventory.PetInventory = {}
@@ -79,9 +83,18 @@ local function ApplyRewardItems(player: Player, items: { { ItemType: string, Qua
 					end
 
 					petEntry.ObtainedAt = os.time()
+					petEntry.Locked = false
 					table.insert(inventory.PetInventory, petEntry)
+					newPetIndex = #inventory.PetInventory
 					return inventory
 				end)
+				
+				-- Register runtime pet ID and notify client
+				if newPetIndex then
+					local PetService = Knit.GetService("PetService")
+					PetService:RegisterPetID(player, newPetIndex, petID)
+					DataService:FireDataReady(player)
+				end
 			end
 		end
 	end

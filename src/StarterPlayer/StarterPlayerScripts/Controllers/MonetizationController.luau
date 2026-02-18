@@ -37,18 +37,17 @@ function IsStudio()
 end
 
 function MonetizationController:HasGamePass(gamePassName: string): boolean
-	-- In Studio, check debug overrides first
-	if IsStudio() then
-		return DebugOverrides[gamePassName]
-	end
-	return OwnedPasses[gamePassName]
+	-- Server is the single source of truth. OwnedPasses is kept in sync
+	-- via GamePassOwnershipChanged signal (fires on purchase + debug toggle).
+	return OwnedPasses[gamePassName] == true
 end
 
 -- Debug function to set gamepass ownership (only works in Studio)
 function MonetizationController:SetDebugGamePass(gamePassName: string, owned: boolean)
 	if IsStudio() then
 		DebugOverrides[gamePassName] = owned
-		-- Also notify the server to update its debug overrides
+		-- Notify server — it will fire GamePassOwnershipChanged signal back
+		-- with the combined (debug OR actual) result, updating OwnedPasses
 		if MonetizationService then
 			MonetizationService:SetDebugGamePass(gamePassName, owned)
 		end
@@ -83,24 +82,11 @@ function MonetizationController:KnitStart()
 		end
 	end):catch(warn)
 	
-	-- Update on purchase
-	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamePassId, wasPurchased)
-		if player == Players.LocalPlayer and wasPurchased then
-			for name, id in pairs(GamePassIds) do
-				if id == gamePassId then
-					OwnedPasses[name] = true
-					MonetizationController.GamePassChanged:Fire(name, true)
-					-- Also refresh from server to be safe
-					MonetizationService:GetPlayerPasses():andThen(function(passes)
-						if passes then
-							OwnedPasses = passes
-							MonetizationController.GamePassChanged:Fire(name, true)
-						end
-					end)
-					break
-				end
-			end
-		end
+	-- Listen for server-authoritative ownership changes (purchase + debug toggle).
+	-- Server fires this signal whenever HasGamePass result changes for this player.
+	MonetizationService.GamePassOwnershipChanged:Connect(function(gamePassName, owned)
+		OwnedPasses[gamePassName] = owned
+		MonetizationController.GamePassChanged:Fire(gamePassName, owned)
 	end)
 end
 
