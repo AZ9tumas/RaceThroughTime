@@ -70,7 +70,7 @@ local data = {
 	Currencies = { Cash = 0, Gems = 0 },
 	Stats = { Points = 0, Rebirths = 0, Fuel = 100, Stars = 0 },
 	Progression = { CurrentWorld = "Main", UnlockedWorlds = { "Main" } },
-	Inventory = { PetInventory = {}, EquippedPets = {}, Potions = {} },
+	Inventory = { PetInventory = {}, EquippedPets = {}, ConsumedPotions = {}, Potions = {} },
 	Meta = { DailyStreak = 0, LastClaim = 0, CollectedRewards = {}, UpdateVersion = 0, Settings = { Music = true, SFX = true, HidePets = false, TradingEnabled = true } },
 }
 

@@ -76,6 +76,33 @@ local UI = {
 export type ShopUIStructure = typeof(UI)
 local _connections = {}
 
+-- Helper: get quantity of a potion from inventory data (Potions array)
+local function GetPotionQuantity(potionsArray: {{PotionKey: string, Quantity: number}}?, potionKey: string): number
+	if not potionsArray then return 0 end
+	for _, entry in ipairs(potionsArray) do
+		if entry.PotionKey == potionKey then
+			return entry.Quantity or 0
+		end
+	end
+	return 0
+end
+
+-- Update all potion UseButton labels from the given inventory data
+local function UpdatePotionUseButtons(potionsArray: {{PotionKey: string, Quantity: number}}?)
+	local potionFrames = {
+		{ key = "SuperLuck",      frame = UI.Frames.Potions.SuperLuck },
+		{ key = "PointsOverload", frame = UI.Frames.Potions.PointsOverload },
+		{ key = "MagnetPulse",    frame = UI.Frames.Potions.MagnetPulse },
+	}
+	for _, info in ipairs(potionFrames) do
+		local qty = GetPotionQuantity(potionsArray, info.key)
+		local useBtn = info.frame and info.frame:FindFirstChild("UseButton")
+		if useBtn then
+			useBtn.Text = "USE (" .. qty .. ")"
+		end
+	end
+end
+
 function ShopUIController:UpdateShopUI()
 end
 
@@ -224,6 +251,11 @@ function ShopUIController:KnitStart()
 		end)
 	end)
 
+	_connections["UseSuperLuck"] = UI.Frames.Potions.SuperLuck.UseButton.MouseButton1Click:Connect(function()
+		local PotionsService = Knit.GetService("PotionsService")
+		PotionsService:ConsumePotion("SuperLuck")
+	end)
+
 	_connections["PointsOverload"] = UI.Frames.Potions.PointsOverload.TextButton.MouseButton1Click:Connect(function()
 		local MonetizationService = Knit.GetService("MonetizationService")
 		MonetizationService:GetDevProductId("PointsOverload"):andThen(function(productId)
@@ -240,6 +272,16 @@ function ShopUIController:KnitStart()
 				MarketplaceService:PromptProductPurchase(player, productId)
 			end
 		end)
+	end)
+
+	_connections["UsePointsOverload"] = UI.Frames.Potions.PointsOverload.UseButton.MouseButton1Click:Connect(function()
+		local PotionsService = Knit.GetService("PotionsService")
+		PotionsService:ConsumePotion("PointsOverload")
+	end)
+
+	_connections["UseMagnetPulse"] = UI.Frames.Potions.MagnetPulse.UseButton.MouseButton1Click:Connect(function()
+		local PotionsService = Knit.GetService("PotionsService")
+		PotionsService:ConsumePotion("MagnetPulse")
 	end)
 
 	-- redeem button setup
@@ -264,6 +306,19 @@ function ShopUIController:KnitStart()
 	_connections["LuckGamepass"] = UI.Frames.Gamepasses.LuckFrame.TextButton.MouseButton1Click:Connect(function()
 		MonetizationController:PromptPurchase("Luck")
 	end)
+
+	-- Listen for data updates to refresh potion UseButton labels
+	local DataService = Knit.GetService("DataService")
+	_connections["PotionDataReady"] = DataService.DataReady:Connect(function(newData)
+		local potionsArray = newData and newData.Inventory and newData.Inventory.Potions
+		UpdatePotionUseButtons(potionsArray)
+	end)
+
+	-- Initial update from cached data
+	local data = UIController:GetData()
+	if data and data.Inventory then
+		UpdatePotionUseButtons(data.Inventory.Potions)
+	end
 end
 
 return ShopUIController

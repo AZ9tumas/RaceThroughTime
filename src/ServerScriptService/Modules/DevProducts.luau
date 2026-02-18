@@ -282,27 +282,24 @@ function DevProducts.Initialize(Knit)
 		[DevProducts.Ids.SuperLuck] = {
 			Name = "SuperLuck",
 			OnPurchase = function(player)
-				-- Apply Super Luck effect to player
 				local PotionsService = Knit.GetService("PotionsService")
-				local success = PotionsService:AddPotion(player, "SuperLuck")
+				local success = PotionsService:AddPotionToInventory(player, "SuperLuck")
 				return success
 			end
 		},
 		[DevProducts.Ids.PointsOverload] = {
 			Name = "PointsOverload",
 			OnPurchase = function(player)
-				-- Apply Points Overload effect to player (x3 distance multiplier)
 				local PotionsService = Knit.GetService("PotionsService")
-				local success = PotionsService:AddPotion(player, "PointsOverload")
+				local success = PotionsService:AddPotionToInventory(player, "PointsOverload")
 				return success
 			end
 		},
 		[DevProducts.Ids.MagnetPulse] = {
 			Name = "MagnetPulse",
 			OnPurchase = function(player)
-				-- Apply Magnet Pulse effect to player (50 stud star collection range)
 				local PotionsService = Knit.GetService("PotionsService")
-				local success = PotionsService:AddPotion(player, "MagnetPulse")
+				local success = PotionsService:AddPotionToInventory(player, "MagnetPulse")
 				return success
 			end
 		},
