@@ -657,9 +657,10 @@ local function UpdateBillboardAdornees(worldName: string)
 		return
 	end
 	
-	local uiHatchBoard = PlayerGui:FindFirstChild("UI_HatchBoard")
+	local uiHatchBoard = PlayerGui:FindFirstChild("UI_HatchBoard") :: BillboardGui
 	if uiHatchBoard and uiHatchBoard:IsA("BillboardGui") then
 		uiHatchBoard.Adornee = eggRoot
+		uiHatchBoard.Enabled = true
 	end
 
 	SetupUIButtons()
