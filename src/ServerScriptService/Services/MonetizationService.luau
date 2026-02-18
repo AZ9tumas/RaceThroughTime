@@ -84,16 +84,13 @@ function MonetizationService.Client:SetDebugGamePass(player: Player, gamePassNam
 			DebugOverrides[userId] = {}
 		end
 		DebugOverrides[userId][gamePassName] = owned
-		print("[MonetizationService]: ", DebugOverrides)
 		
 		-- Notify the client with the combined result (debug OR actual)
 		MonetizationService.Client.GamePassOwnershipChanged:Fire(player, gamePassName, MonetizationService:HasGamePass(player, gamePassName))
 		
 		-- Fire DataReady to update client UI when gamepass ownership changes
 		local DataService = Knit.GetService("DataService")
-		if DataService then
-			DataService:FireDataReady(player)
-		end
+		DataService:FireDataReady(player)
 	end
 end
 
