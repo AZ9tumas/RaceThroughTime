@@ -1,21 +1,3 @@
---[[
-	LeaderboardService
-	Manages global leaderboards using OrderedDataStores.
-	
-	Tracks:
-	- Top N players by Rebirths
-	- Top N players by Max Distance Traveled
-	- Top N players by Cash
-	
-	Data is refreshed periodically and cached for efficient client requests.
-	OrderedDataStores are updated when players join and leave.
-	
-	Usage:
-	- LeaderboardService:GetTopRebirths() :: { { UserId: number, Name: string, Value: number } }
-	- LeaderboardService:GetTopDistance() :: { { UserId: number, Name: string, Value: number } }
-	- LeaderboardService:GetTopCash() :: { { UserId: number, Name: string, Value: number } }
-]]
-
 local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -48,12 +30,7 @@ local function Log(message: string)
 	print(string.format("[LeaderboardService]: %s", message))
 end
 
---[[
-	Save a player's stats to all ordered data stores.
-	Called on player join and leave to keep leaderboards up to date.
-	
-	@param player Player - The player whose data to save
-]]
+
 local function SavePlayerToStores(player: Player)
 	local DataService = Knit.GetService("DataService")
 
@@ -95,14 +72,6 @@ local function SavePlayerToStores(player: Player)
 	end
 end
 
---[[
-	Fetch the top N entries from an ordered data store.
-	Returns a sorted list of { UserId, Name, Value } entries.
-	
-	@param orderedStore OrderedDataStore - The data store to query
-	@param count number - Number of top entries to fetch
-	@return { { UserId: number, Name: string, Value: number } }
-]]
 local function FetchTopEntries(orderedStore, count: number): { { UserId: number, Name: string, Value: number } }
 	local entries = {}
 
@@ -157,29 +126,14 @@ local function RefreshLeaderboards()
 	))
 end
 
---[[
-	Get the top N players by Rebirths.
-	
-	@return { { UserId: number, Name: string, Value: number } }
-]]
 function LeaderboardService:GetTopRebirths(): { { UserId: number, Name: string, Value: number } }
 	return CachedLeaderboards.Rebirths
 end
 
---[[
-	Get the top N players by Max Distance Traveled.
-	
-	@return { { UserId: number, Name: string, Value: number } }
-]]
 function LeaderboardService:GetTopDistance(): { { UserId: number, Name: string, Value: number } }
 	return CachedLeaderboards.MaxDistance
 end
 
---[[
-	Get the top N players by Cash.
-	
-	@return { { UserId: number, Name: string, Value: number } }
-]]
 function LeaderboardService:GetTopCash(): { { UserId: number, Name: string, Value: number } }
 	return CachedLeaderboards.Cash
 end
