@@ -19,7 +19,7 @@ local PetMergeStats = {}
 -- FinalMultiplier: Target multiplier for pets at this rarity tier
 PetMergeStats.RarityTiers = {
 	-- Tier 1: Common (easy to obtain, low grind)
-	{
+	[1] = {
 		Name = "Common",
 		TierLevel = 1,
 		CopiesRequired = 3, -- Need 3 copies to merge
@@ -29,7 +29,7 @@ PetMergeStats.RarityTiers = {
 		Color = Color3.fromRGB(128, 128, 128), -- Gray
 	},
 	-- Tier 2: Uncommon
-	{
+	[2] = {
 		Name = "Uncommon",
 		TierLevel = 2,
 		CopiesRequired = 3, -- Need 3 copies to merge
@@ -39,7 +39,7 @@ PetMergeStats.RarityTiers = {
 		Color = Color3.fromRGB(76, 175, 80), -- Green
 	},
 	-- Tier 3: Rare
-	{
+	[3] = {
 		Name = "Rare",
 		TierLevel = 3,
 		CopiesRequired = 3, -- Need 3 copies to merge
@@ -49,7 +49,7 @@ PetMergeStats.RarityTiers = {
 		Color = Color3.fromRGB(33, 150, 243), -- Blue
 	},
 	-- Tier 4: Epic (GRIND WALL STARTS HERE)
-	{
+	[4] = {
 		Name = "Epic",
 		TierLevel = 4,
 		CopiesRequired = 8, -- GRIND WALL: Jump from 3 to 8
@@ -59,7 +59,7 @@ PetMergeStats.RarityTiers = {
 		Color = Color3.fromRGB(156, 39, 176), -- Purple
 	},
 	-- Tier 5: Legendary
-	{
+	[5] = {
 		Name = "Legendary",
 		TierLevel = 5,
 		CopiesRequired = 10, -- Need 10 copies to merge
@@ -69,7 +69,7 @@ PetMergeStats.RarityTiers = {
 		Color = Color3.fromRGB(255, 152, 0), -- Orange
 	},
 	-- Tier 6: Mythic
-	{
+	[6] = {
 		Name = "Mythic",
 		TierLevel = 6,
 		CopiesRequired = 12, -- Need 12 copies to merge
@@ -79,7 +79,7 @@ PetMergeStats.RarityTiers = {
 		Color = Color3.fromRGB(244, 67, 54), -- Red
 	},
 	-- Tier 7: Divine (Max Tier)
-	{
+	[7] = {
 		Name = "Divine",
 		TierLevel = 7,
 		CopiesRequired = 15, -- Need 15 copies (if there were higher tier)
