@@ -42,7 +42,10 @@ DevProducts.Ids = {
 
 	-- server bonuses
 	ServerLuckParty = 3534615338,
-	ServerPointsParty = 3534631451
+	ServerPointsParty = 3534631451,
+
+	-- starter pack
+	StarterPack = 3540557146
 }
 
 -- Purchases Manager - handlers are initialized when Initialize() is called
@@ -300,6 +303,21 @@ function DevProducts.Initialize(Knit)
 			OnPurchase = function(player)
 				local PotionsService = Knit.GetService("PotionsService")
 				local success = PotionsService:AddPotionToInventory(player, "MagnetPulse")
+				return success
+			end
+		},
+		-- Starter Pack (hatches a Limited Historical Egg)
+		[DevProducts.Ids.StarterPack] = {
+			Name = "StarterPack",
+			OnPurchase = function(player)
+				local success, errorMsg, petInfo = EggService:HatchEgg(player, "LimitedHistoricalEgg")
+				if not success then
+					NotificationService:SendNotification(
+						player,
+						errorMsg or "Failed to hatch Starter Pack egg.",
+						NotificationService.Category.Error
+					)
+				end
 				return success
 			end
 		},
