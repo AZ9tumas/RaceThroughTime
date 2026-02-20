@@ -1,3 +1,4 @@
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
@@ -12,6 +13,7 @@ local BossService = Knit.CreateService({
 local CurrentBossIndex = 0
 local SpawnedBosses = {}
 local CurrentBossKey = nil
+local LastPlayerDamageTime: { [Player]: number } = {}
 
 local function AnchorAndDisableCollision(model)
 	for _, descendant in ipairs(model:GetDescendants()) do
@@ -173,6 +175,35 @@ function BossService:EndBossFight()
 		end
 	end
 	
+	-- Distribute rewards to all online players
+	local rewards = Stats.BossDefeatRewards
+	if rewards then
+		local DataService = Knit.GetService("DataService")
+		local PotionsService = Knit.GetService("PotionsService")
+		local NotificationService = Knit.GetService("NotificationService")
+
+		for _, plr in ipairs(Players:GetPlayers()) do
+			-- Cash reward
+			if rewards.Cash and rewards.Cash > 0 and DataService then
+				DataService:Update(plr, "Currencies", function(currencies)
+					currencies.Cash = (currencies.Cash or 0) + rewards.Cash
+					return currencies
+				end)
+			end
+
+			-- Potion reward
+			if rewards.Potion and PotionsService then
+				PotionsService:AddPotion(plr, rewards.Potion)
+			end
+
+			-- Notify player
+			if NotificationService and NotificationService.SendNotification then
+				local msg = string.format("Boss defeated! You earned %d Cash and a %s potion!", rewards.Cash or 0, rewards.Potion or "")
+				NotificationService:SendNotification(plr, msg)
+			end
+		end
+	end
+
 	-- Reset server stars - get StarService and reset
 	local StarService = Knit.GetService("StarService")
 	if StarService and StarService.ResetAllStars then
@@ -180,7 +211,25 @@ function BossService:EndBossFight()
 	end
 end
 
+function BossService.Client:PlayerDamageBoss(player: Player): boolean
+	if not self.Server:IsBossFightActive() then return false end
+
+	-- Rate-limit: allow 1 tick per second per player (with small tolerance)
+	local now = tick()
+	local last = LastPlayerDamageTime[player] or 0
+	if now - last < 0.9 then return false end
+	LastPlayerDamageTime[player] = now
+
+	local damage = Stats.PlayerBossDamagePerSecond
+	self.Server:DamageBoss(damage)
+	return true
+end
+
 function BossService:KnitStart()
+	-- Clean up tracking when players leave
+	game:GetService("Players").PlayerRemoving:Connect(function(player)
+		LastPlayerDamageTime[player] = nil
+	end)
 end
 
 function BossService:KnitInit()

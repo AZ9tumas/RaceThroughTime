@@ -25,6 +25,11 @@ local eggHatchDimmer: Frame = nil
 local eggviewport: ViewportFrame = nil
 local eggHatchFlash: Frame? = nil
 
+local multiEggHatchScreenGui: ScreenGui = nil
+local multiEggHatchDimmer: Frame = nil
+local multiEggViewports: { ViewportFrame } = {}
+local multiEggHatchFlash: Frame? = nil
+
 local CurrentWorldName = "Main"
 local EggConnections: { [string]: { RBXScriptConnection } } = {}
 local AutoHatchActive: { [string]: boolean } = {}
@@ -193,15 +198,14 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 		return
 	end
 
-	-- Check if player has Luck or SuperLuck gamepass for displaying updated probabilities
-	local hasSuperLuck = MonetizationController and MonetizationController:HasGamePass("SuperLuck")
+	-- Determine which probability distributions are available
 	local hasLuck = MonetizationController and MonetizationController:HasGamePass("Luck")
-	
-	-- Check if player has active SuperLuck potion
-	local PotionsController = Knit.GetController("PotionsController")
-	local hasSuperLuckPotion = PotionsController and PotionsController:HasPotionEffect("SuperLuck")
+	local ServerBonusController = Knit.GetController("ServerBonusController")
+	if not hasLuck then hasLuck = ServerBonusController and ServerBonusController:IsBonusEnabled("LuckParty") end
 
-	print(hasSuperLuckPotion, "hasSuperLuckPotion in EggController")
+	local hasSuperLuck = MonetizationController and MonetizationController:HasGamePass("SuperLuck")
+	local PotionsController = Knit.GetController("PotionsController")
+	if not hasSuperLuck then hasSuperLuck = PotionsController and PotionsController:HasPotionEffect("SuperLuck") end
 
 	for _, child in ipairs(contentFrame:GetChildren()) do
 		if child:IsA("GuiObject") and child.Name ~= "Template" and child ~= gridLayout and not child:IsA("UIGridLayout") then
@@ -210,16 +214,14 @@ local function SetupPetTemplates(mainBoard: Frame, eggName: string)
 	end
 
 	for i, petOption in ipairs(eggConfig.Pets) do
-		print(petOption.LuckProbability, "luck probability for", petOption.Pet)
 		local petName = petOption.Pet
-		-- Priority: SuperLuck gamepass > Luck gamepass > Potion > Default
-		local probability = petOption.Probability
-		
-		if hasSuperLuck then
-			probability = petOption.SuperLuckProbability
-		elseif hasLuck or hasSuperLuckPotion then
-			probability = petOption.LuckProbability
-		end
+		local probability = Stats.CalculateStackedProbability(
+			petOption.Probability,
+			petOption.LuckProbability or petOption.Probability,
+			petOption.SuperLuckProbability or petOption.Probability,
+			hasLuck,
+			hasSuperLuck
+		)
 		local petConfig = GetPetConfig(petName)
 
 		local newTemplate = template:Clone()
@@ -312,118 +314,60 @@ local function PurchaseMultipleEggs(eggName: string, count: number)
 	if EggHatchAnimation.IsPlaying() then return end
 	
 	IsHatching = true
-	local purchasedCount = 0
-	local currentIndex = 0
 	
 	local hasInstantHatch = MonetizationController and MonetizationController:HasGamePass("InstantHatch")
 	
 	if hasInstantHatch then
-		local function PurchaseNextInstant()
-			currentIndex = currentIndex + 1
-			if currentIndex > count then
-				if purchasedCount > 0 and NotificationController then
-					NotificationController:ShowNotification(
-						string.format("Hatched %d eggs!", purchasedCount),
-						NotificationController.Category.Success,
-						3
-					)
+		-- No animation, batch purchase all at once from server
+		EggService:RequestPurchaseMultipleEggs(eggName, count):andThen(function(purchasedCount, pets)
+			if purchasedCount > 0 then
+				local data = UIController:GetData()
+				if not data.Inventory.PetInventory then
+					data.Inventory.PetInventory = {}
 				end
-				IsHatching = false
-				return
-			end
-			
-			EggService:RequestPurchaseEgg(eggName):andThen(function(success, _errorMsg, petInfo)
-				if success and petInfo then
-					purchasedCount = purchasedCount + 1
-					local data = UIController:GetData()
-					if not data.Inventory.PetInventory then
-						data.Inventory.PetInventory = {}
-					end
+				for _, petInfo in ipairs(pets) do
 					table.insert(data.Inventory.PetInventory, petInfo)
-					if InventoryUIController then
-						InventoryUIController:UpdatePetsInventory()
-					end
-					task.wait(0.05)
-					PurchaseNextInstant()
-				else
-					if purchasedCount > 0 and NotificationController then
-						NotificationController:ShowNotification(
-							string.format("Hatched %d eggs!", purchasedCount),
-							NotificationController.Category.Success,
-							3
-						)
-					end
-					IsHatching = false
 				end
-			end)
-		end
-		
-		PurchaseNextInstant()
+				if InventoryUIController then
+					InventoryUIController:UpdatePetsInventory()
+				end
+			end
+			IsHatching = false
+		end)
 		return
 	end
 	
-	local function HatchNext()
-		currentIndex = currentIndex + 1
-		if currentIndex > count then
-			if purchasedCount > 0 and NotificationController then
-				NotificationController:ShowNotification(
-					string.format("Hatched %d eggs!", purchasedCount),
-					NotificationController.Category.Success,
-					3
-				)
-			end
-			IsHatching = false
-			return
-		end
-		
-		UIFramesController:DisableFrames(true)
-		eggviewport.Parent.Visible = true
-		
-		EggHatchAnimation.PlayHatch(
-			eggviewport,
-			eggName,
-			eggHatchDimmer,
-			eggHatchFlash,
-			function(animationSuccess)
-				if animationSuccess then
-					EggService:RequestPurchaseEgg(eggName):andThen(function(success, _errorMsg, petInfo)
-						if success and petInfo then
-							purchasedCount = purchasedCount + 1
-							local data = UIController:GetData()
-							if not data.Inventory.PetInventory then
-								data.Inventory.PetInventory = {}
-							end
-							table.insert(data.Inventory.PetInventory, petInfo)
-							if InventoryUIController then
-								InventoryUIController:UpdatePetsInventory()
-							end
-							eggviewport.Parent.Visible = false
-							UIFramesController:DisableFrames(false)
-							task.wait(0.1)
-							HatchNext()
-						else
-							eggviewport.Parent.Visible = false
-							UIFramesController:DisableFrames(false)
-							if purchasedCount > 0 and NotificationController then
-								NotificationController:ShowNotification(
-									string.format("Hatched %d eggs!", purchasedCount),
-									NotificationController.Category.Success,
-									3
-								)
-							end
-							IsHatching = false
-						end
-					end)
-				else
-					eggviewport.Parent.Visible = false
-					UIFramesController:DisableFrames(false)
-					IsHatching = false
-				end
-			end
-		)
-	end
+	-- Play animation on all 4 viewports simultaneously, then batch purchase
+	UIFramesController:DisableFrames(true)
+	multiEggHatchScreenGui.Dimmer.Visible = true
 	
-	HatchNext()
+	EggHatchAnimation.PlayMultiHatch(
+		multiEggViewports,
+		eggName,
+		multiEggHatchDimmer,
+		multiEggHatchFlash,
+		function(animationSuccess)
+			if animationSuccess then
+				EggService:RequestPurchaseMultipleEggs(eggName, count):andThen(function(purchasedCount, pets)
+					if purchasedCount > 0 then
+						local data = UIController:GetData()
+						if not data.Inventory.PetInventory then
+							data.Inventory.PetInventory = {}
+						end
+						for _, petInfo in ipairs(pets) do
+							table.insert(data.Inventory.PetInventory, petInfo)
+						end
+						if InventoryUIController then
+							InventoryUIController:UpdatePetsInventory()
+						end
+					end
+				end)
+			end
+			multiEggHatchScreenGui.Dimmer.Visible = false
+			UIFramesController:DisableFrames(false)
+			IsHatching = false
+		end
+	)
 end
 
 local function StartAutoHatch(eggName: string)
@@ -660,9 +604,10 @@ local function UpdateBillboardAdornees(worldName: string)
 		return
 	end
 	
-	local uiHatchBoard = PlayerGui:FindFirstChild("UI_HatchBoard")
+	local uiHatchBoard = PlayerGui:FindFirstChild("UI_HatchBoard") :: BillboardGui
 	if uiHatchBoard and uiHatchBoard:IsA("BillboardGui") then
 		uiHatchBoard.Adornee = eggRoot
+		uiHatchBoard.Enabled = true
 	end
 
 	SetupUIButtons()
@@ -693,6 +638,15 @@ function EggController:KnitInit()
 	eggviewport = eggHatchDimmer:WaitForChild("Viewport")
 	eggHatchFlash = eggHatchScreenGui:FindFirstChild("Flash")
 	
+	multiEggHatchScreenGui = PlayerGui:WaitForChild("MultipleEggHatchScreen")
+	multiEggHatchDimmer = multiEggHatchScreenGui:WaitForChild("Dimmer")
+	multiEggHatchFlash = multiEggHatchScreenGui:FindFirstChild("Flash")
+	multiEggViewports = {}
+	for i = 1, MULTI_HATCH_COUNT do
+		local frame = multiEggHatchDimmer:WaitForChild("Frame" .. i)
+		table.insert(multiEggViewports, frame:WaitForChild("ViewportFrame"))
+	end
+	
 	SetupUIButtons()
 end
 
@@ -705,6 +659,11 @@ function EggController:KnitStart()
 	UpdateBillboardAdornees(CurrentWorldName)
 
 	DataService.DataReady:Connect(function(_newData)
+		self:UpdateEggUI()
+	end)
+
+	-- Refresh egg percentages when gamepass ownership changes (e.g., Luck/SuperLuck purchased)
+	MonetizationController.GamePassChanged:Connect(function(_gamePassName, _owned)
 		self:UpdateEggUI()
 	end)
 
@@ -729,6 +688,12 @@ function EggController:KnitStart()
 	EggService.PlayHatchAnimation:Connect(function(eggName: string, petInfo: any)
 		-- Queue the animation
 		QueueHatchAnimation(eggName, petInfo)
+	end)
+	
+	-- Listen for bonus updates to refresh egg UI (e.g., LuckParty changes probabilities)
+	local ServerBonusService = Knit.GetService("ServerBonusService")
+	ServerBonusService.BonusUpdated:Connect(function(_BonusName: string, _value: boolean)
+		self:UpdateEggUI()
 	end)
 end
 

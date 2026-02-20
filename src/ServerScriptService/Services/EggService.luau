@@ -80,27 +80,26 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 	-- Support both old format (single Pet) and new format (Pets array with probabilities)
 	if eggConfig.Pets and #eggConfig.Pets > 0 then
 		-- New format: select pet based on probability
-		-- Check if player has Luck or SuperLuck gamepass for better probabilities
-		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
+		-- Determine which probability distributions are available
 		local hasLuck = MonetizationService:HasGamePass(player, "Luck")
+		local ServerBonusService = Knit.GetService("ServerBonusService")
+		if not hasLuck then hasLuck = ServerBonusService:IsBonusEnabled("LuckParty") end
 		
-		-- Check if player has active SuperLuck potion
+		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
 		local PotionsService = Knit.GetService("PotionsService")
-		local hasSuperLuckPotion = PotionsService:HasPotionEffect(player, "SuperLuck")
-		print(hasSuperLuckPotion, "hasSuperLuckPotion in EggService")
+		if not hasSuperLuck then hasSuperLuck = PotionsService:HasPotionEffect(player, "SuperLuck") end
 		
 		local random = math.random()
 		local cumulativeProbability = 0
 		
 		for _, petOption in ipairs(eggConfig.Pets) do
-			print(petOption.LuckProbability, "luck probability for", petOption.Pet)
-			-- Priority: SuperLuck gamepass > Luck gamepass > Potion > Default
-			local probability = petOption.Probability
-			if hasSuperLuck then
-				probability = petOption.SuperLuckProbability
-			elseif hasLuck or hasSuperLuckPotion then
-				probability = petOption.LuckProbability
-			end
+			local probability = Stats.CalculateStackedProbability(
+				petOption.Probability,
+				petOption.LuckProbability or petOption.Probability,
+				petOption.SuperLuckProbability or petOption.Probability,
+				hasLuck,
+				hasSuperLuck
+			)
 			cumulativeProbability = cumulativeProbability + probability
 			if random <= cumulativeProbability then
 				petType = petOption.Pet
@@ -139,6 +138,7 @@ function EggService:HatchEgg(player: Player, eggType: string): (boolean, string?
 	end
 
 	finalPetEntry.ObtainedAt = os.time()
+	finalPetEntry.Locked = false
 	
 	DataService:Update(player, "Inventory", function(inventory)
 		if not inventory.PetInventory then
@@ -183,7 +183,7 @@ end
 	@param eggType string - The type of egg to purchase (e.g., "StandardEgg")
 	@return (boolean, string?, { Name: string, ID: string, Multiplier: number }?) - Success status, error message if failed, pet info if successful
 ]]
-function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, string?, { Name: string, ID: string, Multiplier: number }?)
+function EggService:PurchaseEgg(player: Player, eggType: string, silent: boolean?): (boolean, string?, { Name: string, ID: string, Multiplier: number }?)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
 	local PetService = Knit.GetService("PetService")
@@ -205,28 +205,27 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	-- Support both old format (single Pet) and new format (Pets array with probabilities)
 	if eggConfig.Pets and #eggConfig.Pets > 0 then
 		-- New format: select pet based on probability
-		-- Check if player has Luck or SuperLuck gamepass for better probabilities
+		-- Determine which probability distributions are available
 		local MonetizationService = Knit.GetService("MonetizationService")
-		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
 		local hasLuck = MonetizationService:HasGamePass(player, "Luck")
+		local ServerBonusService = Knit.GetService("ServerBonusService")
+		if not hasLuck then hasLuck = ServerBonusService:IsBonusEnabled("LuckParty") end
 		
-		-- Check if player has active SuperLuck potion
+		local hasSuperLuck = MonetizationService:HasGamePass(player, "SuperLuck")
 		local PotionsService = Knit.GetService("PotionsService")
-		local hasSuperLuckPotion = PotionsService:HasPotionEffect(player, "SuperLuck")
+		if not hasSuperLuck then hasSuperLuck = PotionsService:HasPotionEffect(player, "SuperLuck") end
 		
 		local random = math.random()
 		local cumulativeProbability = 0
 		
 		for _, petOption in ipairs(eggConfig.Pets) do
-			-- Priority: Potion > SuperLuck gamepass > Luck gamepass > Default
-			local probability = petOption.Probability
-			if hasSuperLuckPotion and petOption.LuckProbability then
-				probability = petOption.LuckProbability
-			elseif hasSuperLuck and petOption.SuperLuckProbability then
-				probability = petOption.SuperLuckProbability
-			elseif hasLuck and petOption.LuckProbability then
-				probability = petOption.LuckProbability
-			end
+			local probability = Stats.CalculateStackedProbability(
+				petOption.Probability,
+				petOption.LuckProbability or petOption.Probability,
+				petOption.SuperLuckProbability or petOption.Probability,
+				hasLuck,
+				hasSuperLuck
+			)
 			cumulativeProbability = cumulativeProbability + probability
 			if random <= cumulativeProbability then
 				petType = petOption.Pet
@@ -311,6 +310,7 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	end
 
 	finalPetEntry.ObtainedAt = os.time()
+	finalPetEntry.Locked = false
 	
 	DataService:Update(player, "Inventory", function(inventory)
 		if not inventory.PetInventory then
@@ -330,14 +330,18 @@ function EggService:PurchaseEgg(player: Player, eggType: string): (boolean, stri
 	Log(string.format("Player %s purchased %s and obtained %s (ID: %s) for %d %s", 
 		player.Name, eggType, petConfig.Name, petID, cost, currencyType))
 	
-	NotificationService:SendNotification(
-		player,
-		string.format("Obtained %s!", petConfig.Name),
-		NotificationService.Category.Success
-	)
+	if not silent then
+		NotificationService:SendNotification(
+			player,
+			string.format("Obtained %s!", petConfig.Name),
+			NotificationService.Category.Success
+		)
+	end
 	
 	-- Fire signal to client
-	EggService.Client.PetObtained:Fire(player, finalPetEntry)
+	if not silent then
+		EggService.Client.PetObtained:Fire(player, finalPetEntry)
+	end
 	DataService:FireDataReady(player)
 	
 	return true, nil, finalPetEntry
@@ -350,19 +354,42 @@ end
 
 -- Client request to purchase multiple eggs at once
 function EggService.Client:RequestPurchaseMultipleEggs(player: Player, eggType: string, count: number): (number, { any })
+	local NotificationService = Knit.GetService("NotificationService")
 	local purchasedCount = 0
 	local pets = {}
 	
 	count = math.min(count, 10)
 	
 	for _ = 1, count do
-		local success, _errorMsg, petInfo = EggService:PurchaseEgg(player, eggType)
+		local success, _errorMsg, petInfo = EggService:PurchaseEgg(player, eggType, true)
 		if success and petInfo then
 			purchasedCount = purchasedCount + 1
 			table.insert(pets, petInfo)
 		else
 			break
 		end
+	end
+	
+	if purchasedCount > 0 then
+		-- Build a summary of hatched pets
+		local petCounts = {}
+		for _, petInfo in ipairs(pets) do
+			local name = petInfo.Name or "Unknown"
+			petCounts[name] = (petCounts[name] or 0) + 1
+		end
+		local parts = {}
+		for name, c in pairs(petCounts) do
+			if c > 1 then
+				table.insert(parts, string.format("%s x%d", name, c))
+			else
+				table.insert(parts, name)
+			end
+		end
+		NotificationService:SendNotification(
+			player,
+			string.format("Hatched %d eggs: %s", purchasedCount, table.concat(parts, ", ")),
+			NotificationService.Category.Success
+		)
 	end
 	
 	return purchasedCount, pets

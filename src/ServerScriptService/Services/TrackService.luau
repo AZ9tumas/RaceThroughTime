@@ -20,6 +20,7 @@ local TrackService = Knit.CreateService({
 	Client = {
 		TrackStarted = Knit.CreateSignal(), -- Signal to notify client when track run starts
 		TrackEnded = Knit.CreateSignal(), -- Signal to notify client when track run ends
+		Overdrive = Knit.CreateSignal(), -- Signal to trigger overdrive effects on client
 		EarlyWorldUnlock = Knit.CreateSignal(), -- Signal when world is unlocked mid-run
 	},
 })
@@ -169,6 +170,12 @@ local function CalculateTrackParameters(player: Player, worldName: string):
 	end
 	if PotionsService:HasPotionEffect(player, "PointsOverload") then
 		trackParams.totalDistance = trackParams.totalDistance * 3.0
+	end
+	
+	-- Apply server bonus multipliers
+	local ServerBonusService = Knit.GetService("ServerBonusService")
+	if ServerBonusService:IsBonusEnabled("PointsParty") then
+		trackParams.totalDistance = trackParams.totalDistance * 2.0
 	end
 	
 	-- Apply rebirth speed multiplier
@@ -498,9 +505,45 @@ end
 local function HandleEarlyWorldUnlock(player: Player, nextWorld: string, estimatedDistance: number)
 	Log(string.format("Player %s early world unlock! Distance: %.2f, new world: %s", player.Name, estimatedDistance, nextWorld))
 
+	local userId = player.UserId
+	local trackData = PlayersOnTrack[userId]
+	local worldName = trackData and trackData.worldName or "Main"
+	local DataService = Knit.GetService("DataService")
+
+	-- Award cash for distance traveled before the world unlock
+	local distanceTraveled = math.clamp(estimatedDistance, 0, trackData and trackData.totalDistance or estimatedDistance)
+	
+	local playerStats = DataService:Get(player, "Stats")
+	local rebirthLevel = (playerStats and playerStats.Rebirths) or 0
+	local rebirthCashMultiplier = RebirthStats.CalculateTotalCashMultiplier(rebirthLevel)
+	
+	local cashRate = Stats.WorldCashRates[worldName] or Stats.WorldCashRates.Main
+	local baseCashEarned = (distanceTraveled / 1000) * cashRate
+	local cashEarned = math.floor(baseCashEarned * rebirthCashMultiplier)
+	
+	if cashEarned > 0 then
+		DataService:Update(player, "Currencies", function(currencies)
+			currencies.Cash = (currencies.Cash or 0) + cashEarned
+			return currencies
+		end)
+	end
+	
+	-- Update MaxDistanceTraveled if this run beat the previous record
+	DataService:Update(player, "Stats", function(stats)
+		local currentMax = stats.MaxDistanceTraveled or 0
+		if distanceTraveled > currentMax then
+			stats.MaxDistanceTraveled = distanceTraveled
+			Log(string.format("Player %s set new max distance record: %.2f (previous: %.2f) [early world unlock]", player.Name, distanceTraveled, currentMax))
+		end
+		return stats
+	end)
+	
+	Log(string.format("Player %s earned %d cash for %.2f distance before early world unlock (rebirth multiplier: %.2fx)", player.Name, cashEarned, distanceTraveled, rebirthCashMultiplier))
+
 	-- Fire early world unlock signal to client (for client-side handling)
 	TrackService.Client.EarlyWorldUnlock:Fire(player, {
-		distanceTraveled = estimatedDistance,
+		distanceTraveled = distanceTraveled,
+		cashEarned = cashEarned,
 		newWorld = nextWorld,
 	})
 
@@ -508,18 +551,38 @@ local function HandleEarlyWorldUnlock(player: Player, nextWorld: string, estimat
 	local WorldService = Knit.GetService("WorldService")
 	WorldService:GiveWorldToPlayer(player, nextWorld)
 	
-	-- Reuse the cancel track run logic to clean up the track run
-	TrackService.Client:CancelTrackRun(player)
+	-- Clean up track run (body movers, pet movers, track state, laps)
+	local character = player.Character
+	if character then
+		CleanupBodyMovers(character)
+	end
+	CleanupPetBodyMoversForTrack(player)
+	PlayersOnTrack[userId] = nil
+	
+	local LapService = Knit.GetService("LapService")
+	LapService:StopTracking(player)
+	
+	-- Fire TrackEnded with actual rewards (world was unlocked, so 100% progress)
+	local unlockRequirement = Stats.GetWorldDistanceRequirement(nextWorld)
+	TrackService.Client.TrackEnded:Fire(player, {
+		distanceTraveled = distanceTraveled,
+		cashEarned = cashEarned,
+		percentageToNextWorld = 100,
+		unlockRequirement = unlockRequirement,
+	})
+	
+	-- Clear and restart stars
+	local StarService = Knit.GetService("StarService")
+	StarService:RemoveAllStarsForPlayer(player)
+	StarService:Start(player)
 
 	-- Open up the white frame (Loading screen handler) here for 1s
 	local LoadingScreenService = Knit.GetService("LoadingScreenService")
 	LoadingScreenService:ShowLoadingScreen(player, 2.5)
 
-	warn("Here.")
-
 	WorldService:TeleportPlayerToWorld(player, nextWorld)
 
-	task.delay(1.5, function()
+	task.delay(2.5, function()
 		LoadingScreenService:HideLoadingScreen(player)
 	end)
 
@@ -533,13 +596,12 @@ local function HandleEarlyWorldUnlock(player: Player, nextWorld: string, estimat
 	)
 	
 	-- Update client data
-	local DataService = Knit.GetService("DataService")
 	DataService:FireDataReady(player)
 end
 
 function TrackService:UnlockWorld(player: Player)
 	local trackData = PlayersOnTrack[player.UserId]
-	if not trackData then return false, "Player not found on track" end
+	if not trackData then return false, nil end
 
 	local nextWorld = trackData.nextWorld
 	if not nextWorld then return false, "No next world to unlock" end
@@ -733,8 +795,8 @@ function TrackService.Client:RequestTrackStart(player: Player): (boolean, string
 	local radius = Stats.WorldRadius[worldName] or Stats.WorldRadius.Main
 
 	local fuel = DataService:Get(player, "Stats").Fuel
-	if fuel <= 1 then
-		return false, string.format("Not enough fuel, need at least 1 fuel/sec")
+	if fuel < 25 then
+		return false, string.format("Not enough fuel, need at least 25 fuel")
 	end
 	
 	local playerPosition = rootPart.Position
@@ -891,6 +953,62 @@ function TrackService.Client:CancelTrackRun(player: Player): (boolean, string?, 
 	return true, nil, {
 		distanceTraveled = distanceTraveled,
 	}
+end
+
+-- Client request to activate overdrive speed boost
+-- Only allowed within the first OverdriveTimeframe seconds of a track run
+function TrackService.Client:RequestOverdrive(player: Player): (boolean, string?)
+	local userId = player.UserId
+	local trackData = PlayersOnTrack[userId]
+
+	if not trackData then
+		return false, "Not currently on track"
+	end
+
+	-- Check if overdrive was already used this run
+	if trackData.overdriveUsed then
+		return false, "Overdrive already used"
+	end
+
+	-- Check if within the allowed timeframe
+	local elapsed = tick() - trackData.startTime
+	if elapsed > Stats.OverdriveTimeframe then
+		return false, "Overdrive timeframe expired"
+	end
+
+	-- Mark as used
+	trackData.overdriveUsed = true
+
+	-- Apply the speed boost to the track parameters
+	local multiplier = Stats.OverdriveSpeedMultiplier
+	trackData.initialSpeed = trackData.initialSpeed * multiplier
+	trackData.maxSpeed = trackData.maxSpeed * multiplier
+	trackData.acceleration = trackData.acceleration * multiplier
+
+	Log(string.format("Player %s activated Overdrive! Speed multiplied by %.1fx", player.Name, multiplier))
+
+	-- Fire the Overdrive signal to the client so it can apply visual effects and updated speeds
+	TrackService.Client.Overdrive:Fire(player, {
+		initialSpeed = trackData.initialSpeed,
+		maxSpeed = trackData.maxSpeed,
+		acceleration = trackData.acceleration,
+		duration = Stats.OverdriveDuration,
+		multiplier = multiplier,
+	})
+
+	-- Schedule reverting the speed boost after the duration
+	task.delay(Stats.OverdriveDuration, function()
+		-- Only revert if the player is still on this same track run
+		local currentTrackData = PlayersOnTrack[userId]
+		if currentTrackData and currentTrackData == trackData then
+			currentTrackData.initialSpeed = currentTrackData.initialSpeed / multiplier
+			currentTrackData.maxSpeed = currentTrackData.maxSpeed / multiplier
+			currentTrackData.acceleration = currentTrackData.acceleration / multiplier
+			Log(string.format("Player %s Overdrive expired, speed reverted", player.Name))
+		end
+	end)
+
+	return true, nil
 end
 
 -- Client request to end track run (with distance traveled and world unlock info)

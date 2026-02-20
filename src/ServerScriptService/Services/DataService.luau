@@ -21,7 +21,6 @@ local Template = {
 		Gems = 0,
 	},
 	Stats = {
-		TotalDistance = 0,
 		Points = 0,
 		Rebirths = 0,
 		Fuel = 0, -- Starting fuel for players
@@ -38,12 +37,16 @@ local Template = {
 		-- { Name: string, PetType: string, Multiplier: number, ObtainedAt: number }
 		PetInventory = {},
 		EquippedPets = {}, -- Indices of equipped pets (max 3)
+		ConsumedPotions = {},
+		-- Potions stores collectible potion items:
+		-- { PotionKey: string, Quantity: number }
 		Potions = {},
 	},
 	Meta = {
 		DailyStreak = 0,
 		LastClaim = 0,
 		CollectedRewards = {}, -- Tracks which daily reward IDs have been collected
+		RedeemedCodes = {}, -- Tracks which codes have been redeemed by the player
 		UpdateVersion = 0,
 		Settings = {
 			Music = true,
@@ -192,10 +195,12 @@ local function TryResolveSession(player: Player)
 		local PetService = Knit.GetService("PetService")
 		PetService:InitializePets(player)
 		
-		-- Initialize potions from saved data
+		-- Initialize consumed potions and potion inventory from saved data
 		local PotionsService = Knit.GetService("PotionsService")
-		local potionsData = profile.Data.Inventory and profile.Data.Inventory.Potions
+		local potionsData = profile.Data.Inventory and profile.Data.Inventory.ConsumedPotions
 		PotionsService:InitializePotions(player, potionsData)
+		local potionInventoryData = profile.Data.Inventory and profile.Data.Inventory.Potions
+		PotionsService:InitializePotionInventory(player, potionInventoryData)
 
 		local dataToSend = setupPets(player, profile.Data)
 		

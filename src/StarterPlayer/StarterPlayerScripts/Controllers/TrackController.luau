@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
@@ -38,7 +39,7 @@ local playerIndicatorTemplate: ImageLabel = globalView:WaitForChild("Templates")
 local localView: Frame = RaceHUDMainFrame:WaitForChild("LocalView")
 local progressFrameFill: Frame = localView:WaitForChild("Progress"):WaitForChild("Fill")
 local progressHeadshotImage: ImageLabel = progressFrameFill:WaitForChild("Frame"):WaitForChild("ImageLabel")
-local skipButton: TextButton = RaceHUDMainFrame:WaitForChild("Skip")
+local skipButton: TextButton = RaceHUD:WaitForChild("Skip")
 local skipButtonConnection: RBXScriptConnection? = nil
 
 -- Track cancel button UI
@@ -64,6 +65,7 @@ local UIFramesController = nil
 -- Camera settings
 local DEFAULT_FOV = 70
 local TRACK_FOV = 90
+local OVERDRIVE_FOV = 110
 local FOV_TWEEN_TIME = 0.5
 local TRACK_END_LOADING_DELAY = 0.8 -- Seconds to show loading screen after track ends
 
@@ -107,6 +109,7 @@ local ElapsedTime = 0
 local DistanceTraveled = 0
 local LapCount = 0
 local WorldUnlocked = false
+local MilestoneReached = false
 
 -- Pet follow constants (same as PetController and TrackService)
 local PET_FOLLOW_DISTANCE = 8
@@ -632,6 +635,7 @@ local function OnTrackStarted(trackData: {
 	DistanceTraveled = 0
 	LapCount = 0
 	WorldUnlocked = false
+	MilestoneReached = false
 	
 	-- Reset progress bar
 	progressFrameFill.Size = UDim2.new(1, 0, 0, 0)
@@ -782,6 +786,36 @@ local function OnTrackStarted(trackData: {
 			if DistanceTraveled >= unlockRequirement and not WorldUnlocked then
 				WorldUnlocked = true
 				Log(string.format("World unlock threshold reached: %.2f", DistanceTraveled))
+				
+				-- Check for milestone: distance reached but rebirth requirement not met
+				if not MilestoneReached then
+					local rebirthReq = TrackData.rebirthRequirement
+					if rebirthReq and rebirthReq > 0 then
+						local data = UIController and UIController:GetData()
+						local playerRebirths = data and data.Stats and data.Stats.Rebirths or 0
+						if playerRebirths < rebirthReq then
+							MilestoneReached = true
+							
+							-- Camera FOV tween effect (same as overdrive)
+							TweenCameraFOV(OVERDRIVE_FOV, 0.3)
+							task.delay(1.5, function()
+								if IsOnTrack then
+									TweenCameraFOV(TRACK_FOV, 0.5)
+								end
+							end)
+							
+							-- Notification
+							local NotifController = Knit.GetController("NotificationController")
+							if NotifController then
+								NotifController:ShowNotification(
+									string.format("Milestone Complete! Need Rebirth %d to unlock %s", rebirthReq, TrackData.nextWorld or "next world"),
+									NotifController.Category.Success,
+									4
+								)
+							end
+						end
+					end
+				end
 			end
 		end
 		
@@ -848,6 +882,7 @@ local function OnTrackEnded(trackData: { distanceTraveled: number, cashEarned: n
 	DistanceTraveled = 0
 	LapCount = 0
 	WorldUnlocked = false
+	MilestoneReached = false
 
 	DisableSkipWorldButton()
 	
@@ -967,6 +1002,7 @@ function TrackController:StopTrack()
 	DistanceTraveled = 0
 	LapCount = 0
 	WorldUnlocked = false
+	MilestoneReached = false
 	
 	-- Reset camera FOV
 	TweenCameraFOV(DEFAULT_FOV, FOV_TWEEN_TIME)
@@ -1015,7 +1051,6 @@ function TrackController:UpdateWorldFrameColors()
 	local nextWorld = Stats.WorldOrder[nextWorldIndex] and Stats.WorldUnlockRequirements[nextworldname] or {Rebirth = 0}
 	local worldProgress: Frame = globalView.Parent:FindFirstChild("WorldProgress")
 	local rebirths: TextLabel = worldProgress:WaitForChild("Rebirths")
-	warn(data.Stats.Rebirths, nextWorld.Rebirth)
 
 	rebirths.Text = data.Stats.Rebirths .. "/" .. nextWorld.Rebirth
 	worldProgress.WorldName.Text = nextworldname or "MAX"
@@ -1238,6 +1273,59 @@ function TrackController:KnitStart()
 	
 	-- Update player position indicators on RenderStepped
 	RunService.RenderStepped:Connect(UpdatePlayerPositionIndicators)
+
+	-- Listen for Overdrive signal from server to apply client-side speed boost and effects
+	TrackService.Overdrive:Connect(function(overdriveData)
+		if not IsOnTrack or not TrackData then return end
+
+		-- Update client-side track parameters with boosted values
+		TrackData.initialSpeed = overdriveData.initialSpeed
+		TrackData.maxSpeed = overdriveData.maxSpeed
+		TrackData.acceleration = overdriveData.acceleration
+
+		Log(string.format("Overdrive activated! Speed x%.1f for %.1fs", overdriveData.multiplier, overdriveData.duration))
+
+		-- Zoom out camera for immersive speed effect
+		TweenCameraFOV(OVERDRIVE_FOV, 0.3)
+
+		local NotificationController = Knit.GetController("NotificationController")
+		if NotificationController then
+			NotificationController:ShowNotification(
+				string.format("OVERDRIVE! x%.1f Speed Boost!", overdriveData.multiplier),
+				NotificationController.Category.Success,
+				overdriveData.duration
+			)
+		end
+
+		-- Revert client-side speeds and camera after duration
+		task.delay(overdriveData.duration, function()
+			if IsOnTrack and TrackData then
+				local m = overdriveData.multiplier
+				TrackData.initialSpeed = TrackData.initialSpeed / m
+				TrackData.maxSpeed = TrackData.maxSpeed / m
+				TrackData.acceleration = TrackData.acceleration / m
+				TweenCameraFOV(TRACK_FOV, 0.5)
+				Log("Overdrive expired, speed and FOV reverted")
+			end
+		end)
+	end)
+
+	UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+		if gameProcessedEvent then return end
+
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if not IsOnTrack or not TrackData then return end
+
+			-- Only allow overdrive within the configured timeframe
+			if ElapsedTime > Stats.OverdriveTimeframe then return end
+
+			TrackService:RequestOverdrive():andThen(function(success, errorMsg)
+				if not success then
+					Log(string.format("Overdrive request failed: %s", errorMsg or "Unknown"))
+				end
+			end)
+		end
+	end)
 	
 	Log("TrackController started")
 end

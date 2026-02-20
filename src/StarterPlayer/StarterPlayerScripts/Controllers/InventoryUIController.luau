@@ -23,6 +23,7 @@ local inventoryItemCount: TextLabel
 local inventoryScrollingFrame: ScrollingFrame
 local inventoryPetTemplate: Frame
 local inventoryCloseButton: TextButton
+local equipBestButton: TextButton
 
 local _connections = {}
 local constantUpdateLabels: { [number]: TextLabel } = {}
@@ -54,7 +55,6 @@ function InventoryUIController:UpdatePetsInventory()
 	end
 	-- Calculate max equipped pets based on gamepass
 	local maxEquipped = statsM.MaxEquippedPets
-	warn(MonetizationController:HasGamePass("ExtraPets"), "ExtraPets")
 
 	if MonetizationController:HasGamePass("ExtraPets") then
 		maxEquipped = maxEquipped + statsM.ExtraPetsBonus
@@ -99,7 +99,7 @@ function InventoryUIController:UpdatePetsInventory()
 		end
 		
 		local isEquipped = equippedSet[index] == true
-		petFrame.UIStroke.Color = statsM.TierColors[petData.TierLevel]
+		petFrame.UIStroke.Color = statsM.Rarity[petData.TierLevel].Color
 		
 		if isEquipped then
 			petFrame.BackgroundColor3 = DefaultBackgroundColorSelected
@@ -110,6 +110,7 @@ function InventoryUIController:UpdatePetsInventory()
 		local fullPetData = {
 			ID = petData.ID,
 			Name = petData.Name,
+			PetType = petData.PetType,
 			Multiplier = petData.Multiplier,
 			PickupRangeBonus = petData.PickupRangeBonus,
 			RoamRange = petData.RoamRange,
@@ -121,6 +122,7 @@ function InventoryUIController:UpdatePetsInventory()
 			TierName = petData.TierName,
 			Rarity = petData.Rarity,
 			Equipped = isEquipped,
+			Locked = petData.Locked,
 			Index = index,
 		}
 		
@@ -169,6 +171,7 @@ function InventoryUIController:KnitInit()
 	inventoryScrollingFrame = inventoryMainFrame:WaitForChild("ScrollingFrame")
 	inventoryPetTemplate = inventoryScrollingFrame:WaitForChild("UIGridLayout"):WaitForChild("Template")
 	inventoryCloseButton = inventoryMainFrame:WaitForChild("CloseButton")
+	equipBestButton = inventoryMainFrame:WaitForChild("Frame"):WaitForChild("BestButton")
 end
 
 function InventoryUIController:KnitStart()
@@ -177,6 +180,24 @@ function InventoryUIController:KnitStart()
 	end)
 	_connections["InventoryClose"] = inventoryCloseButton.MouseButton1Click:Connect(function()
 		self:CloseInventory()
+	end)
+
+	_connections["EquipBestButton"] = equipBestButton.MouseButton1Click:Connect(function()
+		local PetService = Knit.GetService("PetService")
+		PetService:RequestEquipBestPets():andThen(function(success, errorMsg)
+			if success then
+				self:UpdatePetsInventory()
+			else
+				local NotificationController = Knit.GetController("NotificationController")
+				if NotificationController then
+					NotificationController:ShowNotification(
+						errorMsg or "Failed to equip best pets",
+						NotificationController.Category.Warning,
+						3
+					)
+				end
+			end
+		end)
 	end)
 
 	_connections["RunService"] = game:GetService("RunService").Heartbeat:Connect(function()

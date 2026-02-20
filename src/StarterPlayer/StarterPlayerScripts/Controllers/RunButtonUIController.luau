@@ -54,7 +54,7 @@ function RunButtonUIController:KnitStart()
 			else
 				if NotificationController then
 					NotificationController:ShowNotification(
-						"Failed to start track: " .. (gateName or "Unknown error"),
+						(gateName or "Unknown error"),
 						NotificationController.Category.Error,
 						5
 					)

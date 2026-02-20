@@ -40,6 +40,7 @@ export type Pet = {
 	Rarity: string?,
 	ID: string?,
 	Equipped: boolean?,
+	Locked: boolean?,
 }
 
 local PetService = Knit.CreateService({
@@ -60,7 +61,7 @@ local PlayerPetIDs = {}
 local SpawnedPets = {}
 
 -- Pending merge data for Missing Merge dev products
--- [Player.UserId] = { tierLevel: number, selectedIndexes: {number}, selectedIDs: {string} }
+-- [Player.UserId] = { tierLevel: number, selectedIDs: {string} }
 local PendingMergeData = {}
 
 -- Track if collision group was created
@@ -118,25 +119,33 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		warn("Spawning again.")
 	end
 	
-	local petType = petData.PetType or "StandardPet"
+	local petType = petData.PetType
+	if not petType then
+		warn(string.format("[PetService] SpawnPetModel: petData has no PetType for player %s", player.Name))
+		return
+	end
 	local petModel = GetPetModel(petType)
 	
 	-- Get pet stats from Stats.Pets (petData may not have these values saved)
-	local petStats = Stats.Pets[petType] or Stats.Pets.StandardPet
-	local roamRange = petData.RoamRange or petStats.RoamRange or 30
-	local starCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius or 5
-	local petVelocity = petData.Velocity or petStats.Velocity or 20
+	local petStats = Stats.Pets[petType]
+	if not petStats then
+		warn(string.format("[PetService] SpawnPetModel: Stats.Pets[%s] not found", petType))
+		return
+	end
+	local roamRange = petData.RoamRange or petStats.RoamRange
+	local starCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius
+	local petVelocity = petData.Velocity or petStats.Velocity
 	
-	-- Cap velocity to 50
-	petVelocity = math.min(petVelocity or 20, Stats.MaxPetSpeed)
+	-- Cap velocity
+	petVelocity = math.min(petVelocity, Stats.MaxPetSpeed)
 
 	-- Cap roam range
-	roamRange = math.min(roamRange or 30, Stats.MaxPetRoamRange)
+	roamRange = math.min(roamRange, Stats.MaxPetRoamRange)
 
 	-- Cap star collection radius
-	starCollectionRadius = math.min(starCollectionRadius or 5, Stats.MaxStarCollectionRadius)
+	starCollectionRadius = math.min(starCollectionRadius, Stats.MaxStarCollectionRadius)
 	
-	local multiplier = petData.Multiplier or petStats.Multiplier or 1.0
+	local multiplier = petData.Multiplier or petStats.Multiplier
 	
 	if not petModel then
 		-- Create a simple placeholder if model not found
@@ -153,20 +162,37 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		petModel.PrimaryPart = part
 	end
 	
-	-- Position near player initially
-	local world = player:GetAttribute("CurrentWorld")
-	local spawnPart = workspace:FindFirstChild(world):FindFirstChild("SpawnLocation")
-	print(spawnPart)
-	petModel:PivotTo(CFrame.new(spawnPart.Position))
-
+	-- Position near player initially (use same circular offset pattern as PetController)
+	local spawnPosition: Vector3
+	local spawnCFrame: CFrame
+	
 	local character = player.Character
-	if character then
-		local rootPart = character:FindFirstChild("HumanoidRootPart")
-		if rootPart then
-			local offset = Vector3.new(3 + (petIndex - 1) * PET_FOLLOW_OFFSET_SPACING, 0, 3)
-			--petModel:PivotTo(CFrame.new(rootPart.Position + offset))
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	
+	if rootPart then
+		-- Spawn around the player using circular offset (matches PetController follow formation)
+		local offset = Vector3.new(
+			math.cos(petIndex * math.pi / 2) * 8,
+			2,
+			math.sin(petIndex * math.pi / 2) * 8
+		)
+		spawnPosition = rootPart.Position + offset
+		spawnCFrame = CFrame.new(spawnPosition, rootPart.Position) -- Face toward the player
+		print("PET SPAWN POSITION:", spawnPosition)
+	else
+		-- Fallback to world spawn location if character hasn't loaded yet
+		local world = player:GetAttribute("CurrentWorld")
+		local worldFolder = workspace:FindFirstChild(world)
+		local spawnPart = worldFolder and worldFolder:FindFirstChild("SpawnLocation")
+		if spawnPart then
+			spawnPosition = spawnPart.Position
+		else
+			spawnPosition = Vector3.new(0, 10, 0)
 		end
+		spawnCFrame = CFrame.new(spawnPosition)
 	end
+	
+	petModel:PivotTo(spawnCFrame)
 	
 	local primaryPart = petModel.PrimaryPart
 	if primaryPart then
@@ -184,7 +210,7 @@ local function SpawnPetModel(player: Player, petIndex: number, petData: Pet)
 		alignPosition.MaxVelocity = petVelocity
 		alignPosition.Responsiveness = petVelocity
 		-- IMPORTANT: Set initial position to current pet position (not 0,0,0)
-		alignPosition.Position = spawnPart.Position
+		alignPosition.Position = spawnPosition
 		alignPosition.Parent = primaryPart
 		
 		-- Create AlignOrientation for smooth rotation (controlled by client)
@@ -395,12 +421,20 @@ function PetService:EquipPet(player: Player, petID: string): (boolean, string?)
 	Log(string.format("Player %s equipped %s", player.Name, petData.Name))
 	
 	-- Get pet stats from Stats.Pets (petData may not have these values saved)
-	local petType = petData.PetType or "StandardPet"
-	local petStats = Stats.Pets[petType] or Stats.Pets.StandardPet
-	local roamRange = petData.RoamRange or petStats.RoamRange or 30
-	local starCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius or 5
-	local velocity = petData.Velocity or petStats.Velocity or 20
-	local multiplier = petData.Multiplier or petStats.Multiplier or 1.0
+	local petType = petData.PetType
+	if not petType then
+		warn(string.format("[PetService] EquipPet: petData has no PetType for player %s", player.Name))
+		return false, "Pet has no PetType"
+	end
+	local petStats = Stats.Pets[petType]
+	if not petStats then
+		warn(string.format("[PetService] EquipPet: Stats.Pets[%s] not found", petType))
+		return false, "Pet stats not found"
+	end
+	local roamRange = petData.RoamRange or petStats.RoamRange
+	local starCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius
+	local velocity = petData.Velocity or petStats.Velocity
+	local multiplier = petData.Multiplier or petStats.Multiplier
 	
 	-- Spawn the pet model
 	SpawnPetModel(player, petIndex, petData)
@@ -548,6 +582,171 @@ function PetService:UnequipPetByIndex(player: Player, petIndex: number): (boolea
 	return true, nil
 end
 
+-- Toggle the lock state of a pet by pet ID
+function PetService:ToggleLockPet(player: Player, petID: string): (boolean, string?)
+	local DataService = Knit.GetService("DataService")
+	
+	if not petID or petID == "" then
+		return false, "Invalid pet ID"
+	end
+
+	-- Get pet index from ID
+	local petIndex = self:GetPetIndexByID(player, petID)
+	if not petIndex then
+		return false, "Pet not found"
+	end
+
+	local inventory = DataService:Get(player, "Inventory")
+	if not inventory or not inventory.PetInventory or not inventory.PetInventory[petIndex] then
+		return false, "Pet not found"
+	end
+
+	-- Toggle the locked state
+	local newLocked = not (inventory.PetInventory[petIndex].Locked == true)
+
+	DataService:Update(player, "Inventory", function(inv)
+		if inv.PetInventory and inv.PetInventory[petIndex] then
+			inv.PetInventory[petIndex].Locked = newLocked
+		end
+		return inv
+	end)
+
+	-- Sync updated data to client so UI refreshes
+	DataService:FireDataReady(player)
+
+	return true, nil
+end
+
+-- Delete a pet from a player's inventory by pet ID
+function PetService:DeletePet(player: Player, petID: string): (boolean, string?)
+	local DataService = Knit.GetService("DataService")
+	local NotificationService = Knit.GetService("NotificationService")
+	
+	if not petID or petID == "" then
+		NotificationService:SendNotification(player, "Invalid pet ID.", NotificationService.Category.Error)
+		return false, "Invalid pet ID"
+	end
+	
+	-- Resolve pet ID to current index
+	local petIndex = self:GetPetIndexByID(player, petID)
+	if not petIndex then
+		NotificationService:SendNotification(player, "Pet not found.", NotificationService.Category.Error)
+		return false, "Invalid pet ID"
+	end
+	
+	-- Get player inventory
+	local inventory = DataService:Get(player, "Inventory")
+	if not inventory or not inventory.PetInventory or not inventory.PetInventory[petIndex] then
+		NotificationService:SendNotification(player, "Pet not found in inventory.", NotificationService.Category.Error)
+		return false, "Pet not found"
+	end
+	
+	local petData = inventory.PetInventory[petIndex]
+	local petName = petData.Name or "Unknown"
+	
+	-- Block deleting locked pets
+	if petData.Locked == true then
+		NotificationService:SendNotification(player, "Cannot delete a locked pet. Unlock it first.", NotificationService.Category.Warning)
+		return false, "Pet is locked"
+	end
+	
+	-- If pet is equipped, unequip first (despawn model + remove from equipped list)
+	local isEquipped = false
+	if inventory.EquippedPets then
+		for _, equippedIndex in ipairs(inventory.EquippedPets) do
+			if equippedIndex == petIndex then
+				isEquipped = true
+				break
+			end
+		end
+	end
+	
+	if isEquipped then
+		DespawnPetModel(player, petIndex)
+	end
+	
+	-- Remove pet from inventory and adjust equipped indexes
+	DataService:Update(player, "Inventory", function(inv)
+		-- Remove from equipped list
+		if inv.EquippedPets then
+			local newEquipped = {}
+			for _, equippedIndex in ipairs(inv.EquippedPets) do
+				if equippedIndex ~= petIndex then
+					-- Adjust index for pets after the removed one
+					if equippedIndex > petIndex then
+						table.insert(newEquipped, equippedIndex - 1)
+					else
+						table.insert(newEquipped, equippedIndex)
+					end
+				end
+			end
+			inv.EquippedPets = newEquipped
+		end
+		
+		-- Remove pet from inventory
+		table.remove(inv.PetInventory, petIndex)
+		
+		return inv
+	end)
+	
+	-- Regenerate all pet IDs (indexes shifted after removal)
+	local userId = player.UserId
+	if PlayerPetIDs[userId] then
+		PlayerPetIDs[userId] = {
+			petIndexToID = {},
+			idToPetIndex = {},
+		}
+		
+		local newInventory = DataService:Get(player, "Inventory")
+		if newInventory and newInventory.PetInventory then
+			for index, _ in ipairs(newInventory.PetInventory) do
+				local newPetID = GeneratePetID()
+				PlayerPetIDs[userId].petIndexToID[index] = newPetID
+				PlayerPetIDs[userId].idToPetIndex[newPetID] = index
+			end
+		end
+	end
+	
+	-- Also update SpawnedPets indexes if any pets were spawned after the removed one
+	if SpawnedPets[userId] then
+		local newSpawned = {}
+		for spawnedIndex, model in pairs(SpawnedPets[userId]) do
+			if spawnedIndex ~= petIndex then
+				if spawnedIndex > petIndex then
+					newSpawned[spawnedIndex - 1] = model
+				else
+					newSpawned[spawnedIndex] = model
+				end
+			end
+		end
+		SpawnedPets[userId] = newSpawned
+	end
+	
+	Log(string.format("Player %s deleted pet '%s' (was at index %d)", player.Name, petName, petIndex))
+	
+	NotificationService:SendNotification(player, string.format("Deleted %s.", petName), NotificationService.Category.Success)
+	
+	-- Fire unequipped signal to all clients if the pet was equipped
+	if isEquipped then
+		for _, p in ipairs(Players:GetPlayers()) do
+			PetService.Client.PetUnequipped:Fire(p, {
+				OwnerUserId = player.UserId,
+				ID = petID,
+				PetIndex = petIndex,
+			})
+		end
+		
+		-- Recalculate fuel since multiplier may have changed
+		local StarService = Knit.GetService("StarService")
+		StarService:RecalculateFuel(player)
+	end
+	
+	-- Refresh client data
+	DataService:FireDataReady(player)
+	
+	return true, nil
+end
+
 -- Get all pets for a player (with runtime IDs)
 function PetService:GetPlayerPets(player: Player): { Pet }
 	local DataService = Knit.GetService("DataService")
@@ -569,24 +768,33 @@ function PetService:GetPlayerPets(player: Player): { Pet }
 		local petID = self:GetPetIDByIndex(player, index)
 		if petID then
 			-- Get pet stats from Stats.Pets (petData may not have these values saved)
-			local petType = petData.PetType or "StandardPet"
-			local petStats = Stats.Pets[petType] or Stats.Pets.StandardPet
+			local petType = petData.PetType
+			if not petType then
+				warn(string.format("[PetService] GetPlayerPets: pet at index %d has no PetType", index))
+				continue
+			end
+			local petStats = Stats.Pets[petType]
+			if not petStats then
+				warn(string.format("[PetService] GetPlayerPets: Stats.Pets[%s] not found", petType))
+				continue
+			end
 			
 			table.insert(pets, {
 				ID = petID,
 				Name = petData.Name,
 				PetType = petType,
-				Multiplier = petData.Multiplier or petStats.Multiplier or 1.0,
-				PickupRangeBonus = petData.PickupRangeBonus or petStats.PickupRangeBonus or 1.0,
-				RoamRange = petData.RoamRange or petStats.RoamRange or 30,
-				StarCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius or 5,
-				Velocity = petData.Velocity or petStats.Velocity or 20,
-				World = petData.World or petStats.World or "Main",
-				Level = petData.Level or 1,
-				TierLevel = petData.TierLevel or petData.Level or 1,
-				TierName = petData.TierName or "Common",
-				Rarity = petData.Rarity or petStats.Rarity or "Standard",
+				Multiplier = petData.Multiplier or petStats.Multiplier,
+				PickupRangeBonus = petData.PickupRangeBonus or petStats.PickupRangeBonus,
+				RoamRange = petData.RoamRange or petStats.RoamRange,
+				StarCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius,
+				Velocity = petData.Velocity or petStats.Velocity,
+				World = petData.World or petStats.World,
+				Level = petData.Level,
+				TierLevel = petData.TierLevel or petData.Level,
+				TierName = petData.TierName,
+				Rarity = petData.Rarity or petStats.Rarity,
 				Equipped = equippedSet[index] == true,
+				Locked = petData.Locked == true,
 			})
 		end
 	end
@@ -596,26 +804,14 @@ end
 
 -- Merge pets of the same tier level to create a higher tier pet
 -- @param player Player - The player performing the merge
--- @param targetPetID string - The ID of the pet to merge into (will be upgraded)
--- @param selectedIndexes { number }? - Optional array of selected pet indexes to merge
--- @param selectedIDs { string }? - Optional array of selected pet IDs (must match indexes)
-function PetService:MergePets(player: Player, selectedIndexes: { number }?, selectedIDs: { string }?): (boolean, string?, { Name: string, ID: string, Level: number }?)
+-- @param selectedIDs { string }? - Array of selected pet IDs to merge (resolved to indexes at execution time)
+function PetService:MergePets(player: Player, selectedIDs: { string }?): (boolean, string?, { Name: string, ID: string, Level: number }?)
 	local DataService = Knit.GetService("DataService")
 	local NotificationService = Knit.GetService("NotificationService")
 	
-	if not selectedIndexes or not selectedIDs then
+	if not selectedIDs or #selectedIDs == 0 then
 		NotificationService:SendNotification(player, "No pets selected for merge.", NotificationService.Category.Error)
 		return false, "No pets selected", nil
-	end
-	
-	if #selectedIndexes == 0 or #selectedIDs == 0 then
-		NotificationService:SendNotification(player, "No pets selected for merge.", NotificationService.Category.Error)
-		return false, "No pets selected", nil
-	end
-	
-	if #selectedIndexes ~= #selectedIDs then
-		NotificationService:SendNotification(player, "Invalid selection data.", NotificationService.Category.Error)
-		return false, "Mismatched indexes and IDs", nil
 	end
 	
 	local inventory = DataService:Get(player, "Inventory")
@@ -624,48 +820,118 @@ function PetService:MergePets(player: Player, selectedIndexes: { number }?, sele
 		return false, "Inventory not found", nil
 	end
 	
+	-- Resolve all IDs to current indexes
+	local selectedIndexes = {}
+	for _, petID in ipairs(selectedIDs) do
+		local petIndex = self:GetPetIndexByID(player, petID)
+		if not petIndex then
+			NotificationService:SendNotification(player, "A selected pet is no longer valid. Please try again.", NotificationService.Category.Error)
+			return false, "Invalid pet ID: " .. tostring(petID), nil
+		end
+		table.insert(selectedIndexes, petIndex)
+	end
+	
 	local firstPetIndex = selectedIndexes[1]
 	local firstPet = inventory.PetInventory[firstPetIndex]
 	
 	if not firstPet then
-		NotificationService:SendNotification(player, "Selected pet not found.", NotificationService.Category.Error)
+		NotificationService:SendNotification(player, string.format("Selected pet at index %d not found in inventory.", firstPetIndex), NotificationService.Category.Error)
 		return false, "Pet not found", nil
 	end
 	
-	local tierLevel = firstPet.TierLevel or firstPet.Level or 1
+	local tierLevel = firstPet.TierLevel or firstPet.Level
+	if not tierLevel then
+		NotificationService:SendNotification(player, string.format("Pet at index %d has no TierLevel or Level.", firstPetIndex), NotificationService.Category.Error)
+		return false, "Pet has no tier level", nil
+	end
 	local petName = firstPet.Name
 	local petType = firstPet.PetType
 	local world = firstPet.World
 	
-	if PetMergeStats.IsMaxTier(tierLevel) then
+	if not petType then
+		NotificationService:SendNotification(player, string.format("Pet '%s' has no PetType.", tostring(petName)), NotificationService.Category.Error)
+		return false, "Pet has no PetType", nil
+	end
+	if not world then
+		NotificationService:SendNotification(player, string.format("Pet '%s' has no World.", tostring(petName)), NotificationService.Category.Error)
+		return false, "Pet has no World", nil
+	end
+	
+	-- Get the Egg list for the first pet from Stats.Pets to enforce same-egg merging
+	local firstPetStats = Stats.Pets[petType]
+	if not firstPetStats then
+		NotificationService:SendNotification(player, string.format("Pet stats not found for '%s' (PetType: %s).", petName, tostring(petType)), NotificationService.Category.Error)
+		return false, "Pet stats not found", nil
+	end
+	local firstPetEggs = firstPetStats.Egg
+	if not firstPetEggs then
+		NotificationService:SendNotification(player, string.format("Pet '%s' (PetType: %s) has no Egg list in Stats.", petName, petType), NotificationService.Category.Error)
+		return false, "Pet has no Egg list", nil
+	end
+	
+	local maxRarityTier = Stats.GetMaxRarityTierLevel()
+	if tierLevel >= maxRarityTier then
 		NotificationService:SendNotification(player, "Pets are already at maximum tier.", NotificationService.Category.Warning)
 		return false, "Max tier reached", nil
 	end
 	
 	local copiesRequired = PetMergeStats.GetCopiesRequired(tierLevel)
 	
-	if #selectedIndexes ~= copiesRequired then
-		NotificationService:SendNotification(player, string.format("Need exactly %d copies to merge at tier %d. Selected %d.", copiesRequired, tierLevel, #selectedIndexes), NotificationService.Category.Warning)
+	if #selectedIDs ~= copiesRequired then
+		NotificationService:SendNotification(player, string.format("Need exactly %d copies to merge at tier %d. Selected %d.", copiesRequired, tierLevel, #selectedIDs), NotificationService.Category.Warning)
 		return false, "Incorrect number of pets selected", nil
 	end
 	
 	for i, petIndex in ipairs(selectedIndexes) do
-		local expectedID = self:GetPetIDByIndex(player, petIndex)
-		if expectedID ~= selectedIDs[i] then
-			NotificationService:SendNotification(player, "Pet selection has changed. Please try again.", NotificationService.Category.Error)
-			return false, "Pet ID mismatch - inventory may have changed", nil
-		end
-		
 		local pet = inventory.PetInventory[petIndex]
 		if not pet then
-			NotificationService:SendNotification(player, "Selected pet no longer exists.", NotificationService.Category.Error)
+			NotificationService:SendNotification(player, string.format("Selected pet at index %d no longer exists.", petIndex), NotificationService.Category.Error)
 			return false, "Pet not found at index", nil
 		end
 		
 		local petTierLevel = pet.TierLevel or pet.Level
 		if petTierLevel ~= tierLevel then
-			NotificationService:SendNotification(player, "Selected pets must all be the same tier.", NotificationService.Category.Error)
+			NotificationService:SendNotification(player, string.format("'%s' (PetType: %s) is tier %d, but expected tier %d. All pets must be the same tier.", tostring(pet.Name), tostring(pet.PetType), petTierLevel or -1, tierLevel), NotificationService.Category.Error)
 			return false, "Tier level mismatch", nil
+		end
+		
+		-- Ensure pets are from the same world
+		if pet.World ~= world then
+			NotificationService:SendNotification(player, string.format("'%s' (PetType: %s) is from world '%s', but expected world '%s'. All pets must be from the same world.", tostring(pet.Name), tostring(pet.PetType), tostring(pet.World), world), NotificationService.Category.Error)
+			return false, "World mismatch", nil
+		end
+		
+		-- Ensure pets share at least one egg using the Egg field in Stats.Pets
+		local otherPetType = pet.PetType
+		if not otherPetType then
+			NotificationService:SendNotification(player, string.format("Pet '%s' has no PetType.", tostring(pet.Name)), NotificationService.Category.Error)
+			return false, "Pet has no PetType", nil
+		end
+		local otherPetStats = Stats.Pets[otherPetType]
+		if not otherPetStats then
+			NotificationService:SendNotification(player, string.format("Pet stats not found for '%s' (PetType: %s).", tostring(pet.Name), tostring(otherPetType)), NotificationService.Category.Error)
+			return false, "Pet stats not found", nil
+		end
+		local otherPetEggs = otherPetStats.Egg
+		if not otherPetEggs then
+			NotificationService:SendNotification(player, string.format("Pet '%s' (PetType: %s) has no Egg list in Stats.", tostring(pet.Name), tostring(otherPetType)), NotificationService.Category.Error)
+			return false, "Pet has no Egg list", nil
+		end
+		
+		local sharesEgg = false
+		for _, egg1 in ipairs(firstPetEggs) do
+			for _, egg2 in ipairs(otherPetEggs) do
+				if egg1 == egg2 then
+					sharesEgg = true
+					break
+				end
+			end
+			if sharesEgg then break end
+		end
+		
+		if not sharesEgg then
+			NotificationService:SendNotification(player, string.format("'%s' (PetType: %s) does not share an egg with '%s' (PetType: %s).", tostring(pet.Name), tostring(otherPetType), petName, petType), NotificationService.Category.Error)
+			return false, "Egg type mismatch", nil
 		end
 	end
 	
@@ -699,11 +965,11 @@ function PetService:MergePets(player: Player, selectedIndexes: { number }?, sele
 	
 	local newTierLevel = tierLevel + 1
 	local oldStats = {
-		Multiplier = firstPet.Multiplier or 1.0,
-		PickupRangeBonus = firstPet.PickupRangeBonus or 1.0,
-		RoamRange = firstPet.RoamRange or 30,
-		StarCollectionRadius = firstPet.StarCollectionRadius or 5,
-		Velocity = firstPet.Velocity or 20,
+		Multiplier = firstPet.Multiplier,
+		PickupRangeBonus = firstPet.PickupRangeBonus,
+		RoamRange = firstPet.RoamRange,
+		StarCollectionRadius = firstPet.StarCollectionRadius,
+		Velocity = firstPet.Velocity,
 	}
 	local newStats = PetMergeStats.CalculateMergedStats(oldStats, tierLevel)
 	local newTier = PetMergeStats.GetTierByLevel(newTierLevel)
@@ -714,13 +980,15 @@ function PetService:MergePets(player: Player, selectedIndexes: { number }?, sele
 	end
 	table.sort(indicesToRemove, function(a, b) return a > b end)
 	
+	local rarityInfo = Stats.Rarity[newTierLevel]
+	local rarityName = rarityInfo and rarityInfo.Name or "Common"
+	
 	DataService:Update(player, "Inventory", function(inv)
 		for _, indexToRemove in ipairs(indicesToRemove) do
 			table.remove(inv.PetInventory, indexToRemove)
 		end
 		
 		local newPet = {
-			ID = GeneratePetID(),
 			Name = petName,
 			PetType = petType,
 			World = world,
@@ -732,7 +1000,9 @@ function PetService:MergePets(player: Player, selectedIndexes: { number }?, sele
 			RoamRange = newStats.RoamRange,
 			StarCollectionRadius = newStats.StarCollectionRadius,
 			Velocity = newStats.Velocity,
-			Equipped = false,
+			Rarity = rarityName,
+			ObtainedAt = os.time(),
+			Locked = false,
 		}
 		table.insert(inv.PetInventory, newPet)
 		
@@ -829,17 +1099,25 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 			local petData = inventory.PetInventory[petIndex]
 			if petData then
 				-- Get pet stats from Stats.Pets (petData may not have these values saved)
-				local petType = petData.PetType or "StandardPet"
-				local petStats = Stats.Pets[petType] or Stats.Pets.StandardPet
-				local roamRange = petData.RoamRange or petStats.RoamRange or 30
-				local starCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius or 5
+				local petType = petData.PetType
+				if not petType then
+					warn(string.format("[PetService] PetCollectStar: equipped pet at index %d has no PetType", petIndex))
+					continue
+				end
+				local petStats = Stats.Pets[petType]
+				if not petStats then
+					warn(string.format("[PetService] PetCollectStar: Stats.Pets[%s] not found", petType))
+					continue
+				end
+				local roamRange = petData.RoamRange or petStats.RoamRange
+				local starCollectionRadius = petData.StarCollectionRadius or petStats.StarCollectionRadius
 				
 				maxRoamRange = math.max(maxRoamRange, roamRange)
 				maxStarCollectionRadius = math.max(maxStarCollectionRadius, starCollectionRadius)
 				
 				-- Create pet data with proper stats for multiplier calculation
 				table.insert(equippedPets, {
-					Multiplier = petData.Multiplier or petStats.Multiplier or 1.0,
+					Multiplier = petData.Multiplier or petStats.Multiplier,
 				})
 			end
 		end
@@ -898,7 +1176,6 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 	-- Recalculate fuel based on new Stars count and current multipliers
 	StarService:RecalculateFuel(player)
 	
-	Log(string.format("Pet collected star for player %s, gained %d star equivalents", player.Name, starEquivalent))
 	
 	-- Notify client that star was collected
 	--[[
@@ -907,6 +1184,67 @@ function PetService:PetCollectStar(player: Player, starId: string, petPosition: 
 		StarEquivalent = starEquivalent,
 	})]]
 	
+	return true, nil
+end
+
+-- Equip the best pets by multiplier, replacing any currently equipped pets
+function PetService:EquipBestPets(player: Player): (boolean, string?)
+	local DataService = Knit.GetService("DataService")
+	local MonetizationService = Knit.GetService("MonetizationService")
+
+	local inventory = DataService:Get(player, "Inventory")
+	if not inventory or not inventory.PetInventory then
+		return false, "No inventory"
+	end
+
+	-- Determine max equipped slots
+	local maxPets = Stats.MaxEquippedPets
+	if MonetizationService:HasGamePass(player, "ExtraPets") then
+		maxPets = maxPets + Stats.ExtraPetsBonus
+	end
+
+	-- Unequip all currently equipped pets first
+	local currentEquipped = inventory.EquippedPets and table.clone(inventory.EquippedPets) or {}
+	for _, petIndex in ipairs(currentEquipped) do
+		self:UnequipPetByIndex(player, petIndex)
+	end
+
+	-- Re-fetch inventory after unequips
+	inventory = DataService:Get(player, "Inventory")
+
+	-- Build a list of valid (non-expired) pets with their indices
+	local candidates = {}
+	for index, petData in ipairs(inventory.PetInventory) do
+		if petData then
+			-- Skip expired pets
+			if petData.ExpireLength and petData.ObtainedAt + petData.ExpireLength < os.time() then
+				continue
+			end
+			table.insert(candidates, { Index = index, Multiplier = petData.Multiplier or 0 })
+		end
+	end
+
+	-- Sort by multiplier descending
+	table.sort(candidates, function(a, b)
+		return a.Multiplier > b.Multiplier
+	end)
+
+	-- Equip the top N pets using existing EquipPet
+	local equipped = 0
+	for _, candidate in ipairs(candidates) do
+		if equipped >= maxPets then break end
+		local petID = self:GetPetIDByIndex(player, candidate.Index)
+		if petID then
+			local success = self:EquipPet(player, petID)
+			if success then
+				equipped = equipped + 1
+			end
+		end
+	end
+
+	Log(string.format("Player %s equipped best %d pets", player.Name, equipped))
+
+	DataService:FireDataReady(player)
 	return true, nil
 end
 
@@ -920,8 +1258,23 @@ function PetService.Client:RequestUnequipPet(player: Player, petID: string): (bo
 	return PetService:UnequipPet(player, petID)
 end
 
-function PetService.Client:RequestMergePets(player: Player, selectedIndexes: { number }?, selectedIDs: { string }?)
-	return PetService:MergePets(player, selectedIndexes, selectedIDs)
+-- Client request to equip best pets
+function PetService.Client:RequestEquipBestPets(player: Player): (boolean, string?)
+	return PetService:EquipBestPets(player)
+end
+
+function PetService.Client:RequestMergePets(player: Player, selectedIDs: { string }?)
+	return PetService:MergePets(player, selectedIDs)
+end
+
+-- Client request to delete a pet
+function PetService.Client:RequestDeletePet(player: Player, petID: string): (boolean, string?)
+	return PetService:DeletePet(player, petID)
+end
+
+-- Client request to toggle pet lock
+function PetService.Client:RequestToggleLockPet(player: Player, petID: string): (boolean, string?)
+	return PetService:ToggleLockPet(player, petID)
 end
 
 -- Client request to get all pets
@@ -1000,7 +1353,7 @@ end
 
 -- Store pending merge data for Missing Merge dev product purchases
 -- Called when client detects they're 1 pet short before prompting purchase
-function PetService:StorePendingMerge(player: Player, tierLevel: number, selectedIndexes: { number }, selectedIDs: { string }): boolean
+function PetService:StorePendingMerge(player: Player, tierLevel: number, selectedIDs: { string }): boolean
 	local userId = player.UserId
 	
 	-- Validate the data
@@ -1008,18 +1361,17 @@ function PetService:StorePendingMerge(player: Player, tierLevel: number, selecte
 		return false
 	end
 	
-	if not selectedIndexes or not selectedIDs then
+	if not selectedIDs or #selectedIDs == 0 then
 		return false
 	end
 	
 	PendingMergeData[userId] = {
 		tierLevel = tierLevel,
-		selectedIndexes = selectedIndexes,
 		selectedIDs = selectedIDs,
 		timestamp = os.time(),
 	}
 	
-	Log(string.format("Stored pending merge for player %s: tier %d with %d pets", player.Name, tierLevel, #selectedIndexes))
+	Log(string.format("Stored pending merge for player %s: tier %d with %d pets", player.Name, tierLevel, #selectedIDs))
 	return true
 end
 
@@ -1060,20 +1412,29 @@ function PetService:MergePetsWithException(player: Player, targetTierLevel: numb
 		return false, "Pending merge expired"
 	end
 	
-	local selectedIndexes = pendingData.selectedIndexes
 	local selectedIDs = pendingData.selectedIDs
 	local tierLevel = pendingData.tierLevel
 	
 	-- Clear pending data
 	PendingMergeData[userId] = nil
 	
-	if not selectedIndexes or not selectedIDs or #selectedIndexes == 0 then
+	if not selectedIDs or #selectedIDs == 0 then
 		return false, "Invalid pending merge data"
 	end
 	
 	local inventory = DataService:Get(player, "Inventory")
 	if not inventory or not inventory.PetInventory then
 		return false, "Inventory not found"
+	end
+	
+	-- Resolve IDs to current indexes
+	local selectedIndexes = {}
+	for _, petID in ipairs(selectedIDs) do
+		local petIndex = self:GetPetIndexByID(player, petID)
+		if not petIndex then
+			return false, "A selected pet is no longer valid (ID: " .. tostring(petID) .. ")"
+		end
+		table.insert(selectedIndexes, petIndex)
 	end
 	
 	local firstPetIndex = selectedIndexes[1]
@@ -1084,7 +1445,10 @@ function PetService:MergePetsWithException(player: Player, targetTierLevel: numb
 	end
 	
 	-- Verify the pet's tier matches what we expect
-	local petTierLevel = firstPet.TierLevel or firstPet.Level or 1
+	local petTierLevel = firstPet.TierLevel or firstPet.Level
+	if not petTierLevel then
+		return false, "First pet has no TierLevel or Level"
+	end
 	if petTierLevel ~= tierLevel then
 		return false, "Pet tier mismatch"
 	end
@@ -1093,7 +1457,25 @@ function PetService:MergePetsWithException(player: Player, targetTierLevel: numb
 	local petType = firstPet.PetType
 	local world = firstPet.World
 	
-	if PetMergeStats.IsMaxTier(tierLevel) then
+	if not petType then
+		return false, string.format("Pet '%s' at index %d has no PetType", tostring(petName), firstPetIndex)
+	end
+	if not world then
+		return false, string.format("Pet '%s' at index %d has no World", tostring(petName), firstPetIndex)
+	end
+	
+	-- Get the Egg list for the first pet from Stats.Pets to enforce same-egg merging
+	local firstPetStats = Stats.Pets[petType]
+	if not firstPetStats then
+		return false, string.format("Pet stats not found for '%s' (PetType: %s)", tostring(petName), petType)
+	end
+	local firstPetEggs = firstPetStats.Egg
+	if not firstPetEggs then
+		return false, string.format("Pet '%s' (PetType: %s) has no Egg list in Stats", tostring(petName), petType)
+	end
+	
+	local maxRarityTier = Stats.GetMaxRarityTierLevel()
+	if tierLevel >= maxRarityTier then
 		return false, "Max tier reached"
 	end
 	
@@ -1106,11 +1488,6 @@ function PetService:MergePetsWithException(player: Player, targetTierLevel: numb
 	
 	-- Validate all selected pets
 	for i, petIndex in ipairs(selectedIndexes) do
-		local expectedID = self:GetPetIDByIndex(player, petIndex)
-		if expectedID ~= selectedIDs[i] then
-			return false, "Pet ID mismatch - inventory may have changed"
-		end
-		
 		local pet = inventory.PetInventory[petIndex]
 		if not pet then
 			return false, "Pet not found at index"
@@ -1118,7 +1495,41 @@ function PetService:MergePetsWithException(player: Player, targetTierLevel: numb
 		
 		local currentTierLevel = pet.TierLevel or pet.Level
 		if currentTierLevel ~= tierLevel then
-			return false, "Tier level mismatch"
+			return false, string.format("Tier level mismatch: pet '%s' is tier %s, expected %d", tostring(pet.Name), tostring(currentTierLevel), tierLevel)
+		end
+		
+		-- Ensure same world
+		if pet.World ~= world then
+			return false, string.format("World mismatch: pet '%s' is from '%s', expected '%s'", tostring(pet.Name), tostring(pet.World), world)
+		end
+		
+		-- Ensure pets share at least one egg
+		local otherPetType = pet.PetType
+		if not otherPetType then
+			return false, string.format("Pet '%s' at index %d has no PetType", tostring(pet.Name), petIndex)
+		end
+		local otherPetStats = Stats.Pets[otherPetType]
+		if not otherPetStats then
+			return false, string.format("Pet stats not found for '%s' (PetType: %s)", tostring(pet.Name), otherPetType)
+		end
+		local otherPetEggs = otherPetStats.Egg
+		if not otherPetEggs then
+			return false, string.format("Pet '%s' (PetType: %s) has no Egg list in Stats", tostring(pet.Name), otherPetType)
+		end
+		
+		local sharesEgg = false
+		for _, egg1 in ipairs(firstPetEggs) do
+			for _, egg2 in ipairs(otherPetEggs) do
+				if egg1 == egg2 then
+					sharesEgg = true
+					break
+				end
+			end
+			if sharesEgg then break end
+		end
+		
+		if not sharesEgg then
+			return false, string.format("Egg mismatch: '%s' (PetType: %s) does not share an egg with '%s' (PetType: %s)", tostring(pet.Name), otherPetType, tostring(petName), petType)
 		end
 	end
 	
@@ -1156,11 +1567,11 @@ function PetService:MergePetsWithException(player: Player, targetTierLevel: numb
 	-- Calculate new pet stats
 	local newTierLevel = tierLevel + 1
 	local oldStats = {
-		Multiplier = firstPet.Multiplier or 1.0,
-		PickupRangeBonus = firstPet.PickupRangeBonus or 1.0,
-		RoamRange = firstPet.RoamRange or 30,
-		StarCollectionRadius = firstPet.StarCollectionRadius or 5,
-		Velocity = firstPet.Velocity or 20,
+		Multiplier = firstPet.Multiplier,
+		PickupRangeBonus = firstPet.PickupRangeBonus,
+		RoamRange = firstPet.RoamRange,
+		StarCollectionRadius = firstPet.StarCollectionRadius,
+		Velocity = firstPet.Velocity,
 	}
 	local newStats = PetMergeStats.CalculateMergedStats(oldStats, tierLevel)
 	local newTier = PetMergeStats.GetTierByLevel(newTierLevel)
@@ -1172,13 +1583,15 @@ function PetService:MergePetsWithException(player: Player, targetTierLevel: numb
 	end
 	table.sort(indicesToRemove, function(a, b) return a > b end)
 	
+	local rarityInfo = Stats.Rarity[newTierLevel]
+	local rarityName = rarityInfo and rarityInfo.Name or "Common"
+	
 	DataService:Update(player, "Inventory", function(inv)
 		for _, indexToRemove in ipairs(indicesToRemove) do
 			table.remove(inv.PetInventory, indexToRemove)
 		end
 		
 		local newPet = {
-			ID = GeneratePetID(),
 			Name = petName,
 			PetType = petType,
 			World = world,
@@ -1190,7 +1603,9 @@ function PetService:MergePetsWithException(player: Player, targetTierLevel: numb
 			RoamRange = newStats.RoamRange,
 			StarCollectionRadius = newStats.StarCollectionRadius,
 			Velocity = newStats.Velocity,
-			Equipped = false,
+			Rarity = rarityName,
+			ObtainedAt = os.time(),
+			Locked = false,
 		}
 		table.insert(inv.PetInventory, newPet)
 		
@@ -1247,8 +1662,8 @@ function PetService:MergePetsWithException(player: Player, targetTierLevel: numb
 end
 
 -- Client function to store pending merge data
-function PetService.Client:StorePendingMerge(player: Player, tierLevel: number, selectedIndexes: { number }, selectedIDs: { string }): boolean
-	return PetService:StorePendingMerge(player, tierLevel, selectedIndexes, selectedIDs)
+function PetService.Client:StorePendingMerge(player: Player, tierLevel: number, selectedIDs: { string }): boolean
+	return PetService:StorePendingMerge(player, tierLevel, selectedIDs)
 end
 
 -- Clean up when player leaves

@@ -52,6 +52,13 @@ Stats.MaxPhysicalSpeed = 130
 -- Base acceleration for track movement (studs/sec²)
 Stats.BaseAcceleration = 20
 
+-- Overdrive: time window (seconds from run start) during which overdrive can be activated
+Stats.OverdriveTimeframe = 5
+-- Overdrive: speed multiplier applied to initialSpeed, maxSpeed, and acceleration
+Stats.OverdriveSpeedMultiplier = 1.5
+-- Overdrive: duration in seconds the boost lasts
+Stats.OverdriveDuration = 3
+
 -- World radius values for track movement (distance from center)
 Stats.WorldRadius = {
 	Main = 205,
@@ -88,6 +95,15 @@ end
 -- Boss spawn requirement (stars needed to trigger boss fight)
 Stats.BossUnlockRequirement = { Stars = 250 }
 
+-- Rewards given to all online players when a boss is defeated
+Stats.BossDefeatRewards = {
+	Cash = 500,           -- Flat cash reward per player
+	Potion = "SuperLuck", -- Potion granted on defeat (key from PotionsService definitions)
+}
+
+-- Player passive boss damage per second (while standing in arena)
+Stats.PlayerBossDamagePerSecond = 5
+
 -- Default pet attack rate against bosses (attacks per second)
 Stats.DefaultPetAttackRate = 1 -- 1 attack per second
 
@@ -96,11 +112,11 @@ Stats.DefaultPetAttackRate = 1 -- 1 attack per second
 -- Format: { Distance = number, Rebirth = number? }
 Stats.WorldUnlockRequirements = {
 	-- Main is unlocked by default
-	StoneAge = { Distance = 100510, Rebirth = 1 },
-	AncientEgypt = { Distance = 510110, Rebirth = 2 },
-	Medieval = { Distance = 1250000, Rebirth = 5 },
-	Industrial = { Distance = 5250000, Rebirth = 7 },
-	Neon = { Distance = 105250000, Rebirth = 10 },
+	StoneAge = { Distance = 5_510, Rebirth = 1 },
+	AncientEgypt = { Distance = 510_110, Rebirth = 2 },
+	Medieval = { Distance = 1_250_000, Rebirth = 5 },
+	Industrial = { Distance = 5_250_000, Rebirth = 7 },
+	Neon = { Distance = 105_250_000, Rebirth = 10 },
 }
 
 -- Get distance requirement for a world
@@ -328,10 +344,9 @@ Stats.Eggs = {
 		Tier = "Basic",
 		Currency = "Cash",
 		World = "Main",
-		-- Pets array contains possible pets with their spawn probabilities (must sum to 1.0)
 		Pets = {
-			{ Pet = "StandardPet", Probability = 0.70, LuckProbability = 0.50, SuperLuckProbability = 0.25 }, -- 70% chance
-			{ Pet = "PremiumPet", Probability = 0.30, LuckProbability = 0.50, SuperLuckProbability = 0.75 }, -- 30% chance (same pet, for testing)
+			{ Pet = "StandardPet", Probability = 0.70, LuckProbability = 0.50, SuperLuckProbability = 0.25 },
+			{ Pet = "PremiumPet", Probability = 0.30, LuckProbability = 0.50, SuperLuckProbability = 0.75 },
 		},
 	},
 	BestFriendEgg = {
@@ -339,9 +354,7 @@ Stats.Eggs = {
 		Tier = "Basic",
 		Currency = "Cash",
 		World = "Main",
-		-- Pets array contains possible pets with their spawn probabilities (must sum to 1.0)
 		Pets = {
-			{ Pet = "StandardPet", Probability = 0.00, LuckProbability = 0.00, SuperLuckProbability = 0.00 }, -- 0% chance
 			{ Pet = "PercentagePet", Probability = 1.00, LuckProbability = 1.00, SuperLuckProbability = 1.00 }, -- 100% chance
 		},
 	},
@@ -374,11 +387,14 @@ Stats.Eggs = {
 	},
 }
 
-Stats.TierColors = setmetatable({
-	[1] = Color3.fromRGB(255, 255, 255), -- Standard - White
-	[2] = Color3.fromRGB(0, 255, 255),   -- Premium - Cyan
-	[3] = Color3.fromRGB(255, 215, 0),   -- Limited Time - Gold
-	[4] = Color3.fromRGB(255, 0, 255),   -- Exclusive - Magenta
+Stats.Rarity = setmetatable({
+	[1] = {Name = "Common", Color = Color3.fromRGB(255, 255, 255)},   -- White
+	[2] = {Name = "Uncommon", Color = Color3.fromRGB(0, 255, 255)},   -- Cyan
+	[3] = {Name = "Rare", Color = Color3.fromRGB(255, 215, 0)},       -- Gold
+	[4] = {Name = "Epic", Color = Color3.fromRGB(255, 0, 255)},       -- Magenta
+	[5] = {Name = "Legendary", Color = Color3.fromRGB(255, 152, 0)},  -- Orange
+	[6] = {Name = "Mythic", Color = Color3.fromRGB(244, 67, 54)},     -- Red
+	[7] = {Name = "Divine", Color = Color3.fromRGB(255, 215, 0)},     -- Gold
 }, {
 	__index = function()
 		warn("Could not find tier color, defaulting to White")
@@ -386,11 +402,24 @@ Stats.TierColors = setmetatable({
 	end,
 })
 
+-- Get the maximum rarity tier level dynamically from Stats.Rarity
+-- Removing entries from Stats.Rarity will lower the max tier level
+function Stats.GetMaxRarityTierLevel(): number
+	local maxLevel = 0
+	for level in Stats.Rarity do
+		if level > maxLevel then
+			maxLevel = level
+		end
+	end
+	return maxLevel
+end
+
 -- Pet Configuration
 -- Pet types with their base stats
 Stats.Pets = {
 	StandardPet = {
 		Name = "Standard Pet",
+		Egg = {"StandardEgg"},
 		TierLevel = 1, -- Required especially during merging pets
 		Multiplier = 10, -- x10
 		PickupRangeBonus = 1.0, -- No range extension (base range)
@@ -399,10 +428,11 @@ Stats.Pets = {
 		Velocity = 20, -- Pet movement speed (studs/sec)
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
-		Rarity = "Standard", -- Standard, Premium, or LimitedTime
+		Rarity = "Common", -- Common, Uncommon, Rare, or Epic
 	},
 	PremiumPet = {
 		Name = "Premium Pet",
+		Egg = {"StandardEgg", "PremiumWorldEgg"},
 		TierLevel = 2, -- Required especially during merging pets
 		Multiplier = 20, -- x10
 		PickupRangeBonus = 2.0, -- No range extension (base range)
@@ -411,10 +441,11 @@ Stats.Pets = {
 		Velocity = 25, -- Pet movement speed (studs/sec)
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
-		Rarity = "Premium", -- Standard, Premium, or LimitedTime
+		Rarity = "Uncommon", -- Common, Uncommon, Rare, or Epic
 	},
 	GoldenPet = {
 		Name = "Golden Pet",
+		Egg = {"GoldenChronoEgg"},
 		TierLevel = 3, -- Required especially during merging pets
 		Multiplier = 50, -- x50
 		PickupRangeBonus = 3.0, -- Extended range
@@ -423,10 +454,11 @@ Stats.Pets = {
 		Velocity = 30, -- Pet movement speed (studs/sec)
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
-		Rarity = "Exclusive", -- Standard, Premium, LimitedTime, or Exclusive
+		Rarity = "Rare", -- Common, Uncommon, Rare, or Epic
 	},
 	PercentagePet = {
 		Name = "Percentage Pet",
+		Egg = {"BestFriendEgg"},
 		TierLevel = 3, -- Required especially during merging pets
 		Multiplier = 0,
 		PickupRangeBonus = 3.0, -- Extended range
@@ -435,11 +467,12 @@ Stats.Pets = {
 		Velocity = 35, -- Pet movement speed (studs/sec)
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
-		Rarity = "Exclusive", -- Standard, Premium, LimitedTime, or Exclusive
+		Rarity = "Rare", -- Common, Uncommon, Rare, or Epic
 		Percentage = 40
 	},
 	LimitedPet = {
 		Name = "Limited Pet",
+		Egg = {"LimitedHistoricalEgg"},
 		TierLevel = 4, -- Required especially during merging pets
 		Multiplier = 135, -- x35
 		PickupRangeBonus = 2.5, -- Extended range
@@ -448,10 +481,24 @@ Stats.Pets = {
 		Velocity = 28, -- Pet movement speed (studs/sec)
 		World = "Main", -- Associated world for merging
 		BaseTierLevel = 1, -- Starting tier level
-		Rarity = "LimitedTime", -- Standard, Premium, LimitedTime, or Exclusive
+		Rarity = "Epic", -- Common, Uncommon, Rare, or Epic
 		ExpireLength = 30, -- debug time: 30s
 	}
 }
+
+do
+	for key, pet in pairs(Stats.Pets) do
+		pet.PetType = key
+	end
+	Stats.Pets = setmetatable(Stats.Pets, {
+		__newindex = function(self, key, value)
+			if type(value) == "table" then
+				value.PetType = key
+			end
+			rawset(self, key, value)
+		end,
+	})
+end
 
 -- Calculate total fuel bonus from all equipped pets
 -- Returns the sum of all equipped pets' bonuses (0 if no pets equipped)
@@ -479,7 +526,7 @@ function Stats.CalculateFuelMultiplier(equippedPets: {any}?, potionMultiplier: n
 			highestMultiplier = math.max(highestMultiplier, pet.Multiplier or 0)
 		end
 	end
-	warn(totalPercentageBonus, highestMultiplier)
+	
 	local totalBonus = baseTotal + (highestMultiplier * (totalPercentageBonus / 100))
 	
 	-- Apply potion multiplier if provided
@@ -532,6 +579,36 @@ function Stats.CalculateFuelFromStars(stars: number, petBonus: number, rebirthBo
 	-- If all bonuses are 0, use 1 as default multiplier
 	local totalMultiplier = totalBonuses > 0 and totalBonuses or 1
 	return math.floor(stars * totalMultiplier)
+end
+
+-- Calculate the effective probability for a pet option based on which luck distributions are active.
+-- There are exactly 4 states:
+--   1. No luck:       use Probability (base)
+--   2. Luck only:     use LuckProbability
+--   3. SuperLuck only: use SuperLuckProbability
+--   4. Both active:   stack — continue the Luck→SuperLuck progression by half a step
+--                     Formula: SuperLuckProb + (SuperLuckProb - LuckProb) * 0.5
+-- Sources (gamepass, potion, server bonus) only determine WHETHER a distribution is available.
+-- They do NOT affect the magnitude of the stacking.
+-- Sum-to-1.0 is preserved across all pet options because interpolation/extrapolation
+-- of distributions that each sum to 1.0 always produces a valid distribution.
+-- @param defaultProb number - The base Probability for this pet option
+-- @param luckProb number - The LuckProbability for this pet option
+-- @param superLuckProb number - The SuperLuckProbability for this pet option
+-- @param hasLuck boolean - Whether any Luck source is active (Luck gamepass, LuckParty, etc.)
+-- @param hasSuperLuck boolean - Whether any SuperLuck source is active (SuperLuck gamepass, SuperLuck potion, etc.)
+-- @return number - The effective probability
+function Stats.CalculateStackedProbability(defaultProb: number, luckProb: number, superLuckProb: number, hasLuck: boolean, hasSuperLuck: boolean): number
+	if hasLuck and hasSuperLuck then
+		-- Both active: continue the Luck→SuperLuck direction by half a step past SuperLuck
+		return superLuckProb + (superLuckProb - luckProb) * 0.5
+	elseif hasSuperLuck then
+		return superLuckProb
+	elseif hasLuck then
+		return luckProb
+	else
+		return defaultProb
+	end
 end
 
 return Stats

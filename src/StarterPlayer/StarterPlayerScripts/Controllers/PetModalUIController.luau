@@ -13,6 +13,7 @@ local PetMergeStats = require(Modules:WaitForChild("PetMergeStats"))
 export type PetData = {
 	ID: string,
 	Name: string,
+	PetType: string?,
 	Multiplier: number,
 	PickupRangeBonus: number?,
 	RoamRange: number?,
@@ -24,6 +25,7 @@ export type PetData = {
 	TierName: string?,
 	Rarity: string?,
 	Equipped: boolean?,
+	Locked: boolean?,
 	Index: number,
 }
 
@@ -84,6 +86,8 @@ export type UIColors = {
 	StrokeDefault: Color3,
 	EquipEnabled: Color3,
 	EquipDisabled: Color3,
+	LockEnabled: Color3,
+	LockDisabled: Color3,
 }
 
 local PetModalUIController = Knit.CreateController({
@@ -100,7 +104,20 @@ local Colors: UIColors = {
 	StrokeDefault = Color3.fromRGB(49, 49, 49),
 	EquipEnabled = Color3.fromRGB(80, 200, 80),
 	EquipDisabled = Color3.fromRGB(200, 80, 80),
+	LockEnabled = Color3.fromRGB(200, 160, 40),
+	LockDisabled = Color3.fromRGB(100, 100, 100),
 }
+
+local DEBUG_COLORS = {
+	Background = Color3.fromRGB(30, 30, 35),
+	Header = Color3.fromRGB(40, 40, 50),
+	RowEven = Color3.fromRGB(38, 38, 45),
+	RowOdd = Color3.fromRGB(45, 45, 55),
+	Key = Color3.fromRGB(130, 200, 255),
+	Value = Color3.fromRGB(255, 255, 255),
+}
+
+local debugFrame: Frame? = nil
 
 local UI: UIComponents = {} :: UIComponents
 
@@ -146,6 +163,22 @@ local function UpdateEquipButtonAppearance(isEquipped: boolean)
 		UI.PetModal.EquipEmoji.Text = "✅"
 		UI.PetModal.EquipLabel.Text = "Equip"
 		UI.PetModal.EquipButton.BackgroundColor3 = Colors.EquipEnabled
+	end
+end
+
+local function UpdateLockButtonAppearance(isLocked: boolean)
+	local lockButton = UI.PetModal.LockButton
+	if not lockButton then return end
+	local emoji = lockButton:FindFirstChild("Emoji")
+	local label = lockButton:FindFirstChild("TextLabel")
+	if isLocked then
+		if emoji then emoji.Text = "🔒" end
+		if label then label.Text = "Locked" end
+		lockButton.BackgroundColor3 = Colors.LockEnabled
+	else
+		if emoji then emoji.Text = "🔓" end
+		if label then label.Text = "Unlocked" end
+		lockButton.BackgroundColor3 = Colors.LockDisabled
 	end
 end
 
@@ -259,7 +292,28 @@ local function SelectAllPets()
 	State.Debounce.SelectAll = false
 end
 
-local function GetMatchingPetsForMerge(tierLevel: number): { { Index: number, PetData: PetData } }
+-- Check if two pets share at least one egg in common via Stats.Pets
+local function SharesEgg(petTypeA: string, petTypeB: string): boolean
+	local statsA = Stats.Pets[petTypeA]
+	local statsB = Stats.Pets[petTypeB]
+	if not statsA or not statsB then
+		warn(string.format("[PetModalUIController] Missing Stats.Pets entry: %s or %s", tostring(petTypeA), tostring(petTypeB)))
+		return false
+	end
+	local eggsA = statsA.Egg
+	local eggsB = statsB.Egg
+	if not eggsA or not eggsB then return false end
+	for _, egg1 in ipairs(eggsA) do
+		for _, egg2 in ipairs(eggsB) do
+			if egg1 == egg2 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+local function GetMatchingPetsForMerge(tierLevel: number, petType: string, world: string): { { Index: number, PetData: PetData } }
 	local controllers = GetControllers()
 	local data = controllers.UI:GetData()
 	local petInventory = data.Inventory.PetInventory
@@ -267,13 +321,19 @@ local function GetMatchingPetsForMerge(tierLevel: number): { { Index: number, Pe
 	local matchingPets: { { Index: number, PetData: PetData } } = {}
 	
 	for index, petData in ipairs(petInventory) do
-		if petData.TierLevel == tierLevel then
+		-- Must match: same tier level, same world, and at least one egg in common
+		if petData.TierLevel == tierLevel
+			and petData.World == world
+			and petData.PetType
+			and SharesEgg(petType, petData.PetType)
+		then
 			table.insert(matchingPets, {
 				Index = index,
 				PetData = {
 					ID = petData.ID,
-					Name = petData.Name or "Unknown Pet",
-					Multiplier = petData.Multiplier or 1.0,
+					Name = petData.Name,
+					PetType = petData.PetType,
+					Multiplier = petData.Multiplier,
 					PickupRangeBonus = petData.PickupRangeBonus,
 					RoamRange = petData.RoamRange,
 					StarCollectionRadius = petData.StarCollectionRadius,
@@ -329,11 +389,209 @@ local function GetSelectedPetIDs(): { string }
 	return ids
 end
 
+local function FormatValue(value: any): string
+	if type(value) == "table" then
+		local parts = {}
+		for _, v in ipairs(value) do
+			table.insert(parts, tostring(v))
+		end
+		return table.concat(parts, ", ")
+	elseif type(value) == "boolean" then
+		return value and "true" or "false"
+	else
+		return tostring(value)
+	end
+end
+
+local function CreateDebugInfoFrame(): Frame
+	local frame = Instance.new("Frame")
+	frame.Name = "PetDebugInfo"
+	frame.Size = UDim2.new(0, 320, 0, 400)
+	frame.Position = UDim2.new(0.5, -160, 0.5, -200)
+	frame.AnchorPoint = Vector2.new(0, 0)
+	frame.BackgroundColor3 = DEBUG_COLORS.Background
+	frame.BorderSizePixel = 0
+	frame.Active = true
+	frame.Draggable = true
+	frame.ZIndex = 1100
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = frame
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(80, 80, 90)
+	stroke.Thickness = 1
+	stroke.Parent = frame
+
+	-- Header
+	local header = Instance.new("Frame")
+	header.Name = "Header"
+	header.Size = UDim2.new(1, 0, 0, 36)
+	header.BackgroundColor3 = DEBUG_COLORS.Header
+	header.BorderSizePixel = 0
+	header.ZIndex = 1101
+	header.Parent = frame
+
+	local headerCorner = Instance.new("UICorner")
+	headerCorner.CornerRadius = UDim.new(0, 8)
+	headerCorner.Parent = header
+
+	local headerFix = Instance.new("Frame")
+	headerFix.Size = UDim2.new(1, 0, 0, 10)
+	headerFix.Position = UDim2.new(0, 0, 1, -10)
+	headerFix.BackgroundColor3 = DEBUG_COLORS.Header
+	headerFix.BorderSizePixel = 0
+	headerFix.ZIndex = 1101
+	headerFix.Parent = header
+
+	local headerTitle = Instance.new("TextLabel")
+	headerTitle.Name = "Title"
+	headerTitle.Size = UDim2.new(1, -40, 1, 0)
+	headerTitle.Position = UDim2.new(0, 10, 0, 0)
+	headerTitle.BackgroundTransparency = 1
+	headerTitle.Text = "🐾 Pet Debug Info"
+	headerTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+	headerTitle.TextSize = 14
+	headerTitle.Font = Enum.Font.GothamBold
+	headerTitle.TextXAlignment = Enum.TextXAlignment.Left
+	headerTitle.ZIndex = 1102
+	headerTitle.Parent = header
+
+	-- Close button
+	local closeBtn = Instance.new("TextButton")
+	closeBtn.Name = "CloseButton"
+	closeBtn.Size = UDim2.new(0, 28, 0, 28)
+	closeBtn.Position = UDim2.new(1, -32, 0, 4)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+	closeBtn.Text = "X"
+	closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	closeBtn.TextSize = 14
+	closeBtn.Font = Enum.Font.GothamBold
+	closeBtn.ZIndex = 1102
+	closeBtn.Parent = header
+
+	local closeBtnCorner = Instance.new("UICorner")
+	closeBtnCorner.CornerRadius = UDim.new(0, 6)
+	closeBtnCorner.Parent = closeBtn
+
+	-- Scrolling content
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Name = "Content"
+	scroll.Size = UDim2.new(1, -12, 1, -44)
+	scroll.Position = UDim2.new(0, 6, 0, 40)
+	scroll.BackgroundTransparency = 1
+	scroll.ScrollBarThickness = 4
+	scroll.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 120)
+	scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	scroll.ZIndex = 1101
+	scroll.Parent = frame
+
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 1)
+	layout.Parent = scroll
+
+	closeBtn.MouseButton1Click:Connect(function()
+		frame.Visible = false
+	end)
+
+	return frame
+end
+
+local function PopulateDebugFrame(petData: PetData)
+	if not debugFrame then return end
+
+	local scroll = debugFrame:FindFirstChild("Content") :: ScrollingFrame
+	if not scroll then return end
+
+	-- Clear existing rows
+	for _, child in ipairs(scroll:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+
+	-- Build a sorted list of keys from petData
+	-- Also pull in Stats.Pets values for the PetType as fallback/extra info
+	local displayData: { { Key: string, Value: string } } = {}
+	local seenKeys: { [string]: boolean } = {}
+
+	-- First add all petData fields
+	for key, value in pairs(petData :: any) do
+		table.insert(displayData, { Key = tostring(key), Value = FormatValue(value) })
+		seenKeys[tostring(key)] = true
+	end
+
+	-- Then add any extra fields from Stats.Pets[PetType] that aren't already shown
+	local petType = petData.PetType
+	if petType then
+		local statsPet = Stats.Pets[petType]
+		if statsPet then
+			for key, value in pairs(statsPet) do
+				local keyStr = tostring(key)
+				if not seenKeys[keyStr] then
+					table.insert(displayData, { Key = keyStr .. " (Stats)", Value = FormatValue(value) })
+					seenKeys[keyStr] = true
+				end
+			end
+		end
+	end
+
+	-- Sort alphabetically by key
+	table.sort(displayData, function(a, b)
+		return a.Key < b.Key
+	end)
+
+	-- Create rows
+	for i, entry in ipairs(displayData) do
+		local row = Instance.new("Frame")
+		row.Name = "Row_" .. entry.Key
+		row.Size = UDim2.new(1, 0, 0, 24)
+		row.BackgroundColor3 = if i % 2 == 0 then DEBUG_COLORS.RowEven else DEBUG_COLORS.RowOdd
+		row.BorderSizePixel = 0
+		row.LayoutOrder = i
+		row.ZIndex = 1102
+		row.Parent = scroll
+
+		local keyLabel = Instance.new("TextLabel")
+		keyLabel.Name = "Key"
+		keyLabel.Size = UDim2.new(0.45, -4, 1, 0)
+		keyLabel.Position = UDim2.new(0, 8, 0, 0)
+		keyLabel.BackgroundTransparency = 1
+		keyLabel.Text = entry.Key .. ":"
+		keyLabel.TextColor3 = DEBUG_COLORS.Key
+		keyLabel.TextSize = 12
+		keyLabel.Font = Enum.Font.GothamMedium
+		keyLabel.TextXAlignment = Enum.TextXAlignment.Left
+		keyLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		keyLabel.ZIndex = 1103
+		keyLabel.Parent = row
+
+		local valueLabel = Instance.new("TextLabel")
+		valueLabel.Name = "Value"
+		valueLabel.Size = UDim2.new(0.55, -8, 1, 0)
+		valueLabel.Position = UDim2.new(0.45, 0, 0, 0)
+		valueLabel.BackgroundTransparency = 1
+		valueLabel.Text = entry.Value
+		valueLabel.TextColor3 = DEBUG_COLORS.Value
+		valueLabel.TextSize = 12
+		valueLabel.Font = Enum.Font.Gotham
+		valueLabel.TextXAlignment = Enum.TextXAlignment.Left
+		valueLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		valueLabel.ZIndex = 1103
+		valueLabel.Parent = row
+	end
+end
+
 function PetModalUIController:OpenPetModal(petData: PetData)
 	local UIFramesController = Knit.GetController("UIFramesController")
 	State.SelectedPetData = petData
-	UI.PetModal.Multiplier.Text = string.format("x%.1f Multiplier", petData.Multiplier or 1.0)
+	UI.PetModal.NameLabel.Text = petData.Name or "Unknown"
+	UI.PetModal.Multiplier.Text = string.format("x%.1f Multiplier", petData.Multiplier)
 	UpdateEquipButtonAppearance(petData.Equipped or false)
+	UpdateLockButtonAppearance(petData.Locked or false)
 	UIFramesController:OpenFrame("PetModal")
 end
 
@@ -341,13 +599,16 @@ function PetModalUIController:ClosePetModal()
 	local UIFramesController = Knit.GetController("UIFramesController")
 	UIFramesController:CloseFrame("PetModal")
 	State.SelectedPetData = nil
+	if debugFrame then
+		debugFrame.Visible = false
+	end
 end
 
 function PetModalUIController:GetSelectedPetData(): PetData?
 	return State.SelectedPetData
 end
 
-function PetModalUIController:UpdateMergeUI(tierLevel: number)
+function PetModalUIController:UpdateMergeUI(tierLevel: number, petType: string, world: string)
 	local UIFramesController = Knit.GetController("UIFramesController")
 	ClearMergePetConnections()
 	ClearMergePetGrid()
@@ -356,7 +617,7 @@ function PetModalUIController:UpdateMergeUI(tierLevel: number)
 	State.Merge.TierLevel = tierLevel
 	State.Merge.RequiredCopies = PetMergeStats.GetCopiesRequired(tierLevel)
 	
-	local matchingPets = GetMatchingPetsForMerge(tierLevel)
+	local matchingPets = GetMatchingPetsForMerge(tierLevel, petType, world)
 	
 	if #matchingPets == 0 then
 		return
@@ -399,6 +660,9 @@ function PetModalUIController:KnitInit()
 		EquipLabel = nil :: any,
 		MergeButton = nil :: any,
 		Multiplier = nil :: any,
+		NameLabel = nil :: any,
+		DeleteButton = nil :: any,
+		LockButton = nil :: any,
 	}
 	
 	UI.PetModal.DarkOverlay = UI.PetModal.ScreenGui:WaitForChild("DarkOverlay")
@@ -409,7 +673,18 @@ function PetModalUIController:KnitInit()
 	UI.PetModal.EquipLabel = UI.PetModal.EquipButton:WaitForChild("TextLabel")
 	UI.PetModal.MergeButton = UI.PetModal.MainFrame:WaitForChild("MergeButton")
 	UI.PetModal.Multiplier = UI.PetModal.MainFrame:WaitForChild("Multiplier")
-	
+	UI.PetModal.NameLabel = UI.PetModal.MainFrame:WaitForChild("Name")
+	UI.PetModal.DeleteButton = UI.PetModal.MainFrame:WaitForChild("Delete")
+	UI.PetModal.LockButton = UI.PetModal.MainFrame:WaitForChild("Lock")
+
+	-- Debug button already exists in the MainFrame
+	UI.PetModal.DebugButton = UI.PetModal.MainFrame:WaitForChild("Debug")
+
+	-- Create the debug info frame (parented to ScreenGui so it floats)
+	debugFrame = CreateDebugInfoFrame()
+	debugFrame.Visible = false
+	debugFrame.Parent = UI.PetModal.ScreenGui
+
 	UI.Merge = {
 		ScreenGui = PlayerGui:WaitForChild("UI_Merge"),
 		MainFrame = nil :: any,
@@ -512,9 +787,101 @@ function PetModalUIController:KnitStart()
 		end
 		
 		local tierLevel = State.SelectedPetData.TierLevel or State.SelectedPetData.Level or 1
-		self:UpdateMergeUI(tierLevel)
+		local maxRarityTier = Stats.GetMaxRarityTierLevel()
+		if tierLevel >= maxRarityTier then
+			warn("[PetModalUIController] Pet is already at maximum rarity tier level.")
+			return
+		end
+		local petType = State.SelectedPetData.PetType
+		local world = State.SelectedPetData.World
+		if not petType or not world then
+			warn("[PetModalUIController] Cannot open merge: missing PetType or World on selected pet")
+			return
+		end
+		self:UpdateMergeUI(tierLevel, petType, world)
+	end)
+
+	Connections["PetModalDebug"] = UI.PetModal.DebugButton.MouseButton1Click:Connect(function()
+		if not State.SelectedPetData then
+			return
+		end
+
+		if debugFrame then
+			PopulateDebugFrame(State.SelectedPetData)
+			debugFrame.Visible = not debugFrame.Visible
+		end
+	end)
+
+	Connections["PetModalDelete"] = UI.PetModal.DeleteButton.MouseButton1Click:Connect(function()
+		if not State.SelectedPetData then
+			return
+		end
+
+		if State.Debounce.EquipAction then
+			return
+		end
+
+		State.Debounce.EquipAction = true
+
+		local petID = State.SelectedPetData.ID
+		services.Pet:RequestDeletePet(petID):andThen(function(success, errorMsg)
+			if success then
+				self:ClosePetModal()
+				controllers.Inventory:UpdatePetsInventory()
+			else
+				controllers.Notification:ShowNotification(
+					"Failed to delete pet: " .. (errorMsg or "Unknown error"),
+					controllers.Notification.Category.Error,
+					3
+				)
+			end
+
+			State.Debounce.EquipAction = false
+		end)
 	end)
 	
+	Connections["PetModalLock"] = UI.PetModal.LockButton.MouseButton1Click:Connect(function()
+		if not State.SelectedPetData then
+			return
+		end
+
+		if State.Debounce.EquipAction then
+			return
+		end
+
+		State.Debounce.EquipAction = true
+
+		local petID = State.SelectedPetData.ID
+		services.Pet:RequestToggleLockPet(petID):andThen(function(success, errorMsg)
+			if not success then
+				controllers.Notification:ShowNotification(
+					"Failed to toggle lock: " .. (errorMsg or "Unknown error"),
+					controllers.Notification.Category.Error,
+					3
+				)
+			end
+			-- Do NOT update lock button here - DataReady will handle it
+
+			State.Debounce.EquipAction = false
+		end)
+	end)
+
+	-- Listen for DataReady to refresh lock button when pet modal is open
+	local DataService = Knit.GetService("DataService")
+	Connections["DataReadyLockRefresh"] = DataService.DataReady:Connect(function(newData)
+		if not State.SelectedPetData then return end
+		-- Find the currently selected pet in the new data by ID
+		local petInventory = newData and newData.Inventory and newData.Inventory.PetInventory
+		if not petInventory then return end
+		for _, petData in ipairs(petInventory) do
+			if petData.ID == State.SelectedPetData.ID then
+				State.SelectedPetData.Locked = petData.Locked == true
+				UpdateLockButtonAppearance(State.SelectedPetData.Locked)
+				break
+			end
+		end
+	end)
+
 	Connections["MergeSelectAll"] = UI.Merge.SelectAllButton.MouseButton1Click:Connect(function()
 		SelectAllPets()
 	end)
@@ -535,11 +902,10 @@ function PetModalUIController:KnitStart()
 			if tierLevel >= 1 and tierLevel <= 3 then
 				State.Debounce.MergeExecution = true
 				
-				local selectedIndexes = GetSelectedPetIndexes()
 				local selectedIDs = GetSelectedPetIDs()
 				
 				-- Store pending merge data on server
-				services.Pet:StorePendingMerge(tierLevel, selectedIndexes, selectedIDs):andThen(function(stored)
+				services.Pet:StorePendingMerge(tierLevel, selectedIDs):andThen(function(stored)
 					if stored then
 						-- Get the appropriate dev product ID
 						local MonetizationService = Knit.GetService("MonetizationService")
@@ -588,10 +954,9 @@ function PetModalUIController:KnitStart()
 		
 		State.Debounce.MergeExecution = true
 		
-		local selectedIndexes = GetSelectedPetIndexes()
 		local selectedIDs = GetSelectedPetIDs()
 		
-		services.Pet:RequestMergePets(selectedIndexes, selectedIDs):andThen(function(success, errorMsg, resultData)
+		services.Pet:RequestMergePets(selectedIDs):andThen(function(success, errorMsg, resultData)
 			if success then
 				UIFramesController:CloseAllFrames()
 				

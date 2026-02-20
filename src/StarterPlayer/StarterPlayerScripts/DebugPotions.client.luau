@@ -4,7 +4,7 @@
 	Set DEBUG_ENABLED to false to disable this feature.
 ]]
 
-local DEBUG_ENABLED = false
+local DEBUG_ENABLED = true
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")

@@ -48,6 +48,14 @@ local UI = {
 		Gui = nil :: ScreenGui?,
 		MainFrame = nil :: Frame?,
 	} :: UIReference,
+	ServerBonus = {
+		Gui = nil :: ScreenGui?,
+		MainFrame = nil :: Frame?,
+		BonusButton = nil :: TextButton?,
+		CloseButton = nil :: TextButton?,
+		ServerLuck = nil :: TextLabel?,
+		ServerPoints = nil :: TextLabel?,
+	} :: UIReference,
 	RebirthMenu = nil :: Frame?,
 	WorldMenu = nil :: Frame?,
 }
@@ -60,9 +68,9 @@ local buttonPressed = false
 
 local data = {
 	Currencies = { Cash = 0, Gems = 0 },
-	Stats = { TotalDistance = 0, Points = 0, Rebirths = 0, Fuel = 100, Stars = 0 },
+	Stats = { Points = 0, Rebirths = 0, Fuel = 100, Stars = 0 },
 	Progression = { CurrentWorld = "Main", UnlockedWorlds = { "Main" } },
-	Inventory = { PetInventory = {}, EquippedPets = {}, Potions = {} },
+	Inventory = { PetInventory = {}, EquippedPets = {}, ConsumedPotions = {}, Potions = {} },
 	Meta = { DailyStreak = 0, LastClaim = 0, CollectedRewards = {}, UpdateVersion = 0, Settings = { Music = true, SFX = true, HidePets = false, TradingEnabled = true } },
 }
 
@@ -222,6 +230,7 @@ function UIController:CloseAllFrames(exceptFrame: Frame?)
 	if UI.RebirthMenu then UI.RebirthMenu.Visible = false end
 	if UI.Trading.PlayerListFrame then UI.Trading.PlayerListFrame.Visible = false end
 	if UI.Settings.MainFrame then UI.Settings.MainFrame.Visible = false end
+	if UI.ServerBonus.MainFrame then UI.ServerBonus.MainFrame.Visible = false end
 	if exceptFrame then exceptFrame.Visible = old end
 end
 
@@ -239,22 +248,81 @@ function UIController:GetUIReferences()
 	}
 end
 
+-- only calculates the pet multiplier
+-- @return number - Total multiplier from pets, including percentage bonuses
 function UIController:CalculateTotalMultiplier(): number
-	local currentRebirthLevel = data.Stats.Rebirths or 0
-	local rebirthBonus = rebirthStatsM.CalculateTotalMultiplier(currentRebirthLevel)
-	local equippedPetsList = {}
+	local highestMultiplier = 0
+	local baseTotal = 0
+	local totalPercentageBonus = 0
+
 	if data.Inventory and data.Inventory.EquippedPets and data.Inventory.PetInventory then
 		for _, petIndex in ipairs(data.Inventory.EquippedPets) do
 			local pet = data.Inventory.PetInventory[petIndex]
-			if pet then
-				table.insert(equippedPetsList, pet)
+			if not pet then continue end
+
+			if pet.Percentage then
+				-- This is a percentage pet - accumulate its percentage bonus
+				totalPercentageBonus = totalPercentageBonus + (pet.Percentage or 0)
+			else
+				baseTotal += pet.Multiplier or 0
+				highestMultiplier = math.max(highestMultiplier, pet.Multiplier or 0)
 			end
 		end
 	end
-	local petBonus = statsM.CalculateFuelMultiplier(equippedPetsList)
-	local otherBonus = statsM.CalculateOtherBonus()
-	local totalBonuses = petBonus + rebirthBonus + otherBonus
-	return totalBonuses > 0 and totalBonuses or 1
+	
+	local totalBonus = baseTotal + (highestMultiplier * (totalPercentageBonus / 100))
+	return totalBonus
+end
+
+function UIController:SetupServerBonusUI()
+	local MonetizationService = Knit.GetService("MonetizationService")
+	local MarketplaceService = game:GetService("MarketplaceService")
+
+	local serverBonusGui = PlayerGui:WaitForChild("ServerBonus")
+	local mainFrame = serverBonusGui:WaitForChild("MainFrame")
+	local leftPanel = UI.Main:WaitForChild("LeftPanel")
+	local bonusButton = leftPanel:WaitForChild("BonusButton")
+	local closeButton = mainFrame:WaitForChild("Close")
+
+	UI.ServerBonus.Gui = serverBonusGui
+	UI.ServerBonus.MainFrame = mainFrame
+	UI.ServerBonus.BonusButton = bonusButton
+	UI.ServerBonus.CloseButton = closeButton
+
+	mainFrame.Visible = false
+
+	local UIFramesController = Knit.GetController("UIFramesController")
+
+	bonusButton.MouseButton1Click:Connect(function()
+		mainFrame.Visible = true
+		UIFramesController:ToggleFrame("ServerBonus")
+	end)
+
+	closeButton.MouseButton1Click:Connect(function()
+		UIFramesController:CloseFrame("ServerBonus")
+		mainFrame.Visible = false
+	end)
+
+	UI.ServerBonus.ServerLuck = mainFrame:WaitForChild("ServerLuck")
+	UI.ServerBonus.ServerPoints = mainFrame:WaitForChild("ServerPoints")
+
+	UI.ServerBonus.ServerLuck.MouseButton1Click:Connect(function()
+		local player = Players.LocalPlayer
+		MonetizationService:GetDevProductId("ServerLuckParty"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
+	end)
+
+	UI.ServerBonus.ServerPoints.MouseButton1Click:Connect(function()
+		local player = Players.LocalPlayer
+		MonetizationService:GetDevProductId("ServerPointsParty"):andThen(function(productId)
+			if productId then
+				MarketplaceService:PromptProductPurchase(player, productId)
+			end
+		end)
+	end)
 end
 
 function UIController:KnitInit()
@@ -291,6 +359,8 @@ function UIController:KnitInit()
 end
 
 function UIController:KnitStart()
+	self:SetupServerBonusUI()
+
 	local DataService = Knit.GetService("DataService")
 	DataService.DataReady:Connect(function(newData)
 		self:SetData(newData)

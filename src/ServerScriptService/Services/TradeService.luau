@@ -77,7 +77,7 @@ local PlayerTradingEnabled: { [number]: boolean } = {}
 
 -- Helper function for logging
 local function Log(message: string)
-	print(string.format("[TradeService]: %s", message))
+	--print(string.format("[TradeService]: %s", message))
 end
 
 -- Check if a player has trading enabled
@@ -124,6 +124,7 @@ end
 local function CopyPetDataForTrade(petData: any): any
 	local copy = DeepCopy(petData)
 	copy.ObtainedAt = os.time()
+	copy.Locked = false -- Pets received via trade are always unlocked
 	return copy
 end
 
@@ -568,6 +569,11 @@ function TradeService:OfferItem(player: Player, petIndex: number): (boolean, str
 	local petData = GetPetData(player, petIndex)
 	if not petData then
 		return false, "Pet not found in your inventory"
+	end
+	
+	-- Check if pet is locked
+	if petData.Locked == true then
+		return false, "This pet is locked and cannot be traded"
 	end
 	
 	-- Add to offers

@@ -17,7 +17,8 @@ export type FrameName =
 	"World" | 
 	"TradePlayerList" | 
 	"TradeMain" |
-	"RaceHUD"
+	"RaceHUD" |
+	"ServerBonus"
 
 export type AnimationType = "None" | "SlideBottom" | "SlideLeft"
 
@@ -553,6 +554,15 @@ function UIFramesController:KnitInit()
 		OriginalPosition = tradeMainFrame.Position,
 	}
 	
+	local serverBonusGui = PlayerGui:WaitForChild("ServerBonus")
+	local serverBonusFrame = serverBonusGui:WaitForChild("MainFrame")
+	MainFrames["ServerBonus"] = {
+		Frame = serverBonusFrame,
+		ScreenGui = serverBonusGui,
+		AnimationType = "SlideBottom" :: AnimationType,
+		OriginalPosition = serverBonusFrame.Position,
+	}
+
 	local raceHUDFrame = raceHUD:WaitForChild("MainFrame")
 	MainFrames["RaceHUD"] = {
 		Frame = raceHUDFrame,

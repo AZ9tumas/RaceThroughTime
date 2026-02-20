@@ -38,7 +38,14 @@ DevProducts.Ids = {
 	MagnetPulse = 3534480721,
 
 	-- skip to next world
-	SkipWorld = 3534609808
+	SkipWorld = 3534609808,
+
+	-- server bonuses
+	ServerLuckParty = 3534615338,
+	ServerPointsParty = 3534631451,
+
+	-- starter pack
+	StarterPack = 3540557146
 }
 
 -- Purchases Manager - handlers are initialized when Initialize() is called
@@ -53,6 +60,40 @@ function DevProducts.Initialize(Knit)
 	local TrackService = Knit.GetService("TrackService")
 	
 	DevProducts.PurchasesManager = {
+		[DevProducts.Ids.ServerPointsParty] = {
+			Name = "ServerPointsParty",
+			OnPurchase = function(player)
+				local ServerBonusService = Knit.GetService("ServerBonusService")
+				ServerBonusService:EnableBonus(ServerBonusService.Bonuses.PointsParty)
+
+				-- Notify player of successful purchase
+				if NotificationService then
+					NotificationService:SendNotification(
+						player,
+						"You've contributed to the Server Points Party! Enjoy increased points for everyone!",
+						NotificationService.Category.Success
+					)
+				end
+				return true
+			end
+		},
+		[DevProducts.Ids.ServerLuckParty] = {
+			Name = "ServerLuckParty",
+			OnPurchase = function(player)
+				local ServerBonusService = Knit.GetService("ServerBonusService")
+				ServerBonusService:EnableBonus(ServerBonusService.Bonuses.LuckParty)
+
+				-- Notify player of successful purchase
+				if NotificationService then
+					NotificationService:SendNotification(
+						player,
+						"You've contributed to the Server Luck Party! Enjoy increased luck for everyone!",
+						NotificationService.Category.Success
+					)
+				end
+				return true
+			end
+		},
 		[DevProducts.Ids.SkipWorld] = {
 			Name = "SkipWorld",
 			OnPurchase = function(player)
@@ -244,27 +285,39 @@ function DevProducts.Initialize(Knit)
 		[DevProducts.Ids.SuperLuck] = {
 			Name = "SuperLuck",
 			OnPurchase = function(player)
-				-- Apply Super Luck effect to player
 				local PotionsService = Knit.GetService("PotionsService")
-				local success = PotionsService:AddPotion(player, "SuperLuck")
+				local success = PotionsService:AddPotionToInventory(player, "SuperLuck")
 				return success
 			end
 		},
 		[DevProducts.Ids.PointsOverload] = {
 			Name = "PointsOverload",
 			OnPurchase = function(player)
-				-- Apply Points Overload effect to player (x3 distance multiplier)
 				local PotionsService = Knit.GetService("PotionsService")
-				local success = PotionsService:AddPotion(player, "PointsOverload")
+				local success = PotionsService:AddPotionToInventory(player, "PointsOverload")
 				return success
 			end
 		},
 		[DevProducts.Ids.MagnetPulse] = {
 			Name = "MagnetPulse",
 			OnPurchase = function(player)
-				-- Apply Magnet Pulse effect to player (50 stud star collection range)
 				local PotionsService = Knit.GetService("PotionsService")
-				local success = PotionsService:AddPotion(player, "MagnetPulse")
+				local success = PotionsService:AddPotionToInventory(player, "MagnetPulse")
+				return success
+			end
+		},
+		-- Starter Pack (hatches a Limited Historical Egg)
+		[DevProducts.Ids.StarterPack] = {
+			Name = "StarterPack",
+			OnPurchase = function(player)
+				local success, errorMsg, petInfo = EggService:HatchEgg(player, "LimitedHistoricalEgg")
+				if not success then
+					NotificationService:SendNotification(
+						player,
+						errorMsg or "Failed to hatch Starter Pack egg.",
+						NotificationService.Category.Error
+					)
+				end
 				return success
 			end
 		},

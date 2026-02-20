@@ -149,6 +149,9 @@ local function UpdateLocalTradePets()
 		end
 	end
 	for index, petData in ipairs(petInventory) do
+		-- Skip locked pets - they cannot be traded
+		if petData.Locked == true then continue end
+		
 		local petFrame = template:Clone()
 		petFrame.Name = "TradePet_" .. index
 		petFrame.Visible = true
@@ -164,7 +167,7 @@ local function UpdateLocalTradePets()
 			end
 		end
 		if petFrame:FindFirstChild("UIStroke") and petData.TierLevel then
-			petFrame.UIStroke.Color = statsM.TierColors[petData.TierLevel] or Color3.fromRGB(49, 49, 49)
+			petFrame.UIStroke.Color = statsM.Rarity[petData.TierLevel].Color
 		end
 		local isOffered = offeredSet[index] == true
 		if isOffered then
@@ -228,7 +231,7 @@ local function UpdateRemoteTradePets()
 			end
 		end
 		if petFrame:FindFirstChild("UIStroke") and petData.TierLevel then
-			petFrame.UIStroke.Color = statsM.TierColors[petData.TierLevel] or Color3.fromRGB(49, 49, 49)
+			petFrame.UIStroke.Color = statsM.Rarity[petData.TierLevel].Color
 		end
 		petFrame.BackgroundColor3 = DefaultBackgroundColorSelected
 		petFrame.Parent = scrollingFrame
